@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MyUnisoft/Events.git"
+    "url": "git+https://github.com/MyUnisoft/events-utils.git"
   },
   "publishConfig": {
     "@myunisoft:registry": "https://registry.npmjs.org/"
@@ -21,7 +21,7 @@
   "author": "HALLAERT Nicolas <nicolas.hallaert.pro@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/MyUnisoft/Events/issues"
+    "url": "https://github.com/MyUnisoft/events-utils/issues"
   },
   "dependencies": {
     "ajv": "^8.11.0"
