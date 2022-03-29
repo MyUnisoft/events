@@ -1,0 +1,12 @@
+{
+  "accountingFolder": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "accountingFolderId": { "type": "number" }
+      },
+      "required": ["accountingFolderId"],
+      "additionalProperties": false
+    }
+  }
+}

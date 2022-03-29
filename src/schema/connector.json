@@ -1,0 +1,35 @@
+{
+  "connector": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "connectorId": { "type": "number" }
+      },
+      "required": ["connectorId"],
+      "additionalProperties": false
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "connectorId": { "type": "number" }
+      },
+      "required": ["connectorId"],
+      "additionalProperties": false
+    },
+    "delete": {
+      "type": "object",
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      },
+      "required": ["ids"],
+      "additionalProperties": false
+    }
+  }
+}
