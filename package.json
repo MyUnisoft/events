@@ -1,0 +1,35 @@
+{
+  "name": "@myunisoft/events",
+  "version": "1.0.0",
+  "description": "MyUnisoft Events validation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MyUnisoft/Events.git"
+  },
+  "publishConfig": {
+    "@myunisoft:registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "dist"
+  ],
+  "author": "HALLAERT Nicolas <nicolas.hallaert.pro@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MyUnisoft/Events/issues"
+  },
+  "dependencies": {
+    "ajv": "^8.11.0"
+  },
+  "devDependencies": {
+    "jest": "^27.5.1",
+    "@types/jest": "^27.4.1",
+    "ts-jest": "^27.1.4",
+    "typescript": "^4.6.3"
+  }
+}
