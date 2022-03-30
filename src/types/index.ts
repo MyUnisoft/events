@@ -22,20 +22,17 @@ export interface EventsDefinition {
   connector: Connector;
 }
 
-
-interface Scope {
+export interface Scope {
   schemaId: number;
   accountingFolderId?: number;
 }
 
-export type WebhookResponse<K extends keyof EventsDefinition = keyof EventsDefinition> = {
+type WebhookResponse<K extends keyof EventsDefinition> = {
   scope: Scope;
   webhookId: string;
   createdAt: number;
 } & EventsDefinition[K];
 
-
-export type WebhooksResponse<T extends (keyof EventsDefinition)[]> = [
+export type WebhooksResponse<T extends (keyof EventsDefinition)[] = (keyof EventsDefinition)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
-

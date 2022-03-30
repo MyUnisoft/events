@@ -2,7 +2,7 @@
 import { events } from "./utils/index";
 
 // Import Types
-import { Events, EventsDefinition } from "types";
+import { Events, EventsDefinition } from "./types/index";
 
 export type ValidateEventDataOptions<T extends keyof EventsDefinition = Events> = EventsDefinition[T];
 
@@ -23,3 +23,5 @@ export function validateEventData<T extends keyof EventsDefinition = Events>(opt
     throw `Wrong data for the specified "event" & "operation"`;
   }
 }
+
+export * as EventTypes from "./types/index";
