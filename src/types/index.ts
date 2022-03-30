@@ -1,38 +1,37 @@
-export type Events = "accountingFolder" | "connector";
-
-// Events
-export interface Connector {
-  name: "connector";
-  operation: "CREATE" | "UPDATE" | "DELETE";
-  data: {
-    connectorId: number;
-  };
-}
-
-export interface AccountingFolder {
-  name: "accountingFolder";
-  operation: "CREATE";
-  data: {
-    accountingFolderId: number;
-  };
-}
-
-export interface EventsDefinition {
-  accountingFolder: AccountingFolder;
-  connector: Connector;
-}
+// Import Internal Dependencies
+import * as EventsDefinition from "./events";
 
 export interface Scope {
   schemaId: number;
   accountingFolderId?: number;
 }
 
-type WebhookResponse<K extends keyof EventsDefinition> = {
+export interface Metadata {
+  agent: string;
+  origin?: {
+    endpoint: string;
+    method: "POST" | "PATCH" | "PUT" | "DELETE";
+  };
+  createdAt: string;
+}
+
+export type EventOptions<K extends keyof EventsDefinition.Events>  = {
+  scope: Scope;
+  metadata: Metadata;
+} & EventsDefinition.Events[K];
+
+export type EventsOptions<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
+  ...(EventOptions<T[number]>)[]
+];
+
+type WebhookResponse<K extends keyof EventsDefinition.Events> = {
   scope: Scope;
   webhookId: string;
   createdAt: number;
-} & EventsDefinition[K];
+} & EventsDefinition.Events[K];
 
-export type WebhooksResponse<T extends (keyof EventsDefinition)[] = (keyof EventsDefinition)[]> = [
+export type WebhooksResponse<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
+
+export { EventsDefinition };

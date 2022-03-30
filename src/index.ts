@@ -2,11 +2,9 @@
 import { events } from "./utils/index";
 
 // Import Types
-import { Events, EventsDefinition } from "./types/index";
+import { EventsDefinition } from "./types/index";
 
-export type ValidateEventDataOptions<T extends keyof EventsDefinition = Events> = EventsDefinition[T];
-
-export function validateEventData<T extends keyof EventsDefinition = Events>(options: ValidateEventDataOptions<T>) {
+export function validateEventData<T extends keyof EventsDefinition.Events = keyof EventsDefinition.Events>(options: EventsDefinition.Events[T]) {
   const { name, operation, data } = options;
 
   if(!events.has(name)) {
