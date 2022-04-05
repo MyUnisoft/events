@@ -15,7 +15,7 @@ export interface Metadata {
   createdAt: string;
 }
 
-export type EventOptions<K extends keyof EventsDefinition.Events>  = {
+export type EventOptions<K extends keyof EventsDefinition.Events> = {
   scope: Scope;
   metadata: Metadata;
 } & EventsDefinition.Events[K];
@@ -26,8 +26,8 @@ export type EventsOptions<T extends (keyof EventsDefinition.Events)[] = (keyof E
 
 type WebhookResponse<K extends keyof EventsDefinition.Events> = {
   scope: Scope;
-  webhookId: string;
-  createdAt: number;
+  webhookId: number;
+  createdAt: string;
 } & EventsDefinition.Events[K];
 
 export type WebhooksResponse<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
