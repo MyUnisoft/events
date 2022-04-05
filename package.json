@@ -1,5 +1,5 @@
 {
-  "name": "@myunisoft/events",
+  "name": "@myunisoft/events-utils",
   "version": "1.0.0",
   "description": "MyUnisoft Events validation",
   "main": "dist/index.js",

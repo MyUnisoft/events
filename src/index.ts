@@ -8,17 +8,17 @@ export function validateEventData<T extends keyof EventsDefinition.Events = keyo
   const { name, operation, data } = options;
 
   if(!events.has(name)) {
-    throw "Unknown Event";
+    throw `Unknown "event": ${name}`;
   }
 
   const event = events.get(name);
-  if(!event.has(operation)) {
-    throw `Unknown "operation" for for the specified "event"`;
+  if(!event.has(operation.toLocaleLowerCase())) {
+    throw `Unknown "operation": ${operation} for the "event": ${name}`;
   }
 
   const operationValidationFunction = event.get(operation.toLocaleLowerCase());
   if (!operationValidationFunction(data)) {
-    throw `Wrong data for the specified "event" & "operation"`;
+    throw `Wrong data for the "operation": ${operation} on "event": ${name}`;
   }
 }
 
