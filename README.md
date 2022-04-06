@@ -1,4 +1,4 @@
-# Events-utils
+# Events
 MyUnisoft Events data validation, and transparency on events & result of webhooks.
 
 ## Requirements

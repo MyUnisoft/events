@@ -23,6 +23,13 @@
   "bugs": {
     "url": "https://github.com/MyUnisoft/events/issues"
   },
+  "homepage": "https://github.com/MyUnisoft/HTML-PDF#readme",
+  "keywords": [
+    "node",
+    "event",
+    "types",
+    "validation"
+  ],
   "dependencies": {
     "ajv": "^8.11.0"
   },
