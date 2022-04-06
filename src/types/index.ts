@@ -15,7 +15,7 @@ export interface Metadata {
   createdAt: string;
 }
 
-export type EventOptions<K extends keyof EventsDefinition.Events> = {
+export type EventOptions<K extends keyof EventsDefinition.Events = keyof EventsDefinition.Events> = {
   scope: Scope;
   metadata: Metadata;
 } & EventsDefinition.Events[K];
