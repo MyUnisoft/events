@@ -23,4 +23,5 @@ keyof EventsDefinition.Events>(options: EventsDefinition.Events[T]) {
   }
 }
 
+export * as EventSchemas from "./schema";
 export * as EventTypes from "./types/index";
