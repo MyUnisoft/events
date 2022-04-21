@@ -3,12 +3,12 @@
     "create": {
       "type": "object",
       "properties": {
-        "accountingFolderId": {
+        "id": {
           "type": "string",
           "pattern": "^[0-9]+"
         }
       },
-      "required": ["accountingFolderId"],
+      "required": ["id"],
       "additionalProperties": false
     }
   }

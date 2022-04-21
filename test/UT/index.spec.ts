@@ -10,7 +10,7 @@ describe("validateEventData", () => {
       name: "connector",
       operation: "CREATE",
       data: {
-        connectorId: "1"
+        id: "1"
       }
     };
 
@@ -29,7 +29,7 @@ describe("validateEventData", () => {
         schemaId: 1
       },
       data: {
-        connectorId: "10"
+        id: "10"
       }
     };
 
