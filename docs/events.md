@@ -14,16 +14,16 @@ export interface Connector {
   name: "connector";
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
-    connectorId: number;
+    connectorId: string;
   };
 }
 ```
 
 | Operation  | Agent  | Payload  |
 |---|---|---|
-| CREATE  | Node  | ```{  connectorId: number ;}```  |
-| UPDATE  | Node  | ```{  connectorId: number ;}```  |
-| DELETE  | Node  | ```{  connectorId: number ;}```  |
+| CREATE  | Node  | ```{  connectorId: string ;}```  |
+| UPDATE  | Node  | ```{  connectorId: string ;}```  |
+| DELETE  | Node  | ```{  connectorId: string ;}```  |
 
 ---
 
@@ -34,11 +34,11 @@ export interface AccountingFolder {
   name: "accountingFolder";
   operation: "CREATE";
   data: {
-    accountingFolderId: number;
+    accountingFolderId: string;
   };
 }
 ```
 
 | Operation  | Agent  | Payload  |
 |---|---|---|
-| CREATE  | Windev  | ```{  accountingFolderId: number ;}```  |
+| CREATE  | Windev  | ```{  accountingFolderId: string ;}```  |

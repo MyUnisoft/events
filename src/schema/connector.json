@@ -3,7 +3,10 @@
     "create": {
       "type": "object",
       "properties": {
-        "connectorId": { "type": "number" }
+        "connectorId": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        }
       },
       "required": ["connectorId"],
       "additionalProperties": false
@@ -11,7 +14,10 @@
     "update": {
       "type": "object",
       "properties": {
-        "connectorId": { "type": "number" }
+        "connectorId": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        }
       },
       "required": ["connectorId"],
       "additionalProperties": false
@@ -22,7 +28,8 @@
         "ids": {
           "type": "array",
           "items": {
-            "type": "integer"
+            "type": "string",
+            "pattern": "^[0-9]+"
           },
           "uniqueItems": true,
           "minItems": 1

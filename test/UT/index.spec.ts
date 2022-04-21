@@ -10,7 +10,7 @@ describe("validateEventData", () => {
       name: "connector",
       operation: "CREATE",
       data: {
-        connectorId: 1
+        connectorId: "1"
       }
     };
 
@@ -22,7 +22,7 @@ describe("validateEventData", () => {
       name: "connector",
       operation: "CREATE",
       data: {
-        connectorId: 1
+        connectorId: "1"
       }
     };
 

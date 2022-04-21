@@ -2,7 +2,7 @@ export interface Connector {
   name: "connector";
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
-    connectorId: number;
+    connectorId: string;
   };
 }
 
@@ -10,7 +10,7 @@ export interface AccountingFolder {
   name: "accountingFolder";
   operation: "CREATE";
   data: {
-    accountingFolderId: number;
+    accountingFolderId: string;
   };
 }
 

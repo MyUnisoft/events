@@ -3,7 +3,7 @@
     "create": {
       "type": "object",
       "properties": {
-        "accountingFolderId": { "type": "number" }
+        "accountingFolderId": { "type": "string" }
       },
       "required": ["accountingFolderId"],
       "additionalProperties": false
