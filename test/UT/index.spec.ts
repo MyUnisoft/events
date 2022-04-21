@@ -1,5 +1,5 @@
 // Import Internal Dependencies
-import { validateEventData } from "../../src/index";
+import { validateEventData, EventTypes } from "../../src/index";
 
 // Import Types
 import { EventsDefinition } from "../../src/types/index";
@@ -18,11 +18,18 @@ describe("validateEventData", () => {
   });
 
   test("Casting events name, it should only take the specified events", () => {
-    const event: EventsDefinition.Connector = {
+    const event: EventTypes.EventOptions<"connector"> = {
       name: "connector",
       operation: "CREATE",
+      metadata: {
+        agent: "Jest",
+        createdAt: Date.now().toLocaleString()
+      },
+      scope: {
+        schemaId: 1
+      },
       data: {
-        connectorId: "1"
+        connectorId: "10"
       }
     };
 
@@ -44,7 +51,7 @@ describe("validateEventData", () => {
       name: "accountingFolder",
       operation: "UPDATE",
       data: {
-        accountingFolderId: 1
+        accountingFolderId: "1"
       }
     };
 
