@@ -6,11 +6,13 @@ export interface Scope {
   accountingFolderId?: number;
 }
 
+export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
+
 export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: "POST" | "PATCH" | "PUT" | "DELETE";
+    method: Method;
   };
   createdAt: string;
 }
