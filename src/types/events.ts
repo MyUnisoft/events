@@ -5,18 +5,23 @@ export interface Operation {
   void: "VOID"
 }
 
-export interface Connector<K extends keyof Omit<Operation, "void"> = keyof Omit<Operation, "void">> {
+export type ConnectorOperation = Operation[keyof Omit<Operation, "void">];
+
+export interface Connector {
   name: "connector";
-  operation: Operation[K];
+  operation: ConnectorOperation;
   data: {
     id: string | string[];
   }
 }
 
-export interface AccountingFolder<K extends keyof Omit<Operation, "update" | "delete" | "void"> =
-keyof Omit<Operation, "update" | "delete" | "void">> {
+export type AccountingFolderOperation = Operation[
+  keyof Omit<Operation, "update" | "delete" | "void">
+];
+
+export interface AccountingFolder {
   name: "accountingFolder";
-  operation: Operation[K];
+  operation: AccountingFolderOperation;
   data: {
     accountingFolderId: string;
   };
