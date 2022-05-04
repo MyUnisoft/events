@@ -23,35 +23,15 @@
       "additionalProperties": false
     },
     "delete": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^[0-9]+"
-              },
-              "uniqueItems": true,
-              "minItems": 1
-            }
-          },
-          "required": ["id"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "pattern": "^[0-9]+"
-            }
-          },
-          "required": ["id"],
-          "additionalProperties": false
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
         }
-      ]
+      },
+      "required": ["id"],
+      "additionalProperties": false
     }
   }
 }

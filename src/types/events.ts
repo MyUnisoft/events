@@ -11,7 +11,7 @@ export interface Connector {
   name: "connector";
   operation: ConnectorOperation;
   data: {
-    id: string | string[];
+    id: string;
   }
 }
 
@@ -23,7 +23,7 @@ export interface AccountingFolder {
   name: "accountingFolder";
   operation: AccountingFolderOperation;
   data: {
-    accountingFolderId: string;
+    id: string;
   };
 }
 
