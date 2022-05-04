@@ -63,9 +63,13 @@ const event: EventOptions<"connector"> = {
 ### EventsOptions
 
 ```ts
-export type EventsOptions<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
+type TupleToObject<T extends readonly any[],
+  M extends Record<Exclude<keyof T, keyof any[]>, PropertyKey>> =
+  { [K in Exclude<keyof T, keyof any[]> as M[K]]: T[K] };
+
+export type EventsOptions<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = TupleToObject<[
   ...(EventOptions<T[number]>)[]
-];
+], []>;
 
 const events: EventsOptions<["connector", "accountingFolder"]> = [
   {
@@ -97,6 +101,21 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
     }
   }
 ];
+
+const event: EventsOptions<["connector", "accountingFolder"]> = {
+  name: "connector",
+  operation: "CREATE",
+  data: {
+    connectorId: 1
+  },
+  scope: {
+    schemaId: 1
+  },
+  metadata: {
+    agent: "Node",
+    createdAt: Date.now().toLocaleString()
+  }
+}
 ```
 
 ### WebhooksResponse
