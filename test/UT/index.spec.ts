@@ -26,7 +26,9 @@ describe("validateEventData", () => {
         createdAt: Date.now().toLocaleString()
       },
       scope: {
-        schemaId: 1
+        schemaId: 1,
+        firmId: 1,
+        accountingFolderId: 1
       },
       data: {
         id: "10"

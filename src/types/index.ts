@@ -3,6 +3,7 @@ import * as EventsDefinition from "./events";
 
 export interface Scope {
   schemaId: number;
+  firmId?: number;
   accountingFolderId?: number;
 }
 

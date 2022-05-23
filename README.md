@@ -47,15 +47,15 @@ export type EventOptions<K extends keyof EventsDefinition.Events> = {
 const event: EventOptions<"connector"> = {
   name: "connector",
   operation: "CREATE",
-  data: {
-    connectorId: 1
-  },
   scope: {
     schemaId: 1
   },
   metadata: {
     agent: "Node",
     createdAt: Date.now().toLocaleString()
+  },
+  data: {
+    connectorId: 1
   }
 }
 ```
