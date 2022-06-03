@@ -1,5 +1,17 @@
-# Events
-MyUnisoft Events data validation, and transparency on events & result of webhooks.
+<p align="center"><h1 align="center">
+  Events
+</h1>
+
+<p align="center">
+  MyUnisoft Events validator, schemas and types (useful to work with Webhooks).
+</p>
+
+<p align="center">
+    <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/package-json/v/MyUnisoft/events?style=flat-square" alt="npm version"></a>
+    <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/license/MyUnisoft/events?style=flat-square" alt="license"></a>
+    <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/languages/code-size/MyUnisoft/events?style=flat-square" alt="size"></a>
+    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Responsible%20Disclosure-yellow.svg?style=flat-square" alt="Responsible Disclosure Policy" /></a>
+</p>
 
 ## Requirements
 - [Node.js](https://nodejs.org/en/) version 14 or higher
@@ -34,9 +46,14 @@ const event: EventsDefinition.AccountingFolder = {
 validateEventData<"connector" | "accountingFolder">(event);
 ```
 
+## API
+
+### validateEventData< T extends keyof EventsDefinition.Events >(options: EventsDefinition.Events[ T ]): void
+Throw an error if a given event is not internaly known.
+
 ## Types
 
-### EventOptions
+<details><summary>EventOptions</summary>
 
 ```ts
 export type EventOptions<K extends keyof EventsDefinition.Events> = {
@@ -60,7 +77,9 @@ const event: EventOptions<"connector"> = {
 }
 ```
 
-### EventsOptions
+</details>
+
+<details><summary>EventOptions</summary>
 
 ```ts
 type TupleToObject<T extends readonly any[],
@@ -117,8 +136,9 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
   }
 }
 ```
+</details>
 
-### WebhooksResponse
+<details><summary>WebhooksResponse</summary>
 
 ```ts
 type WebhookResponse<K extends keyof EventsDefinition.Events> = {
@@ -158,3 +178,24 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   },
 ];
 ```
+</details>
+
+## Contributors ✨
+
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+## License
+MIT
