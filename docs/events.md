@@ -9,6 +9,8 @@ export interface Events {
 
 ## connector
 
+[JSON Schema](./json-schema/events/connector.json)
+
 ```ts
 export interface Connector {
   name: "connector";
@@ -28,6 +30,8 @@ export interface Connector {
 ---
 
 ## accountingFolder
+
+[JSON Schema](./json-schema/events/accountingFolder.json)
 
 ```ts
 export interface AccountingFolder {

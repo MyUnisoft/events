@@ -1,0 +1,21 @@
+{
+  "name": {
+    "type": "string",
+    "value": "accountingFolder"
+  },
+  "operation": {
+    "type": "string",
+    "description": "Operation operated next to the event",
+    "enum": ["CREATE"]
+  },
+  "scope": {
+    "$ref": "Scope"
+  },
+  "metadata": {
+    "$ref": "Metadata"
+  },
+  "data": {
+    "id": "string"
+  },
+  "required": ["name", "operation", "scope", "metadata", "data"]
+}
