@@ -1,0 +1,21 @@
+{
+  "name": {
+    "type": "string",
+    "value": "connector"
+  },
+  "operation": {
+    "type": "string",
+    "description": "Operation operated next to the event",
+    "enum": ["CREATE", "UPDATE", "DELETE"]
+  },
+  "scope": {
+    "$ref": "Scope"
+  },
+  "metadata": {
+    "$ref": "Metadata"
+  },
+  "data": {
+    "id": "string"
+  },
+  "required": ["name", "operation", "scope", "metadata", "data"]
+}

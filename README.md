@@ -28,8 +28,6 @@ $ yarn add @myunisoft/events
 
 ## Usage
 
-- [Events descriptions](./docs/events.md)
-
 ### validateEventData
 
 ```ts
@@ -52,6 +50,27 @@ validateEventData<"connector" | "accountingFolder">(event);
 Throw an error if a given event is not internaly known.
 
 ## Types
+
+- [Events descriptions](./docs/events.md)
+
+```ts
+export interface Scope {
+  schemaId: number;
+  firmId?: number;
+  accountingFolderId?: number;
+}
+
+export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
+
+export interface Metadata {
+  agent: string;
+  origin?: {
+    endpoint: string;
+    method: Method;
+  };
+  createdAt: string;
+}
+```
 
 <details><summary>EventOptions</summary>
 
