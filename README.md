@@ -91,7 +91,8 @@ const event: EventOptions<"connector"> = {
     createdAt: Date.now().toLocaleString()
   },
   data: {
-    connectorId: 1
+    id: 1,
+    code: "JFAC"
   }
 }
 ```
@@ -113,29 +114,30 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
   {
     name: "connector",
     operation: "CREATE",
-    data: {
-      connectorId: 1
-    },
     scope: {
       schemaId: 1
     },
     metadata: {
       agent: "Node",
       createdAt: Date.now().toLocaleString()
+    },
+    data: {
+      id: 1,
+      code: "JFAC"
     }
   },
   {
     name: "accountingFolder",
     operation: "CREATE",
-    data: {
-      accountingFolderId: 1
-    },
     scope: {
       schemaId: 1
     },
     metadata: {
       agent: "Windev",
       createdAt: Date.now().toLocaleString()
+    },
+    data: {
+      id: 1
     }
   }
 ];
@@ -143,15 +145,16 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
 const event: EventsOptions<["connector", "accountingFolder"]> = {
   name: "connector",
   operation: "CREATE",
-  data: {
-    connectorId: 1
-  },
   scope: {
     schemaId: 1
   },
   metadata: {
     agent: "Node",
     createdAt: Date.now().toLocaleString()
+  },
+  data: {
+    id: 1,
+    code: "JFAC"
   }
 }
 ```
@@ -174,11 +177,12 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   {
     name: "connector",
     operation: "CREATE",
-    data: {
-      connectorId: 1
-    },
     scope: {
       schemaId: 1
+    },
+    data: {
+      id: 1,
+      code: "JFAC"
     },
     webhookId: 1,
     createdAt: Date.now().toLocaleString()
@@ -186,11 +190,11 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   {
     name: "accountingFolder",
     operation: "CREATE",
-    data: {
-      accountingFolderId: 1
-    },
     scope: {
       schemaId: 1
+    },
+    data: {
+      id: 1
     },
     webhookId: 2,
     createdAt: Date.now().toLocaleString()

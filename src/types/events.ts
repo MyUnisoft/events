@@ -12,6 +12,7 @@ export interface Connector {
   operation: ConnectorOperation;
   data: {
     id: string;
+    code: string;
   }
 }
 

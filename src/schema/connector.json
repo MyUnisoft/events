@@ -6,9 +6,12 @@
         "id": {
           "type": "string",
           "pattern": "^[0-9]+"
+        },
+        "code": {
+          "type": "string"
         }
       },
-      "required": ["id"],
+      "required": ["id", "code"],
       "additionalProperties": false
     },
     "update": {
@@ -17,9 +20,12 @@
         "id": {
           "type": "string",
           "pattern": "^[0-9]+"
+        },
+        "code": {
+          "type": "string"
         }
       },
-      "required": ["id"],
+      "required": ["id", "code"],
       "additionalProperties": false
     },
     "delete": {
@@ -28,9 +34,12 @@
         "id": {
           "type": "string",
           "pattern": "^[0-9]+"
+        },
+        "code": {
+          "type": "string"
         }
       },
-      "required": ["id"],
+      "required": ["id", "code"],
       "additionalProperties": false
     }
   }
