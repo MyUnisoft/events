@@ -17,15 +17,16 @@ export interface Connector {
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
+    code: string;
   };
 }
 ```
 
 | Operation  | Agent  | Payload  |
 |---|---|---|
-| CREATE  | Node  | ```{  id: string ;}```  |
-| UPDATE  | Node  | ```{  id: string ;}```  |
-| DELETE  | Node  | ```{  id: string ;}```  |
+| CREATE  | Node  | ```{  id: string ; code: string; }```  |
+| UPDATE  | Node  | ```{  id: string ; code: string; }```  |
+| DELETE  | Node  | ```{  id: string ; code: string; }```  |
 
 ---
 

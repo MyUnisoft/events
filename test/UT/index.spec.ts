@@ -6,11 +6,12 @@ import { EventsDefinition } from "../../src/types/index";
 
 describe("validateEventData", () => {
   test("Casting no events name, it should take any events", () => {
-    const event: EventsDefinition.Connector | EventsDefinition.AccountingFolder = {
+    const event: EventsDefinition.Connector = {
       name: "connector",
       operation: "CREATE",
       data: {
-        id: "1"
+        id: "1",
+        code: "JFAC"
       }
     };
 
@@ -31,7 +32,8 @@ describe("validateEventData", () => {
         accountingFolderId: 1
       },
       data: {
-        id: "10"
+        id: "10",
+        code: "JFAC"
       }
     };
 
