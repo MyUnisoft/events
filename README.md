@@ -28,12 +28,12 @@ $ yarn add @myunisoft/events
 
 ## Usage
 
-### validateEventData
+- Validating an given Event according to his name.
 
 ```ts
-import { EventsDefinition, validateEventData } from "@myunisoft/events";
+import * as MyEvents from "@myunisoft/events";
 
-const event: EventsDefinition.AccountingFolder = {
+const event: MyEvents.AccountingFolder = {
   name: "accountingFolder",
   operation: "CREATE",
   data: {
@@ -41,17 +41,62 @@ const event: EventsDefinition.AccountingFolder = {
   }
 };
 
-validateEventData<"connector" | "accountingFolder">(event);
+MyEvents.validate<"accountingFolder">(event);
+```
+
+- Specifying valide Events registring an endpoint related to Webhooks.
+
+```ts
+import * as MyEvents from "@myunisoft/events";
+
+type Request = FrameworkRequestContext<{
+  Body: MyEvents.WebhooksResponse<["connector", "accountingFolder"]>;
+}>;
+
+app.post("/my-custom-endpoint", (request: Request) => {
+  const myEvents = request.body;
+
+  console.log(myEvents[0]); // { name, scope, webhookId, createdAt, operation, data }
+});
+```
+
+- How is defined an Event inside MyUnisoft ?
+
+```ts
+import * as MyEvents from "@myunisoft/events";
+
+const event: EventOptions<"connector"> = {
+  name: "connector",
+  operation: "CREATE",
+  scope: {
+    schemaId: 1
+  },
+  metadata: {
+    agent: "Node",
+    origin: {
+      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
+      method: "POST"
+    },
+    createdAt: Date.now().toLocaleString()
+  },
+  data: {
+    id: 1,
+    code: "JFAC"
+  }
+};
 ```
 
 ## API
 
-### validateEventData< T extends keyof EventsDefinition.Events >(options: EventsDefinition.Events[ T ]): void
+### validate< T extends keyof Events >(options: Events[ T ]): void
 Throw an error if a given event is not internaly known.
 
-## Types
+## Events
 
-- [Events descriptions](./docs/events.md)
+An Event fully constitued is composed by a `name`, a `data` object, a `scope` object, and a `metadata` object.
+- The `name` identify the event.
+- According to the name, we know the `data` and the differentes `metadata.origin.method` related.
+- The `metadata` object is used to determine differentes informations as the ecosystem, the entry point etc.
 
 ```ts
 export interface Scope {
@@ -60,17 +105,65 @@ export interface Scope {
   accountingFolderId?: number;
 }
 
-export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
-
 export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: Method;
+    method: "POST" | "PATCH" | "PUT" | "DELETE";
   };
   createdAt: string;
 }
 ```
+
+**Below is an exhaustive list of the MyUnisoft Events available**
+
+<details><summary>Connector</summary>
+
+[JSON Schema](./docs/json-schema/events/connector.md)
+
+```ts
+export interface Connector {
+  name: "connector";
+  operation: "CREATE" | "UPDATE" | "DELETE";
+  data: {
+    id: string;
+    code: string;
+  };
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
+| UPDATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
+| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre> |
+
+
+</details>
+
+
+<details><summary>AccountingFolder</summary>
+
+[JSON Schema](./docs/json-schema/events/accountingFolder.md)
+
+```ts
+export interface AccountingFolder {
+  name: "accountingFolder";
+  operation: "CREATE";
+  data: {
+    id: string;
+  };
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Windev  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+
+</details>
+<br/>
+
+## Types
 
 <details><summary>EventOptions</summary>
 
@@ -99,7 +192,7 @@ const event: EventOptions<"connector"> = {
 
 </details>
 
-<details><summary>EventOptions</summary>
+<details><summary>EventsOptions</summary>
 
 ```ts
 type TupleToObject<T extends readonly any[],
@@ -163,13 +256,13 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
 <details><summary>WebhooksResponse</summary>
 
 ```ts
-type WebhookResponse<K extends keyof EventsDefinition.Events> = {
+type WebhookResponse<K extends keyof EventTypes.Events> = {
   scope: Scope;
   webhookId: string;
   createdAt: number;
-} & EventsDefinition.Events[K];
+} & EventTypes.Events[K];
 
-export type WebhooksResponse<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
+export type WebhooksResponse<T extends (keyof EventTypes.Events)[] = (keyof EventTypes.Events)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
 
@@ -202,6 +295,8 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
 ];
 ```
 </details>
+
+<br/>
 
 ## Contributors ✨
 

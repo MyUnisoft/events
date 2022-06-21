@@ -1,5 +1,5 @@
 // Import Internal Dependencies
-import { events } from "../../../src/utils/index";
+import { events } from "../../../src/index";
 
 describe("events", () => {
   test("events should be defined", () => {

@@ -1,3 +1,4 @@
+```json
 {
   "description": "AccountingFolder event",
   "type": "object",
@@ -27,3 +28,4 @@
   },
   "required": ["name", "operation", "scope", "metadata", "data"]
 }
+```

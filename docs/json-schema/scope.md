@@ -1,3 +1,4 @@
+```json
 {
   "$id": "Scope",
   "description": "Object related to the scope of an event",
@@ -15,3 +16,4 @@
   },
   "required": ["schemaId"]
 }
+```

@@ -2,10 +2,9 @@
 import { events } from "./utils/index";
 
 // Import Types
-import { EventsDefinition } from "./types/index";
+import { Events } from "./types/index";
 
-export function validateEventData<T extends keyof EventsDefinition.Events =
-keyof EventsDefinition.Events>(options: EventsDefinition.Events[T]) {
+export function validate<T extends keyof Events = keyof Events>(options: Events[T]) {
   const { name, operation, data } = options;
 
   if (!events.has(name)) {
@@ -23,5 +22,6 @@ keyof EventsDefinition.Events>(options: EventsDefinition.Events[T]) {
   }
 }
 
-export * as EventSchemas from "./schema";
-export * as EventTypes from "./types/index";
+export * as Schema from "./schema";
+export * from "./types/index";
+export { events } from "./utils/index";

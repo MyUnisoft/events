@@ -1,3 +1,4 @@
+```json
 {
   "$id": "Metadata",
   "description": "Object related to the metadata of an event",
@@ -25,3 +26,4 @@
   },
   "required": ["agent", "createdAt"]
 }
+```
