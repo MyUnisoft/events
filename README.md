@@ -10,13 +10,13 @@
     <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/package-json/v/MyUnisoft/events?style=flat-square" alt="npm version"></a>
     <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/license/MyUnisoft/events?style=flat-square" alt="license"></a>
     <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/languages/code-size/MyUnisoft/events?style=flat-square" alt="size"></a>
-    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Responsible%20Disclosure-yellow.svg?style=flat-square" alt="Responsible Disclosure Policy" /></a>
 </p>
 
-## Requirements
+## 🚧 Requirements
+
 - [Node.js](https://nodejs.org/en/) version 14 or higher
 
-## Getting Started
+## 🚀 Getting Started
 
 This package is available in the Node Package Repository and can be easily installed with [npm](https://doc.npmjs.com/getting-started/what-is-npm) or [yarn](https://yarnpkg.com)
 
@@ -26,41 +26,9 @@ $ npm i @myunisoft/events
 $ yarn add @myunisoft/events
 ```
 
-## Usage
+## 📚 Usage
 
-- Validating an given Event according to his name.
-
-```ts
-import * as MyEvents from "@myunisoft/events";
-
-const event: MyEvents.AccountingFolder = {
-  name: "accountingFolder",
-  operation: "CREATE",
-  data: {
-    accountingFolderId: 1
-  }
-};
-
-MyEvents.validate<"accountingFolder">(event);
-```
-
-- Specifying valide Events registring an endpoint related to Webhooks.
-
-```ts
-import * as MyEvents from "@myunisoft/events";
-
-type Request = FrameworkRequestContext<{
-  Body: MyEvents.WebhooksResponse<["connector", "accountingFolder"]>;
-}>;
-
-app.post("/my-custom-endpoint", (request: Request) => {
-  const myEvents = request.body;
-
-  console.log(myEvents[0]); // { name, scope, webhookId, createdAt, operation, data }
-});
-```
-
-- How is defined an Event inside MyUnisoft ?
+> How is define an Event & how to validate it.
 
 ```ts
 import * as MyEvents from "@myunisoft/events";
@@ -84,7 +52,17 @@ const event: EventOptions<"connector"> = {
     code: "JFAC"
   }
 };
+
+MyEvents.validate<"connector">({ name: event.name, operation: event.operation, data: event.data });
 ```
+
+---
+
+
+> Specifying valide Events registring an endpoint related to Webhooks.
+
+[**Here**](./example/fastify/feature/webhook.ts) is an example
+
 
 ## API
 

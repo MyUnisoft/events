@@ -8,7 +8,7 @@ import { FastifyInstance } from "fastify/types/instance";
 // Import Internal Dependencies
 import { webhooksAPI } from "./feature/webhook";
 
-export function buildServer(opts = {}): FastifyInstance {
+export function buildServer(): FastifyInstance {
   const app = fastify({
     logger: {
       level: "info",
@@ -22,11 +22,7 @@ export function buildServer(opts = {}): FastifyInstance {
 
   return app;
 }
-const server = buildServer({
-  logger: {
-    prettyPrint: true
-  }
-});
+const server = buildServer();
 
 server.listen({
   port: process.env.PORT ? Number(process.env.PORT) : 12080,
