@@ -1,12 +1,9 @@
 // Import Internal Dependencies
-import { validateEventData, EventTypes } from "../../src/index";
+import * as MyEvents from "../../src/index";
 
-// Import Types
-import { EventsDefinition } from "../../src/types/index";
-
-describe("validateEventData", () => {
+describe("validate", () => {
   test("Casting no events name, it should take any events", () => {
-    const event: EventsDefinition.Connector = {
+    const event: MyEvents.Connector = {
       name: "connector",
       operation: "CREATE",
       data: {
@@ -15,11 +12,11 @@ describe("validateEventData", () => {
       }
     };
 
-    expect(() => validateEventData(event)).not.toThrow();
+    expect(() => MyEvents.validate(event)).not.toThrow();
   });
 
   test("Casting events name, it should only take the specified events", () => {
-    const event: EventTypes.EventOptions<"connector"> = {
+    const event: MyEvents.EventOptions<"connector"> = {
       name: "connector",
       operation: "CREATE",
       metadata: {
@@ -37,7 +34,7 @@ describe("validateEventData", () => {
       }
     };
 
-    expect(() => validateEventData<"connector">(event)).not.toThrow();
+    expect(() => MyEvents.validate<"connector">(event)).not.toThrow();
   });
 
   test("Given a wrong event name, it should throw", () => {
@@ -47,7 +44,7 @@ describe("validateEventData", () => {
       data: {}
     };
 
-    expect(() => validateEventData(event as any)).toThrow(`Unknown "event": ${event.name}`);
+    expect(() => MyEvents.validate(event as any)).toThrow(`Unknown "event": ${event.name}`);
   });
 
   test("Given a wrong operation according to the event name, it should throw", () => {
@@ -59,7 +56,7 @@ describe("validateEventData", () => {
       }
     };
 
-    expect(() => validateEventData(event as any))
+    expect(() => MyEvents.validate(event as any))
       .toThrow(`Unknown "operation": ${event.operation} for the "event": ${event.name}`);
   });
 
@@ -70,7 +67,7 @@ describe("validateEventData", () => {
       data: {}
     };
 
-    expect(() => validateEventData(event as any))
+    expect(() => MyEvents.validate(event as any))
       .toThrow(`Wrong data for the "operation": ${event.operation} on "event": ${event.name}`);
   });
 });

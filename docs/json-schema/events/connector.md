@@ -1,3 +1,4 @@
+```json
 {
   "description": "Connector event",
   "type": "object",
@@ -28,3 +29,4 @@
   },
   "required": ["name", "operation", "scope", "metadata", "data"]
 }
+```

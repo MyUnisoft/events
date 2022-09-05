@@ -1,5 +1,5 @@
 // Import Internal Dependencies
-import * as EventsDefinition from "./events";
+import { Events } from "./events";
 
 export interface Scope {
   schemaId: number;
@@ -18,27 +18,27 @@ export interface Metadata {
   createdAt: string;
 }
 
-export type EventOptions<K extends keyof EventsDefinition.Events = keyof EventsDefinition.Events> = {
+export type EventOptions<K extends keyof Events = keyof Events> = {
   scope: Scope;
   metadata: Metadata;
-} & EventsDefinition.Events[K];
+} & Events[K];
 
 type TupleToObject<T extends readonly any[],
   M extends Record<Exclude<keyof T, keyof any[]>, PropertyKey>> =
   { [K in Exclude<keyof T, keyof any[]> as M[K]]: T[K] };
 
-export type EventsOptions<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = TupleToObject<[
+export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = TupleToObject<[
   ...(EventOptions<T[number]>)[]
 ], []>;
 
-type WebhookResponse<K extends keyof EventsDefinition.Events> = {
+type WebhookResponse<K extends keyof Events> = {
   scope: Scope;
   webhookId: number;
   createdAt: string;
-} & EventsDefinition.Events[K];
+} & Events[K];
 
-export type WebhooksResponse<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
+export type WebhooksResponse<T extends (keyof Events)[] = (keyof Events)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
 
-export { EventsDefinition };
+export * from "./events";

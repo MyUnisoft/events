@@ -10,13 +10,13 @@
     <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/package-json/v/MyUnisoft/events?style=flat-square" alt="npm version"></a>
     <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/license/MyUnisoft/events?style=flat-square" alt="license"></a>
     <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/languages/code-size/MyUnisoft/events?style=flat-square" alt="size"></a>
-    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Responsible%20Disclosure-yellow.svg?style=flat-square" alt="Responsible Disclosure Policy" /></a>
 </p>
 
-## Requirements
+## 🚧 Requirements
+
 - [Node.js](https://nodejs.org/en/) version 14 or higher
 
-## Getting Started
+## 🚀 Getting Started
 
 This package is available in the Node Package Repository and can be easily installed with [npm](https://doc.npmjs.com/getting-started/what-is-npm) or [yarn](https://yarnpkg.com)
 
@@ -26,32 +26,55 @@ $ npm i @myunisoft/events
 $ yarn add @myunisoft/events
 ```
 
-## Usage
+## 📚 Usage
 
-### validateEventData
+> How is define an Event & how to validate it.
 
 ```ts
-import { EventsDefinition, validateEventData } from "@myunisoft/events";
+import * as MyEvents from "@myunisoft/events";
 
-const event: EventsDefinition.AccountingFolder = {
-  name: "accountingFolder",
+const event: EventOptions<"connector"> = {
+  name: "connector",
   operation: "CREATE",
+  scope: {
+    schemaId: 1
+  },
+  metadata: {
+    agent: "Node",
+    origin: {
+      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
+      method: "POST"
+    },
+    createdAt: Date.now().toLocaleString()
+  },
   data: {
-    accountingFolderId: 1
+    id: 1,
+    code: "JFAC"
   }
 };
 
-validateEventData<"connector" | "accountingFolder">(event);
+MyEvents.validate<"connector">({ name: event.name, operation: event.operation, data: event.data });
 ```
+
+---
+
+
+> Specifying valide Events registring an endpoint related to Webhooks.
+
+[**Here**](./example/fastify/feature/webhook.ts) is an example
+
 
 ## API
 
-### validateEventData< T extends keyof EventsDefinition.Events >(options: EventsDefinition.Events[ T ]): void
+### validate< T extends keyof Events >(options: Events[ T ]): void
 Throw an error if a given event is not internaly known.
 
-## Types
+## Events
 
-- [Events descriptions](./docs/events.md)
+An Event fully constitued is composed by a `name`, a `data` object, a `scope` object, and a `metadata` object.
+- The `name` identify the event.
+- According to the name, we know the `data` and the differentes `metadata.origin.method` related.
+- The `metadata` object is used to determine differentes informations as the ecosystem, the entry point etc.
 
 ```ts
 export interface Scope {
@@ -60,17 +83,65 @@ export interface Scope {
   accountingFolderId?: number;
 }
 
-export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
-
 export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: Method;
+    method: "POST" | "PATCH" | "PUT" | "DELETE";
   };
   createdAt: string;
 }
 ```
+
+**Below is an exhaustive list of the MyUnisoft Events available**
+
+<details><summary>Connector</summary>
+
+[JSON Schema](./docs/json-schema/events/connector.md)
+
+```ts
+export interface Connector {
+  name: "connector";
+  operation: "CREATE" | "UPDATE" | "DELETE";
+  data: {
+    id: string;
+    code: string;
+  };
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
+| UPDATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
+| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre> |
+
+
+</details>
+
+
+<details><summary>AccountingFolder</summary>
+
+[JSON Schema](./docs/json-schema/events/accountingFolder.md)
+
+```ts
+export interface AccountingFolder {
+  name: "accountingFolder";
+  operation: "CREATE";
+  data: {
+    id: string;
+  };
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Windev  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+
+</details>
+<br/>
+
+## Types
 
 <details><summary>EventOptions</summary>
 
@@ -99,7 +170,7 @@ const event: EventOptions<"connector"> = {
 
 </details>
 
-<details><summary>EventOptions</summary>
+<details><summary>EventsOptions</summary>
 
 ```ts
 type TupleToObject<T extends readonly any[],
@@ -163,13 +234,13 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
 <details><summary>WebhooksResponse</summary>
 
 ```ts
-type WebhookResponse<K extends keyof EventsDefinition.Events> = {
+type WebhookResponse<K extends keyof EventTypes.Events> = {
   scope: Scope;
   webhookId: string;
   createdAt: number;
-} & EventsDefinition.Events[K];
+} & EventTypes.Events[K];
 
-export type WebhooksResponse<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = [
+export type WebhooksResponse<T extends (keyof EventTypes.Events)[] = (keyof EventTypes.Events)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
 
@@ -202,6 +273,8 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
 ];
 ```
 </details>
+
+<br/>
 
 ## Contributors ✨
 
