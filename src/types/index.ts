@@ -34,6 +34,7 @@ export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = Tuple
 type WebhookResponse<K extends keyof Events> = {
   scope: Scope;
   webhookId: number;
+  signature: string;
   createdAt: string;
 } & Events[K];
 
