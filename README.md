@@ -237,6 +237,7 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
 type WebhookResponse<K extends keyof EventTypes.Events> = {
   scope: Scope;
   webhookId: string;
+  signature: string;
   createdAt: number;
 } & EventTypes.Events[K];
 
@@ -248,6 +249,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   {
     name: "connector",
     operation: "CREATE",
+    signature: "foo",
     scope: {
       schemaId: 1
     },
@@ -261,6 +263,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   {
     name: "accountingFolder",
     operation: "CREATE",
+    signature: "foo",
     scope: {
       schemaId: 1
     },
