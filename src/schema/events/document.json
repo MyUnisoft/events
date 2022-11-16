@@ -1,0 +1,18 @@
+{
+  "document": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "kind": {
+          "enum": ["AF", "PF", "DB"]
+        }
+      },
+      "required": ["id", "kind"],
+      "additionalProperties": false
+    }
+  }
+}

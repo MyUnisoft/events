@@ -35,4 +35,18 @@ describe("eventsValidationFonction", () => {
       expect(accountingFolder.has("create")).toBe(true);
     });
   });
+
+  describe("document", () => {
+    let document;
+
+    beforeAll(() => {
+      expect(eventsValidationFonction.has("document")).toBe(true);
+
+      document = eventsValidationFonction.get("document");
+    });
+
+    test("document should have a validation function for \"create\"", () => {
+      expect(document.has("create")).toBe(true);
+    });
+  });
 });
