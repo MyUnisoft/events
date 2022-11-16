@@ -3,9 +3,22 @@ import * as MyEvents from "../../src/index";
 
 describe("validate", () => {
   test("Casting no events name, it should take any events", () => {
-    const event: MyEvents.Connector = {
+    const event: MyEvents.EventOptions<"connector"> = {
       name: "connector",
       operation: "CREATE",
+      metadata: {
+        agent: "Jest",
+        createdAt: Date.now().toString(),
+        origin: {
+          endpoint: "fake",
+          method: "POST"
+        }
+      },
+      scope: {
+        schemaId: 1,
+        firmId: 1,
+        accountingFolderId: 1
+      },
       data: {
         id: "1",
         code: "JFAC"
@@ -21,7 +34,11 @@ describe("validate", () => {
       operation: "CREATE",
       metadata: {
         agent: "Jest",
-        createdAt: Date.now().toLocaleString()
+        createdAt: Date.now().toString(),
+        origin: {
+          endpoint: "fake",
+          method: "POST"
+        }
       },
       scope: {
         schemaId: 1,

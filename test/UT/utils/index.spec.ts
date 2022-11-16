@@ -1,18 +1,18 @@
 // Import Internal Dependencies
-import { events } from "../../../src/index";
+import { eventsValidationFonction } from "../../../src/index";
 
-describe("events", () => {
+describe("eventsValidationFonction", () => {
   test("events should be defined", () => {
-    expect(events).toBeDefined();
+    expect(eventsValidationFonction).toBeDefined();
   });
 
   describe("connector", () => {
     let connector;
 
     beforeAll(() => {
-      expect(events.has("connector")).toBe(true);
+      expect(eventsValidationFonction.has("connector")).toBe(true);
 
-      connector = events.get("connector");
+      connector = eventsValidationFonction.get("connector");
     });
 
     test("connector should have a validation function for \"create\", \"update\", \"delete\"", () => {
@@ -26,9 +26,9 @@ describe("events", () => {
     let accountingFolder;
 
     beforeAll(() => {
-      expect(events.has("accountingFolder")).toBe(true);
+      expect(eventsValidationFonction.has("accountingFolder")).toBe(true);
 
-      accountingFolder = events.get("accountingFolder");
+      accountingFolder = eventsValidationFonction.get("accountingFolder");
     });
 
     test("connector should have a validation function for \"create\"", () => {

@@ -16,14 +16,19 @@
         "method": {
           "type": "string",
           "enum": ["POST", "PATCH", "PUT", "DELETE"]
+        },
+        "requestId": {
+          "type": "string"
         }
       },
-      "required": ["endpoint", "method"]
+      "required": ["endpoint", "method"],
+      "additionalProperties": false
     },
     "createdAt": {
       "type": "string"
     }
   },
-  "required": ["agent", "createdAt"]
+  "required": ["agent", "createdAt"],
+  "additionalProperties": false
 }
 ```

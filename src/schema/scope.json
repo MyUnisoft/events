@@ -1,0 +1,18 @@
+{
+  "scope": {
+    "type": "object",
+    "properties": {
+      "schemaId": {
+        "type": "number"
+      },
+      "firmId": {
+        "type": "number"
+      },
+      "accountingFolderId": {
+        "type": "number"
+      }
+    },
+    "required": ["schemaId"],
+    "additionalProperties": false
+  }
+}

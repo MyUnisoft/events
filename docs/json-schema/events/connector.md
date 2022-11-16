@@ -24,9 +24,11 @@
         "id": "string",
         "code": "string"
       },
-      "required": ["id", "code"]
+      "required": ["id", "code"],
+      "additionalProperties": false
     }
   },
-  "required": ["name", "operation", "scope", "metadata", "data"]
+  "required": ["name", "operation", "scope", "metadata", "data"],
+  "additionalProperties": false
 }
 ```

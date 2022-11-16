@@ -1,2 +1,4 @@
-export { connector } from "./connector.json";
-export { accountingFolder } from "./accountingFolder.json";
+export * as eventsValidationSchemas from "./events/index";
+export { metadata } from "./metadata.json";
+export { scope } from "./scope.json";
+

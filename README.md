@@ -43,7 +43,8 @@ const event: EventOptions<"connector"> = {
     agent: "Node",
     origin: {
       endpoint: "http://localhost:12080/api/v1/my-custom-feature",
-      method: "POST"
+      method: "POST",
+      requestId: crypto.randomUUID();
     },
     createdAt: Date.now().toLocaleString()
   },
@@ -53,7 +54,7 @@ const event: EventOptions<"connector"> = {
   }
 };
 
-MyEvents.validate<"connector">({ name: event.name, operation: event.operation, data: event.data });
+MyEvents.validate<"connector">(event);
 ```
 
 ---
@@ -66,7 +67,7 @@ MyEvents.validate<"connector">({ name: event.name, operation: event.operation, d
 
 ## API
 
-### validate< T extends keyof Events >(options: Events[ T ]): void
+### validate< T extends keyof Events >(options: EventOptions<T>): void
 Throw an error if a given event is not internaly known.
 
 ## Events
@@ -83,11 +84,14 @@ export interface Scope {
   accountingFolderId?: number;
 }
 
+export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
+
 export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: "POST" | "PATCH" | "PUT" | "DELETE";
+    method: Method;
+    requestId?: string;
   };
   createdAt: string;
 }
@@ -159,7 +163,8 @@ const event: EventOptions<"connector"> = {
   },
   metadata: {
     agent: "Node",
-    createdAt: Date.now().toLocaleString()
+    createdAt: Date.now().toLocaleString(),
+    requestId: crypto.randomUUID();
   },
   data: {
     id: 1,
@@ -190,7 +195,8 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
     },
     metadata: {
       agent: "Node",
-      createdAt: Date.now().toLocaleString()
+      createdAt: Date.now().toLocaleString(),
+      requestId: crypto.randomUUID();
     },
     data: {
       id: 1,
@@ -205,7 +211,8 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
     },
     metadata: {
       agent: "Windev",
-      createdAt: Date.now().toLocaleString()
+      createdAt: Date.now().toLocaleString(),
+      requestId: crypto.randomUUID();
     },
     data: {
       id: 1
@@ -221,7 +228,8 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
   },
   metadata: {
     agent: "Node",
-    createdAt: Date.now().toLocaleString()
+    createdAt: Date.now().toLocaleString(),
+    requestId: 0
   },
   data: {
     id: 1,

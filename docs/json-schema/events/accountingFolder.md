@@ -23,9 +23,11 @@
       "properties": {
         "id": "string"
       },
-      "required": ["id"]
+      "required": ["id"],
+      "additionalProperties": false
     }
   },
-  "required": ["name", "operation", "scope", "metadata", "data"]
+  "required": ["name", "operation", "scope", "metadata", "data"],
+  "additionalProperties": false
 }
 ```
