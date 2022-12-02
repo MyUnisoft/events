@@ -28,7 +28,27 @@ export interface AccountingFolder {
   };
 }
 
+export type DocumentOperation = Operation[
+  keyof Omit<Operation, "update" | "delete" | "void">
+];
+
+export enum DocumentKind {
+  DossierAnnuel = "AF",
+  DossierPermanent = "PF",
+  BaseDocumentaire = "DB"
+}
+
+export interface Document {
+  name: "document";
+  operation: DocumentOperation;
+  data: {
+    id: string;
+    kind: DocumentKind;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
+  document: Document;
 }
