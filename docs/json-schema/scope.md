@@ -12,6 +12,9 @@
     },
     "accountingFolderId": {
       "type": "integer"
+    },
+    "persPhysiqueId": {
+      "type": "integer"
     }
   },
   "required": ["schemaId"],
