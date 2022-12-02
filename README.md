@@ -82,6 +82,7 @@ export interface Scope {
   schemaId: number;
   firmId?: number;
   accountingFolderId?: number;
+  persPhysiqueId?: number;
 }
 
 export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
@@ -141,6 +142,33 @@ export interface AccountingFolder {
 | Operation  | Agent  | Payload  |
 |---|---|---|
 | CREATE  | Windev  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+
+</details>
+
+<details><summary>Document</summary>
+
+[JSON Schema](./docs/json-schema/events/document.md)
+
+```ts
+export enum DocumentKind {
+  DossierAnnuel = "AF",
+  DossierPermanent = "PF",
+  BaseDocumentaire = "DB"
+}
+
+export interface Document {
+  name: "document";
+  operation: "CREATE";
+  data: {
+    id: string;
+    kind: DocumentKind;
+  };
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; kind: DocumentKind; <br/>}</pre>  |
 
 </details>
 <br/>
