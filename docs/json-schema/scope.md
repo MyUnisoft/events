@@ -5,16 +5,16 @@
   "type": "object",
   "properties": {
     "schemaId": {
-      "type": "integer"
+      "type": "number"
     },
     "firmId": {
-      "type": "integer"
+      "type": "number"
     },
     "accountingFolderId": {
-      "type": "integer"
+      "type": "number"
     },
     "persPhysiqueId": {
-      "type": "integer"
+      "type": "number"
     }
   },
   "required": ["schemaId"],
