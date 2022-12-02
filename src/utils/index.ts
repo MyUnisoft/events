@@ -2,16 +2,16 @@
 import Ajv, { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
-import * as eventsValidationSchemas from "../schema/index";
+import { eventsValidationSchemas } from "../schema/index";
 
 // CONSTANTS
 const ajv = new Ajv();
 
 export type OperationFunctions = Record<string, any>;
 
-type MappedEvents = Map<string, Map<string, ValidateFunction<OperationFunctions>>>;
+type MappedEventsValidationFonction = Map<string, Map<string, ValidateFunction<OperationFunctions>>>;
 
-export const events: MappedEvents = new Map();
+export const eventsValidationFonction: MappedEventsValidationFonction = new Map();
 
 for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas)) {
   const operationsValidationFunctions: Map<string, ValidateFunction<OperationFunctions>> = new Map();
@@ -20,5 +20,5 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
     operationsValidationFunctions.set(operation, ajv.compile(validationSchema));
   }
 
-  events.set(name, operationsValidationFunctions);
+  eventsValidationFonction.set(name, operationsValidationFunctions);
 }

@@ -14,14 +14,15 @@ export interface Metadata {
   origin?: {
     endpoint: string;
     method: Method;
+    requestId?: string;
   };
   createdAt: string;
 }
 
-export type EventOptions<K extends keyof Events = keyof Events> = {
+export type EventOptions<T extends keyof Events = keyof Events> = {
   scope: Scope;
   metadata: Metadata;
-} & Events[K];
+} & Events[T];
 
 type TupleToObject<T extends readonly any[],
   M extends Record<Exclude<keyof T, keyof any[]>, PropertyKey>> =

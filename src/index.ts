@@ -1,17 +1,26 @@
+// Import Third-party Dependencies
+import Ajv from "ajv";
+
 // Import Internal Dependencies
-import { events } from "./utils/index";
+import { eventsValidationFonction } from "./utils/index";
+import { metadata as metadataSchema, scope as scopeSchema } from "./schema";
 
 // Import Types
-import { Events } from "./types/index";
+import { EventOptions, Events } from "./types/index";
 
-export function validate<T extends keyof Events = keyof Events>(options: Events[T]) {
-  const { name, operation, data } = options;
+// CONSTANTS
+const ajv = new Ajv();
+const metadataValidationFunction = ajv.compile(metadataSchema);
+const scopeValidationFunction = ajv.compile(scopeSchema);
 
-  if (!events.has(name)) {
+export function validate<T extends keyof Events = keyof Events>(options: EventOptions<T>) {
+  const { name, operation, data, scope, metadata } = options;
+
+  if (!eventsValidationFonction.has(name)) {
     throw new Error(`Unknown "event": ${name}`);
   }
 
-  const event = events.get(name);
+  const event = eventsValidationFonction.get(name);
   if (!event.has(operation.toLocaleLowerCase())) {
     throw new Error(`Unknown "operation": ${operation} for the "event": ${name}`);
   }
@@ -20,8 +29,16 @@ export function validate<T extends keyof Events = keyof Events>(options: Events[
   if (!operationValidationFunction(data)) {
     throw new Error(`Wrong data for the "operation": ${operation} on "event": ${name}`);
   }
+
+  if (!metadataValidationFunction(metadata)) {
+    throw new Error("Wrong data for metadata");
+  }
+
+  if (!scopeValidationFunction(scope)) {
+    throw new Error("Wrong data for scope");
+  }
 }
 
-export * as Schema from "./schema";
+export * as EventSchemas from "./schema/events/index";
 export * from "./types/index";
-export { events } from "./utils/index";
+export { eventsValidationFonction } from "./utils/index";

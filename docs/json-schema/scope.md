@@ -14,6 +14,7 @@
       "type": "integer"
     }
   },
-  "required": ["schemaId"]
+  "required": ["schemaId"],
+  "additionalProperties": false
 }
 ```
