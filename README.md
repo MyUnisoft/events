@@ -82,6 +82,7 @@ export interface Scope {
   schemaId: number;
   firmId?: number;
   accountingFolderId?: number;
+  persPhysiqueId?: number;
 }
 
 export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
