@@ -14,7 +14,7 @@
 
 ## 🚧 Requirements
 
-- [Node.js](https://nodejs.org/en/) version 14 or higher
+- [Node.js](https://nodejs.org/en/) version 16 or higher
 
 ## 🚀 Getting Started
 
@@ -28,10 +28,10 @@ $ yarn add @myunisoft/events
 
 ## 📚 Usage
 
-> How is define an Event & how to validate it.
+Define an event with TypeScript and validate it
 
 ```ts
-import * as MyEvents from "@myunisoft/events";
+import * as MyEvents, { EventOptions } from "@myunisoft/events";
 
 const event: EventOptions<"connector"> = {
   name: "connector",
@@ -57,13 +57,7 @@ const event: EventOptions<"connector"> = {
 MyEvents.validate<"connector">(event);
 ```
 
----
-
-
-> Specifying valide Events registring an endpoint related to Webhooks.
-
-[**Here**](./example/fastify/feature/webhook.ts) is an example
-
+> 👀 See [**here**](./example/fastify/feature/webhook.ts) for an example of exploiting webhooks with an http server.
 
 ## API
 
@@ -72,10 +66,12 @@ Throw an error if a given event is not internaly known.
 
 ## Events
 
-An Event fully constitued is composed by a `name`, a `data` object, a `scope` object, and a `metadata` object.
+An Event fully constitued is composed by a `name`, an `operation` a multiple objects such as `data`, `scope` and `metadata`.
 - The `name` identify the event.
+- The `operation` will define if it is a creation, update or deletion.
 - According to the name, we know the `data` and the differentes `metadata.origin.method` related.
 - The `metadata` object is used to determine differentes informations as the ecosystem, the entry point etc.
+- The `scope` will define the **who**.
 
 ```ts
 export interface Scope {
