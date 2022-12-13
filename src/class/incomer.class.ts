@@ -25,6 +25,7 @@ import {
   Prefix,
   SubscribeTo
 } from "types/utils";
+import { TransactionStore } from "./transaction.class";
 
 
 export type ServiceOptions = IncomerRegistrationDataIn & { prefix?: Prefix };
@@ -38,6 +39,8 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
     IncomerRegistrationMetadataIn
   >;
   readonly dispatcherChannelName: string;
+
+  readonly transactionStore: TransactionStore;
 
   protected subscriber: Redis.Redis;
 
@@ -57,6 +60,11 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
     this.dispatcherChannelName = `${this.prefix ? `${this.prefix}-` : ""}${channels.dispatcher}`;
 
     this.logger = logger.pino().child({ service: `${this.prefix ? `${this.prefix}-` : ""}${this.name}` });
+
+    this.transactionStore = new TransactionStore({
+      prefix: this.prefix,
+      instance: "incomer"
+    });
 
     this.dispatcherChannel = new Redis.Channel({
       name: channels.dispatcher,
