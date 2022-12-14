@@ -8,13 +8,12 @@ import {
   channels,
   incomerStoreName,
   predefinedEvents,
-  transactionStoreName,
   redisPort
 } from "../utils/config";
 import {
   Prefix,
   SubscribeTo,
-  IncomingMessages,
+  IncomerMessages,
   IncomerRegistrationDataIn,
   IncomerRegistrationMetadataIn,
   DispatcherTransactionMetadata,
@@ -23,9 +22,8 @@ import {
   IncomerTransactionMetadata,
   IncomerRegistrationMessage
 } from "../types/utils";
-import { Incomer } from "./incomer.class";
 import {
-  Transactions,
+  PartialTransaction,
   TransactionStore
 } from "./transaction.class";
 
@@ -61,7 +59,7 @@ export class Dispatcher {
   readonly privateUuid: string = uuidv4();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
-  readonly transactionStore: TransactionStore;
+  readonly transactionStore: TransactionStore<"dispatcher">;
 
   protected subscriber: Redis.Redis;
 
@@ -100,7 +98,7 @@ export class Dispatcher {
     this.subscriber.on("message", async(channel: string, message: string) => {
       const formatedMessage = JSON.parse(message) as {
         event: string;
-        data: IncomingMessages;
+        data: IncomerMessages;
         metadata: IncomerTransactionMetadata;
       };
 
@@ -126,7 +124,7 @@ export class Dispatcher {
     });
   }
 
-  public async getTree(treeName: string): Promise<IncomerStore | Transactions> {
+  public async getTree(treeName: string): Promise<IncomerStore> {
     const tree = await this.incomerStore.getValue(treeName);
 
     return tree ? tree : {};
@@ -163,13 +161,12 @@ export class Dispatcher {
     const { prefix } = metadata;
 
     const relatedIncomerTreeName = `${prefix ? `${prefix}-` : ""}${incomerStoreName}`;
-    const relatedTransactionStoreName = `${prefix ? `${prefix}-` : ""}${transactionStoreName}`;
 
     if (event === predefinedEvents.incomer.check.pong) {
       const { transactionId, origin } = metadata;
 
-      const relatedTransactions = await this.getTree(relatedTransactionStoreName) as Transactions;
-      if (!relatedTransactions[transactionId]) {
+      const transaction = await this.transactionStore.getTransaction(transactionId);
+      if (!transaction) {
         this.logger.error({
           channel,
           event,
@@ -200,10 +197,7 @@ export class Dispatcher {
 
       // Remove the transaction about the ping event
       // Do I want this to break ?
-      delete relatedTransactions[transactionId];
-      await this.transactionStore.setValue({
-        value: relatedTransactions
-      });
+      await this.transactionStore.deleteTransaction(transactionId);
     }
     else {
       const { data } = message;
@@ -252,32 +246,21 @@ export class Dispatcher {
     }));
     await this.subscriber.subscribe(`${metadata.prefix ? `${metadata.prefix}-` : ""}${providedUuid}`);
 
-    // Approve the service & send him info so he can use the dedicated channel
-    const transactionId = uuidv4();
-
-    const event = {
+    const event: PartialTransaction<"dispatcher"> = {
       event: predefinedEvents.dispatcher.registration.approvement,
       data: {
         uuid: providedUuid
       },
       metadata: {
         origin: this.privateUuid,
-        to: metadata.origin,
-        transactionId
+        to: metadata.origin
       }
     };
 
-    await this.dispatcherChannel.publish(event);
+    const transactionId = await this.transactionStore.setTransaction(event);
 
-    // Save the event as a new transaction
-    const transactionName = `${metadata.prefix ? `${metadata.prefix}-` : ""}${transactionStoreName}`;
-    const relatedTransactions = await this.getTree(transactionName) as Transactions;
-
-    relatedTransactions[transactionId] = { ...event, aliveSince: Date.now() };
-
-    await this.transactionStore.setValue({
-      value: relatedTransactions
-    });
+    // Approve the service & send him info so he can use the dedicated channel
+    await this.dispatcherChannel.publish({ ...event, metadata: { ...event.metadata, transactionId } });
 
     this.logger.info({
       event,
@@ -285,78 +268,3 @@ export class Dispatcher {
     }, "PUBLISHED APPROVEMENT");
   }
 }
-
-const kPrefix = "local";
-
-async function initDispatcher() {
-  await Redis.initRedis({ port: process.env.REDIS_PORT || 6379 } as any);
-
-  const dispatche = new Dispatcher({ prefix: kPrefix });
-  await dispatche.initialize();
-
-  const incomer = new Incomer({
-    name: "foo",
-    prefix: kPrefix,
-    subscribeTo: [
-      {
-        name: "connector"
-      },
-      {
-        name: "accountingFolder",
-        delay: 3600,
-        horizontalScall: false
-      }
-    ]
-  });
-
-  await incomer.initialize();
-}
-
-initDispatcher().catch((error) => console.error(error));
-
-
-async function initIncomer() {
-  await Redis.initRedis({ port: process.env.REDIS_PORT || 6379 } as any);
-
-  const incomer = new Incomer({
-    name: "foo",
-    prefix: kPrefix,
-    subscribeTo: [
-      {
-        name: "connector"
-      },
-      {
-        name: "accountingFolder",
-        delay: 3600,
-        horizontalScall: false
-      }
-    ]
-  });
-
-  await incomer.initialize();
-
-  // const secondService = new MyuService.MyuService({
-  //   name: "bar",
-  //   prefix: kPrefix,
-  //   subscribeTo: secondSubscribeTo
-  // });
-  // await secondService.initialize();
-
-  // await incomer.publish({
-  //   name: "connector",
-  //   operation: "CREATE",
-  //   scope: {
-  //     schemaId: 1
-  //   },
-  //   metadata: {
-  //     agent: "Node",
-  //     createdAt: Date.now().toLocaleString()
-  //   },
-  //   data: {
-  //     id: "1",
-  //     code: "Foo"
-  //   }
-  // });
-}
-
-initIncomer().catch((error) => console.error(error));

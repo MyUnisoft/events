@@ -9,18 +9,8 @@ export interface SubscribeTo<T extends keyof Events = keyof Events> {
   horizontalScall?: boolean;
 }
 
-export interface Transaction {
-  event: string;
-  data?: IncomingMessages | extMessages;
-  metadata: {
-    origin: string;
-    to?: string;
-  }
-  aliveSince: number;
-}
-
-export type IncomingMessages = IncomerRegistrationDataIn;
-export type extMessages = DispatcherRegistrationData;
+export type DispatcherMessages = DispatcherRegistrationData;
+export type IncomerMessages = IncomerRegistrationDataIn;
 
 // Messages
 
@@ -48,7 +38,7 @@ export interface DispatcherRegistrationMessage {
 export interface IncomerTransactionMetadata {
   origin: string;
   prefix?: Prefix;
-  transactionId?: string;
+  transactionId: string;
 }
 
 export interface IncomerRegistrationDataIn {
