@@ -8,5 +8,6 @@ module.exports = {
   testPathIgnorePatterns: [
     "/node_modules/",
     "/test/fixtures/"
-  ]
+  ],
+  globalSetup: "./start-container.js"
 };

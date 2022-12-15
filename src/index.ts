@@ -60,3 +60,5 @@ export function isDeleteOperation<T extends keyof Events>(
 export * as EventSchemas from "./schema/events/index";
 export * from "./types/index";
 export { eventsValidationFonction } from "./utils/index";
+export * from "./class/dispatcher.class";
+export * from "./class/incomer.class";

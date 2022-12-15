@@ -50,7 +50,7 @@ export interface DispachterOptions {
 
 export class Dispatcher {
   readonly type = "dispatcher";
-  readonly prefix: string | undefined;
+  readonly prefix: string;
   readonly dispatcherChannelName: string;
   readonly dispatcherChannel: Redis.Channel<
     { event: string; data: DispatcherRegistrationData; },
@@ -69,7 +69,7 @@ export class Dispatcher {
       DispatcherTransactionMetadata>
   >();
 
-  constructor(options: DispachterOptions = {}) {
+  constructor(options: DispachterOptions = {}, subscriber?: Redis.Redis) {
     this.prefix = `${options.prefix ? `${options.prefix}-` : ""}`;
     this.dispatcherChannelName = this.prefix + channels.dispatcher;
 
@@ -89,10 +89,15 @@ export class Dispatcher {
       name: channels.dispatcher,
       prefix: this.prefix
     });
+
+    this.subscriber = subscriber;
   }
 
   public async initialize() {
-    this.subscriber = await Redis.initRedis({ port: redisPort } as any, true);
+    if (!this.subscriber) {
+      this.subscriber = await Redis.initRedis({ port: redisPort } as any, true);
+    }
+
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
     this.subscriber.on("message", async(channel: string, message: string) => {
@@ -119,9 +124,16 @@ export class Dispatcher {
       catch (error) {
         this.logger.error(error);
       }
-
-      // Load in mem state for incomers & transactions
     });
+  }
+
+  public async close() {
+    if (!this.subscriber) {
+      return;
+    }
+
+    await this.subscriber.quit();
+    this.subscriber = undefined;
   }
 
   public async getTree(treeName: string): Promise<IncomerStore> {

@@ -26,7 +26,7 @@ export interface Transaction<T extends Instance = Instance> {
 export type Transactions<T extends Instance = Instance> = Record<string, Transaction<T>>;
 
 export type TransactionStoreOptions<T extends Instance = Instance> = {
-  instance: Instance
+  instance: T
 } & Partial<KVOptions<Transactions<T>>>;
 
 export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "metadata" | "aliveSince"> & {
