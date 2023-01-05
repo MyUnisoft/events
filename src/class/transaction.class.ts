@@ -43,12 +43,8 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     this.key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }
 
-  async getTransactions(): Promise<Transactions<T> & { metadata: null } | null> {
-    return await super.getValue(this.key);
-  }
-
-  async updateTransactions(transactions: Transactions<T>): Promise<string | Buffer> {
-    return await super.setValue({ value: transactions, key: this.key });
+  async getTransactions(): Promise<Transactions<T> & { metadata: null } | Record<string, any>> {
+    return await super.getValue(this.key) ?? {};
   }
 
   async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
@@ -56,11 +52,16 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
 
     const transactionId = uuidv4();
 
-    transactions[transactionId] = {
+    const formatedTransaction: Transaction<T> = {
       ...transaction,
       aliveSince: Date.now(),
-      metadata: { ...transaction.metadata, transactionId }
-    } as Transaction<T>;
+      metadata: {
+        ...transaction.metadata,
+        transactionId
+      } as T extends "dispatcher" ? DispatcherTransactionMetadata : IncomerTransactionMetadata
+    };
+
+    transactions[transactionId] = formatedTransaction;
 
     await this.updateTransactions(transactions);
 
@@ -76,8 +77,18 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
   async deleteTransaction(transactionId: string) {
     const transactions = await this.getTransactions();
 
-    delete transactions[transactionId];
+    const { [transactionId]: deletedTransaction, ...finalTransactions } = transactions;
 
-    await this.updateTransactions(transactions);
+    if (Object.entries(finalTransactions).length === 0) {
+      await super.deleteValue(this.key);
+
+      return;
+    }
+
+    await this.updateTransactions(finalTransactions);
+  }
+
+  private async updateTransactions(transactions: Transactions<T>): Promise<string | Buffer> {
+    return await super.setValue({ key: this.key, value: transactions });
   }
 }
