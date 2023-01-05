@@ -1,13 +1,17 @@
+// Import Third-party Dependencies
+import { initRedis, closeRedis, Redis } from "@myunisoft/redis-utils";
+
 // Import Internal Dependencies
 import { Dispatcher } from "../../../src/index";
 
-// Import Third-party Dependencies
-import { initRedis, closeRedis, Redis } from "@myunisoft/redis-utils";
 
 let dispatcher: Dispatcher;
 
 beforeAll(async() => {
-  await initRedis({ port: process.env.MYUNISOFT_REDIS_PORT, host: process.env.MYUNISOFT_REDIS_HOST } as any);
+  await initRedis({
+    port: process.env.MYUNISOFT_REDIS_PORT,
+    host: process.env.MYUNISOFT_REDIS_HOST
+  } as any);
 });
 
 afterAll(async() => {
@@ -36,7 +40,10 @@ describe("Dispatcher with subscriber", () => {
   let subscriber: Redis;
 
   beforeAll(async() => {
-    subscriber = await initRedis({ port: process.env.MYUNISOFT_REDIS_PORT, host: process.env.MYUNISOFT_REDIS_HOST } as any);
+    subscriber = await initRedis({
+      port: process.env.MYUNISOFT_REDIS_PORT,
+      host: process.env.MYUNISOFT_REDIS_HOST
+    } as any);
 
     dispatcher = new Dispatcher({}, subscriber);
 
