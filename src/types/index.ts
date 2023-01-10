@@ -17,7 +17,7 @@ export interface Metadata {
     method: Method;
     requestId?: string;
   };
-  createdAt: string;
+  createdAt: number;
 }
 
 export type EventOptions<T extends keyof Events = keyof Events> = {
@@ -36,7 +36,7 @@ export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = Tuple
 type WebhookResponse<K extends keyof Events> = {
   scope: Scope;
   webhookId: number;
-  createdAt: string;
+  createdAt: number;
 } & Events[K];
 
 export type WebhooksResponse<T extends (keyof Events)[] = (keyof Events)[]> = [

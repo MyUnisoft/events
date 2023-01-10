@@ -8,7 +8,7 @@ describe("validate", () => {
       operation: "CREATE",
       metadata: {
         agent: "Jest",
-        createdAt: Date.now().toString(),
+        createdAt: Date.now(),
         origin: {
           endpoint: "fake",
           method: "POST"
@@ -34,7 +34,7 @@ describe("validate", () => {
       operation: "CREATE",
       metadata: {
         agent: "Jest",
-        createdAt: Date.now().toString(),
+        createdAt: Date.now(),
         origin: {
           endpoint: "fake",
           method: "POST"

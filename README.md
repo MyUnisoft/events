@@ -46,7 +46,7 @@ const event: EventOptions<"connector"> = {
       method: "POST",
       requestId: crypto.randomUUID();
     },
-    createdAt: Date.now().toLocaleString()
+    createdAt: Date.now()
   },
   data: {
     id: 1,
@@ -90,7 +90,7 @@ export interface Metadata {
     method: Method;
     requestId?: string;
   };
-  createdAt: string;
+  createdAt: number;
 }
 ```
 
@@ -187,7 +187,7 @@ const event: EventOptions<"connector"> = {
   },
   metadata: {
     agent: "Node",
-    createdAt: Date.now().toLocaleString(),
+    createdAt: Date.now(),
     requestId: crypto.randomUUID();
   },
   data: {
@@ -219,7 +219,7 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
     },
     metadata: {
       agent: "Node",
-      createdAt: Date.now().toLocaleString(),
+      createdAt: Date.now(),
       requestId: crypto.randomUUID();
     },
     data: {
@@ -235,7 +235,7 @@ const events: EventsOptions<["connector", "accountingFolder"]> = [
     },
     metadata: {
       agent: "Windev",
-      createdAt: Date.now().toLocaleString(),
+      createdAt: Date.now(),
       requestId: crypto.randomUUID();
     },
     data: {
@@ -252,7 +252,7 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
   },
   metadata: {
     agent: "Node",
-    createdAt: Date.now().toLocaleString(),
+    createdAt: Date.now(),
     requestId: 0
   },
   data: {
@@ -288,7 +288,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
       code: "JFAC"
     },
     webhookId: 1,
-    createdAt: Date.now().toLocaleString()
+    createdAt: Date.now()
   },
   {
     name: "accountingFolder",
@@ -300,7 +300,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
       id: 1
     },
     webhookId: 2,
-    createdAt: Date.now().toLocaleString()
+    createdAt: Date.now()
   },
 ];
 ```
