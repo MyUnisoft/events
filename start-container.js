@@ -15,8 +15,8 @@ module.exports = async function startContainers() {
       .withExposedPorts(kRedisPort)
       .start();
 
-    process.env.MYUNISOFT_REDIS_PORT = redis.getMappedPort(kRedisPort);
-    process.env.MYUNISOFT_REDIS_HOST = redis.getHost();
+    process.env.REDIS_PORT = redis.getMappedPort(kRedisPort);
+    process.env.REDIS_HOST = redis.getHost();
   }
   catch (error) {
     console.error(error);

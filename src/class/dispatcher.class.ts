@@ -96,8 +96,8 @@ export class Dispatcher {
   public async initialize() {
     if (!this.subscriber) {
       this.subscriber = await Redis.initRedis({
-        port: process.env.MYUNISOFT_REDIS_PORT,
-        host: process.env.MYUNISOFT_REDIS_HOST
+        port: process.env.REDIS_PORT,
+        host: process.env.REDIS_HOST
       } as any, true);
     }
 
