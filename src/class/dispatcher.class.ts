@@ -2,6 +2,7 @@
 import * as Redis from "@myunisoft/redis-utils";
 import { v4 as uuidv4 } from "uuid";
 import * as logger from "pino";
+import Ajv, { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import {
@@ -26,11 +27,13 @@ import {
   PartialTransaction,
   TransactionStore
 } from "./transaction.class";
+import { DispatcherEventsValidationSchemas } from "../schema/index";
 
 // CONSTANTS
+const ajv = new Ajv();
 // const kPrefixs = ["local", "dev", "preprod", "prod"];
 
-interface RegistredIncomer {
+interface RegisteredIncomer {
   providedUuid: string;
   baseUuid: string;
   name: string;
@@ -40,11 +43,12 @@ interface RegistredIncomer {
   subscribeTo: SubscribeTo[];
 }
 
-type IncomerStore = Record<string, RegistredIncomer>;
+type IncomerStore = Record<string, RegisteredIncomer>;
 
 export interface DispachterOptions {
-  /* Prefix for the channel name, commonly used to distinguish environnements */
+  /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
+  eventsValidationFunction?: Map<string, ValidateFunction>;
   subscribeTo?: SubscribeTo[];
 }
 
@@ -69,9 +73,17 @@ export class Dispatcher {
       DispatcherTransactionMetadata>
   >();
 
+  public eventsValidationFunction: Map<string, ValidateFunction>;
+
   constructor(options: DispachterOptions = {}, subscriber?: Redis.Redis) {
     this.prefix = `${options.prefix ? `${options.prefix}-` : ""}`;
     this.dispatcherChannelName = this.prefix + channels.dispatcher;
+
+    this.eventsValidationFunction = options.eventsValidationFunction ?? new Map();
+
+    for (const [name, validationSchema] of Object.entries(DispatcherEventsValidationSchemas)) {
+      this.eventsValidationFunction.set(name, ajv.compile(validationSchema));
+    }
 
     this.incomerStore = new Redis.KVPeer({
       prefix: this.prefix,
@@ -103,31 +115,48 @@ export class Dispatcher {
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
-    this.subscriber.on("message", async(channel: string, message: string) => {
-      const formatedMessage = JSON.parse(message) as {
-        event: string;
-        data: IncomerMessages;
-        metadata: IncomerTransactionMetadata;
-      };
-
-      if (formatedMessage.metadata && formatedMessage.metadata.origin === this.privateUuid) {
-        return;
-      }
-
+    this.subscriber.on("message", async(channel, message) => {
       try {
-        switch (channel) {
-          case this.dispatcherChannelName:
-            await this.handleDispatcherMessages(formatedMessage);
-            break;
-          default:
-            await this.handleIncomerMessages(channel, formatedMessage);
-            break;
-        }
+        await this.handleMessages(channel, message);
       }
       catch (error) {
         this.logger.error(error);
       }
     });
+  }
+
+  private async handleMessages(channel: string, message: string) {
+    if (!message) {
+      return;
+    }
+
+    const formattedMessage = JSON.parse(message) as {
+      event: string;
+      data: IncomerMessages;
+      metadata: IncomerTransactionMetadata;
+    };
+
+    if (!formattedMessage.event) {
+      throw new Error("Malformed message");
+    }
+
+    const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
+    if (!eventValidationSchema) {
+      throw new Error("Unknown Event");
+    }
+
+    if (!eventValidationSchema(formattedMessage)) {
+      throw new Error("Malformed message");
+    }
+
+    switch (channel) {
+      case this.dispatcherChannelName:
+        await this.handleDispatcherMessages(formattedMessage);
+        break;
+      default:
+        await this.handleIncomerMessages(channel, formattedMessage);
+        break;
+    }
   }
 
   public async close() {
@@ -155,19 +184,13 @@ export class Dispatcher {
           data,
           metadata,
           uptime: process.uptime()
-        }, "A new service want to be registred");
+        }, "A new service want to be registered");
 
         await this.approveService(data, metadata);
 
         break;
       default:
-        this.logger.error({
-          event,
-          data,
-          metadata
-        }, "Unknown event on dispatcher channel");
-
-        break;
+        throw new Error("Unknown event on dispatcher channel");
     }
   }
 

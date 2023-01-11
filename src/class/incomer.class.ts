@@ -77,28 +77,28 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
     this.subscriber.on("message", async(channel: string, message: string) => {
-      const formatedMessage = JSON.parse(message);
+      const formattedMessage = JSON.parse(message);
 
       // Avoid reacting to his own message
-      if (formatedMessage.metadata && formatedMessage.metadata.origin === this.privateUuid) {
+      if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
         return;
       }
 
       try {
         switch (channel) {
           case this.dispatcherChannelName:
-            if (formatedMessage.metadata.to !== this.privateUuid) {
+            if (formattedMessage.metadata.to !== this.privateUuid) {
               return;
             }
 
-            await this.handleDispatcherMessages(formatedMessage);
+            await this.handleDispatcherMessages(formattedMessage);
             break;
           default:
             if (channel !== this.incomerChannelName) {
               return;
             }
 
-            await this.handleIncomerMessages(formatedMessage);
+            await this.handleIncomerMessages(formattedMessage);
             break;
         }
       }
@@ -119,9 +119,9 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
       }
     });
 
-    this.logger.info({ uptime: process.uptime() }, "Registring as a new incomer on dispatcher");
+    this.logger.info({ uptime: process.uptime() }, "Registering as a new incomer on dispatcher");
 
-    await new Promise((resolve) => this.once("registred", resolve));
+    await new Promise((resolve) => this.once("registered", resolve));
   }
 
   private async registerPrivateChannel(data: Record<string, any>) {
@@ -135,7 +135,7 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
       prefix: this.prefix
     });
 
-    this.emit("registred");
+    this.emit("registered");
   }
 
   private async handleDispatcherMessages(message: Record<string, any>): Promise<void> {

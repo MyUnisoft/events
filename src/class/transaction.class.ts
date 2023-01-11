@@ -52,7 +52,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
 
     const transactionId = uuidv4();
 
-    const formatedTransaction: Transaction<T> = {
+    const formattedTransaction: Transaction<T> = {
       ...transaction,
       aliveSince: Date.now(),
       metadata: {
@@ -61,7 +61,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
       } as T extends "dispatcher" ? DispatcherTransactionMetadata : IncomerTransactionMetadata
     };
 
-    transactions[transactionId] = formatedTransaction;
+    transactions[transactionId] = formattedTransaction;
 
     await this.updateTransactions(transactions);
 

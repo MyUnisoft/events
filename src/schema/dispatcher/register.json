@@ -1,0 +1,54 @@
+{
+  "register": {
+    "type": "object",
+    "properties": {
+      "event": {
+        "type": "string"
+      },
+      "data": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "subscribeTo": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "delay": {
+                  "type": "number"
+                },
+                "horizontalScale": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["name", "subscribeTo"],
+        "additionalProperties": false
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          }
+        },
+        "required": ["origin", "prefix"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["event", "data", "metadata"],
+    "additionalProperties": false
+  }
+}

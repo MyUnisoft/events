@@ -3,10 +3,10 @@ import { Events } from "./events";
 
 export type Prefix = "local" | "dev" | "preprod" | "prod";
 
-export interface SubscribeTo<T extends keyof Events = keyof Events> {
+export interface SubscribeTo<T extends keyof Events | string = string> {
   name: T;
   delay?: number;
-  horizontalScall?: boolean;
+  horizontalScale?: boolean;
 }
 
 export type DispatcherMessages = DispatcherRegistrationData;
@@ -44,7 +44,7 @@ export interface IncomerTransactionMetadata {
 export interface IncomerRegistrationDataIn {
   /* Service name */
   name: string;
-  /* Commonly used to distinguish environnements */
+  /* Commonly used to distinguish envs */
   subscribeTo: SubscribeTo[];
 }
 
