@@ -1,0 +1,38 @@
+{
+  "foo": {
+    "type": "object",
+    "properties": {
+      "event": {
+        "type": "string"
+      },
+      "data": {
+        "type": "object",
+        "properties": {
+          "foo": {
+            "type": "string"
+          }
+        },
+        "required": ["foo"],
+        "additionalProperties": false
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          }
+        },
+        "required": ["origin", "transactionId"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["event", "data", "metadata"],
+    "additionalProperties": false
+  }
+}
