@@ -3,7 +3,7 @@ import {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   Message
-} from "./utils";
+} from "./index";
 
 
 // Send by the a Dispatcher

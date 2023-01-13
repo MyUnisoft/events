@@ -9,18 +9,18 @@ import {
   channels,
   incomerStoreName,
   predefinedEvents
-} from "../utils/config";
+} from "../../utils/config";
 import {
   Prefix,
   SubscribeTo,
   DispatcherChannelMessages,
   IncomerChannelMessages
-} from "../types/utils";
+} from "../../types/eventManagement/index";
 import {
   PartialTransaction,
   TransactionStore
 } from "./transaction.class";
-import { DispatcherEventsValidationSchemas } from "../schema/index";
+import { DispatcherEventsValidationSchemas } from "../../schema/index";
 
 // CONSTANTS
 const ajv = new Ajv();

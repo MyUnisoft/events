@@ -4,7 +4,7 @@ import {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   SubscribeTo
-} from "./utils";
+} from "./index";
 
 
 // Send by the a Dispatcher

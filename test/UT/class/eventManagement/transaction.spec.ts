@@ -5,7 +5,7 @@ import {
 } from "@myunisoft/redis-utils";
 
 // Import Internal Dependencies
-import { PartialTransaction, TransactionStore } from "../../../src/class/transaction.class";
+import { PartialTransaction, TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
 
 let transactionStore: TransactionStore;
 

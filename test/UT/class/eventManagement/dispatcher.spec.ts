@@ -4,8 +4,8 @@ import * as Logger from "pino";
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { Dispatcher } from "../../../src/index";
-import * as EventsSchemas from "../schema/index";
+import { Dispatcher } from "../../../../src/index";
+import * as EventsSchemas from "../../schema/index";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino();

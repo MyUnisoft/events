@@ -11,13 +11,13 @@ import {
   channels,
   predefinedEvents,
   redisPort
-} from "../utils/config";
+} from "../../utils/config";
 import {
   Prefix,
   SubscribeTo,
   DispatcherChannelMessages,
   IncomerChannelMessages
-} from "types/utils";
+} from "../../types/eventManagement/index";
 import { PartialTransaction, TransactionStore } from "./transaction.class";
 
 

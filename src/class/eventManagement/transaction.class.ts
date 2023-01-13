@@ -12,7 +12,7 @@ import {
   IncomerTransactionMetadata,
   DispatcherChannelMessages,
   IncomerChannelMessages
-} from "types/utils";
+} from "../../types/eventManagement/index";
 
 export type Instance = "dispatcher" | "incomer";
 
