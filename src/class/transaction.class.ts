@@ -8,31 +8,30 @@ import { v4 as uuidv4 } from "uuid";
 
 // Import Internal Dependencies
 import {
-  DispatcherMessages,
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
-  IncomerMessages
+  DispatcherChannelMessages,
+  IncomerChannelMessages
 } from "types/utils";
 
 export type Instance = "dispatcher" | "incomer";
 
-export interface Transaction<T extends Instance = Instance> {
-  event: string;
-  data: T extends "dispatcher" ? DispatcherMessages : IncomerMessages;
-  metadata: T extends "dispatcher" ? DispatcherTransactionMetadata : IncomerTransactionMetadata;
-  aliveSince: number;
-}
+export type Transaction<T extends Instance = Instance> = (T extends "dispatcher" ?
+DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"] :
+DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]) & {
+    aliveSince: number
+};
+
+export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "metadata" | "aliveSince"> & {
+  metadata: T extends "dispatcher" ? Omit<DispatcherTransactionMetadata, "transactionId"> :
+  Omit<IncomerTransactionMetadata, "transactionId">
+};
 
 export type Transactions<T extends Instance = Instance> = Record<string, Transaction<T>>;
 
 export type TransactionStoreOptions<T extends Instance = Instance> = {
   instance: T
 } & Partial<KVOptions<Transactions<T>>>;
-
-export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "metadata" | "aliveSince"> & {
-  metadata: T extends "dispatcher" ? Omit<DispatcherTransactionMetadata, "transactionId"> :
-  Omit<IncomerTransactionMetadata, "transactionId">
-};
 
 export class TransactionStore<T extends Instance = Instance> extends KVPeer<Transactions<T>> {
   private key: string;
@@ -43,7 +42,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     this.key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }
 
-  async getTransactions(): Promise<Transactions<T> & { metadata: null } | Record<string, any>> {
+  async getTransactions(): Promise<Transactions<T> | Record<string, any>> {
     return await super.getValue(this.key) ?? {};
   }
 
@@ -52,14 +51,14 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
 
     const transactionId = uuidv4();
 
-    const formattedTransaction: Transaction<T> = {
+    const formattedTransaction = {
       ...transaction,
       aliveSince: Date.now(),
       metadata: {
         ...transaction.metadata,
         transactionId
       } as T extends "dispatcher" ? DispatcherTransactionMetadata : IncomerTransactionMetadata
-    };
+    } as Transaction<T>;
 
     transactions[transactionId] = formattedTransaction;
 

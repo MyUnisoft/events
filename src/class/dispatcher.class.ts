@@ -8,20 +8,13 @@ import Ajv, { ValidateFunction } from "ajv";
 import {
   channels,
   incomerStoreName,
-  predefinedEvents,
-  redisPort
+  predefinedEvents
 } from "../utils/config";
 import {
   Prefix,
   SubscribeTo,
-  IncomerMessages,
-  IncomerRegistrationDataIn,
-  IncomerRegistrationMetadataIn,
-  DispatcherTransactionMetadata,
-  DispatcherRegistrationData,
-  DispatcherRegistrationMetadata,
-  IncomerTransactionMetadata,
-  IncomerRegistrationMessage
+  DispatcherChannelMessages,
+  IncomerChannelMessages
 } from "../types/utils";
 import {
   PartialTransaction,
@@ -56,10 +49,7 @@ export class Dispatcher {
   readonly type = "dispatcher";
   readonly prefix: string;
   readonly dispatcherChannelName: string;
-  readonly dispatcherChannel: Redis.Channel<
-    { event: string; data: DispatcherRegistrationData; },
-    DispatcherRegistrationMetadata
-  >;
+  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
   readonly privateUuid: string = uuidv4();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
@@ -69,8 +59,7 @@ export class Dispatcher {
 
   private logger: logger.Logger;
   private incomerChannels = new Map<string,
-    Redis.Channel<{ event: string; } & Record<string, any>,
-      DispatcherTransactionMetadata>
+    Redis.Channel<IncomerChannelMessages["DispatcherMessages"]>
   >();
 
   public eventsValidationFunction: Map<string, ValidateFunction>;
@@ -130,14 +119,16 @@ export class Dispatcher {
       return;
     }
 
-    const formattedMessage = JSON.parse(message) as {
-      event: string;
-      data: IncomerMessages;
-      metadata: IncomerTransactionMetadata;
-    };
+    const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["IncomerMessages"] |
+      IncomerChannelMessages["IncomerMessage"];
 
-    if (!formattedMessage.event) {
+    if (!formattedMessage.event || !formattedMessage.metadata) {
       throw new Error("Malformed message");
+    }
+
+    // Avoid reacting to his own message
+    if (formattedMessage.metadata.origin === this.privateUuid) {
+      return;
     }
 
     const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
@@ -151,10 +142,10 @@ export class Dispatcher {
 
     switch (channel) {
       case this.dispatcherChannelName:
-        await this.handleDispatcherMessages(formattedMessage);
+        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["IncomerMessages"]);
         break;
       default:
-        await this.handleIncomerMessages(channel, formattedMessage);
+        await this.handleIncomerMessages(channel, formattedMessage as IncomerChannelMessages["IncomerMessage"]);
         break;
     }
   }
@@ -174,7 +165,7 @@ export class Dispatcher {
     return tree ? tree : {};
   }
 
-  private async handleDispatcherMessages(message: { event: string } & IncomerRegistrationMessage) {
+  private async handleDispatcherMessages(message: DispatcherChannelMessages["IncomerMessages"]) {
     const { event, data, metadata } = message;
 
     switch (event) {
@@ -186,7 +177,7 @@ export class Dispatcher {
           uptime: process.uptime()
         }, "A new service want to be registered");
 
-        await this.approveService(data, metadata);
+        await this.approveService(message);
 
         break;
       default:
@@ -194,7 +185,7 @@ export class Dispatcher {
     }
   }
 
-  private async handleIncomerMessages(channel: string, message: Record<string, any>) {
+  private async handleIncomerMessages(channel: string, message: IncomerChannelMessages["IncomerMessage"]) {
     const { event, metadata } = message;
     const { prefix } = metadata;
 
@@ -238,13 +229,13 @@ export class Dispatcher {
       await this.transactionStore.deleteTransaction(transactionId);
     }
     else {
-      const { data } = message;
-
-      console.log("not happening", event, data, metadata);
+      console.log("not happening", { ...message });
     }
   }
 
-  private async approveService(data: IncomerRegistrationDataIn, metadata: IncomerRegistrationMetadataIn) {
+  private async approveService(message: DispatcherChannelMessages["IncomerMessages"]) {
+    const { data, metadata } = message;
+
     const providedUuid: string = uuidv4();
 
     // Get Incomers Tree

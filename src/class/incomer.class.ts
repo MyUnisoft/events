@@ -8,36 +8,32 @@ import * as logger from "pino";
 
 // Import Internal Dependencies
 import {
-  EventOptions,
-  Events
-} from "../types/index";
-import {
   channels,
   predefinedEvents,
   redisPort
 } from "../utils/config";
 import {
-  IncomerRegistrationDataIn,
-  IncomerRegistrationMetadataIn,
-  IncomerTransactionMetadata,
-  DispatcherTransactionMetadata,
-  PongData,
   Prefix,
-  SubscribeTo
+  SubscribeTo,
+  DispatcherChannelMessages,
+  IncomerChannelMessages
 } from "types/utils";
-import { TransactionStore } from "./transaction.class";
+import { PartialTransaction, TransactionStore } from "./transaction.class";
 
 
-export type ServiceOptions = IncomerRegistrationDataIn & { prefix?: Prefix };
+export type ServiceOptions = {
+  /* Service name */
+  name: string;
+  /* Commonly used to distinguish envs */
+  subscribeTo: SubscribeTo[];
+  prefix?: Prefix;
+};
 
-export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter {
+export class Incomer extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
   readonly subscribeTo: SubscribeTo[];
-  readonly dispatcherChannel: Redis.Channel<
-    { event: string; data: IncomerRegistrationDataIn; },
-    IncomerRegistrationMetadataIn
-  >;
+  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
   readonly dispatcherChannelName: string;
 
   readonly transactionStore: TransactionStore;
@@ -47,10 +43,7 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
   private privateUuid: string = uuidv4();
   private logger: logger.Logger;
   private incomerChannelName: string;
-  private incomerChannel: Redis.Channel<
-    PongData | EventOptions<T>,
-    IncomerTransactionMetadata
-  >;
+  private incomerChannel: Redis.Channel<IncomerChannelMessages["IncomerMessage"]>;
 
   constructor(options: ServiceOptions) {
     super();
@@ -73,6 +66,9 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
   }
 
   public async initialize() {
+    // Every x ms, check transaction are dealed
+    // If not, emit the event so he can dealed locally ?
+
     this.subscriber = await Redis.initRedis({ port: redisPort } as any, true);
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
@@ -107,7 +103,7 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
       }
     });
 
-    await this.dispatcherChannel.publish({
+    const event: PartialTransaction<"incomer"> = {
       event: predefinedEvents.incomer.registration.register,
       data: {
         name: this.name,
@@ -116,6 +112,21 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
       metadata: {
         origin: this.privateUuid,
         prefix: this.prefix
+      }
+    };
+
+    const transactionId = await this.transactionStore.setTransaction(event);
+
+    await this.dispatcherChannel.publish({
+      event: predefinedEvents.incomer.registration.register,
+      data: {
+        name: this.name,
+        subscribeTo: this.subscribeTo
+      },
+      metadata: {
+        origin: this.privateUuid,
+        prefix: this.prefix,
+        transactionId
       }
     });
 
@@ -169,7 +180,7 @@ export class Incomer<T extends keyof Events = keyof Events> extends EventEmitter
     const { event } = message;
 
     if (event === predefinedEvents.dispatcher.check.ping) {
-      const { metadata } = message as { data: Record<string, any>, metadata: DispatcherTransactionMetadata };
+      const { metadata } = message as IncomerChannelMessages["DispatcherMessages"];
 
       const event = {
         event: predefinedEvents.incomer.check.pong,
