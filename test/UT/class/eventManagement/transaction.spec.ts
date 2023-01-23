@@ -2,7 +2,7 @@
 import {
   initRedis,
   closeRedis
-} from "@myunisoft/redis-utils";
+} from "@myunisoft/redis";
 
 // Import Internal Dependencies
 import { PartialTransaction, TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
