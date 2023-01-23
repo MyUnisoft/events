@@ -25,7 +25,7 @@
       "additionalProperties": false
     },
     "createdAt": {
-      "type": "string"
+      "type": "number"
     }
   },
   "required": ["agent", "createdAt"],
