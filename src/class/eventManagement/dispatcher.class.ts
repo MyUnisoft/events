@@ -1,5 +1,5 @@
 // Import Third-party Dependencies
-import * as Redis from "@myunisoft/redis-utils";
+import * as Redis from "@myunisoft/redis";
 import { v4 as uuidv4 } from "uuid";
 import * as logger from "pino";
 import Ajv, { ValidateFunction } from "ajv";
@@ -14,17 +14,19 @@ import {
   Prefix,
   SubscribeTo,
   DispatcherChannelMessages,
-  IncomerChannelMessages
+  IncomerChannelMessages,
+  TransactionAck
 } from "../../types/eventManagement/index";
 import {
   PartialTransaction,
   TransactionStore
 } from "./transaction.class";
-import { DispatcherEventsValidationSchemas } from "../../schema/index";
+import * as ChannelsMessages from "../../schema/eventManagement/index";
+import { Channel } from "@myunisoft/redis";
+import { IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
 
 // CONSTANTS
 const ajv = new Ajv();
-// const kPrefixs = ["local", "dev", "preprod", "prod"];
 
 interface RegisteredIncomer {
   providedUuid: string;
@@ -49,7 +51,7 @@ export class Dispatcher {
   readonly type = "dispatcher";
   readonly prefix: string;
   readonly dispatcherChannelName: string;
-  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
+  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"] | TransactionAck>;
   readonly privateUuid: string = uuidv4();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
@@ -70,7 +72,7 @@ export class Dispatcher {
 
     this.eventsValidationFunction = options.eventsValidationFunction ?? new Map();
 
-    for (const [name, validationSchema] of Object.entries(DispatcherEventsValidationSchemas)) {
+    for (const [name, validationSchema] of Object.entries(ChannelsMessages)) {
       this.eventsValidationFunction.set(name, ajv.compile(validationSchema));
     }
 
@@ -142,7 +144,7 @@ export class Dispatcher {
 
     switch (channel) {
       case this.dispatcherChannelName:
-        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["IncomerMessages"]);
+        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["IncomerMessages"] | TransactionAck);
         break;
       default:
         await this.handleIncomerMessages(channel, formattedMessage as IncomerChannelMessages["IncomerMessage"]);
@@ -165,19 +167,42 @@ export class Dispatcher {
     return tree ? tree : {};
   }
 
-  private async handleDispatcherMessages(message: DispatcherChannelMessages["IncomerMessages"]) {
-    const { event, data, metadata } = message;
+  private async handleAck(transactionId) {
+    const transaction = await this.transactionStore.getTransaction(transactionId);
+    if (!transaction) {
+      throw new Error("Unknown transaction to ack");
+    }
+
+    await this.transactionStore.deleteTransaction(transactionId);
+  }
+
+  private async publishAck(
+    channel: Channel,
+    message: TransactionAck
+  ) {
+    await channel.publish(message);
+  }
+
+  private async handleDispatcherMessages(message: DispatcherChannelMessages["IncomerMessages"] | TransactionAck) {
+    const { event } = message;
 
     switch (event) {
       case predefinedEvents.incomer.registration.register:
         this.logger.info({
-          event,
-          data,
-          metadata,
+          ...message,
           uptime: process.uptime()
-        }, "A new service want to be registered");
+        }, "New Registration on Dispatcher Channel");
 
-        await this.approveService(message);
+        await this.approveService(message as IncomerRegistrationMessage);
+
+        break;
+      case predefinedEvents.ack:
+        this.logger.info({
+          ...message,
+          uptime: process.uptime()
+        }, "New Ack on Dispatcher Channel");
+
+        await this.handleAck(message.metadata.transactionId);
 
         break;
       default:
@@ -185,7 +210,7 @@ export class Dispatcher {
     }
   }
 
-  private async handleIncomerMessages(channel: string, message: IncomerChannelMessages["IncomerMessage"]) {
+  private async handleIncomerMessages(channel: string, message: IncomerChannelMessages["IncomerMessage"] | TransactionAck) {
     const { event, metadata } = message;
     const { prefix } = metadata;
 
@@ -229,11 +254,11 @@ export class Dispatcher {
       await this.transactionStore.deleteTransaction(transactionId);
     }
     else {
-      console.log("not happening", { ...message });
+      this.logger.info({ ...message }, "injected event");
     }
   }
 
-  private async approveService(message: DispatcherChannelMessages["IncomerMessages"]) {
+  private async approveService(message: IncomerRegistrationMessage) {
     const { data, metadata } = message;
 
     const providedUuid: string = uuidv4();
@@ -273,6 +298,7 @@ export class Dispatcher {
       name: providedUuid,
       prefix: metadata.prefix
     }));
+
     await this.subscriber.subscribe(`${metadata.prefix ? `${metadata.prefix}-` : ""}${providedUuid}`);
 
     const event: PartialTransaction<"dispatcher"> = {
@@ -289,7 +315,14 @@ export class Dispatcher {
     const transactionId = await this.transactionStore.setTransaction(event);
 
     // Approve the service & send him info so he can use the dedicated channel
-    await this.dispatcherChannel.publish({ ...event, metadata: { ...event.metadata, transactionId } });
+    await this.dispatcherChannel.publish({
+      ...event,
+      metadata: {
+        origin: this.privateUuid,
+        to: metadata.origin,
+        transactionId
+      }
+    });
 
     this.logger.info({
       event,

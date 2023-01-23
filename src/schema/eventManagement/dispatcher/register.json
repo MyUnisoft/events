@@ -3,7 +3,8 @@
     "type": "object",
     "properties": {
       "event": {
-        "type": "string"
+        "type": "string",
+        "pattern": "register"
       },
       "data": {
         "type": "object",
@@ -44,7 +45,7 @@
             "type": "string"
           }
         },
-        "required": ["origin", "prefix"],
+        "required": ["origin"],
         "additionalProperties": false
       }
     },

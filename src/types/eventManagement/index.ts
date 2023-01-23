@@ -10,16 +10,24 @@ export interface SubscribeTo<T extends string = string> {
   horizontalScale?: boolean;
 }
 
+export type TransactionAck = Message & {
+  metadata: {
+    origin: string;
+    to?: string;
+    transactionId: string;
+  };
+};
+
 export interface DispatcherTransactionMetadata {
   origin: string;
   to: string;
-  transactionId: string;
+  transactionId?: string;
 }
 
 export interface IncomerTransactionMetadata {
   origin: string;
   prefix?: Prefix;
-  transactionId: string;
+  transactionId?: string;
 }
 
 export { DispatcherChannelMessages } from "./dispatcherChannel";

@@ -2,7 +2,7 @@
 import { EventEmitter } from "events";
 
 // Import Third-party Dependencies
-import * as Redis from "@myunisoft/redis-utils";
+import * as Redis from "@myunisoft/redis";
 import { v4 as uuidv4 } from "uuid";
 import * as logger from "pino";
 
@@ -16,9 +16,12 @@ import {
   Prefix,
   SubscribeTo,
   DispatcherChannelMessages,
-  IncomerChannelMessages
+  IncomerChannelMessages,
+  TransactionAck
 } from "../../types/eventManagement/index";
-import { PartialTransaction, TransactionStore } from "./transaction.class";
+import { TransactionStore } from "./transaction.class";
+import { Channel } from "@myunisoft/redis";
+import { DispatcherRegistrationMessage } from "types/eventManagement/dispatcherChannel";
 
 
 export type ServiceOptions = {
@@ -33,7 +36,7 @@ export class Incomer extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
   readonly subscribeTo: SubscribeTo[];
-  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
+  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"] | TransactionAck>;
   readonly dispatcherChannelName: string;
 
   readonly transactionStore: TransactionStore;
@@ -73,49 +76,13 @@ export class Incomer extends EventEmitter {
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
     this.subscriber.on("message", async(channel: string, message: string) => {
-      const formattedMessage = JSON.parse(message);
-
-      // Avoid reacting to his own message
-      if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
-        return;
-      }
-
       try {
-        switch (channel) {
-          case this.dispatcherChannelName:
-            if (formattedMessage.metadata.to !== this.privateUuid) {
-              return;
-            }
-
-            await this.handleDispatcherMessages(formattedMessage);
-            break;
-          default:
-            if (channel !== this.incomerChannelName) {
-              return;
-            }
-
-            await this.handleIncomerMessages(formattedMessage);
-            break;
-        }
+        await this.handleMessages(channel, message);
       }
       catch (error) {
         this.logger.error(error);
       }
     });
-
-    const event: PartialTransaction<"incomer"> = {
-      event: predefinedEvents.incomer.registration.register,
-      data: {
-        name: this.name,
-        subscribeTo: this.subscribeTo
-      },
-      metadata: {
-        origin: this.privateUuid,
-        prefix: this.prefix
-      }
-    };
-
-    const transactionId = await this.transactionStore.setTransaction(event);
 
     await this.dispatcherChannel.publish({
       event: predefinedEvents.incomer.registration.register,
@@ -125,8 +92,7 @@ export class Incomer extends EventEmitter {
       },
       metadata: {
         origin: this.privateUuid,
-        prefix: this.prefix,
-        transactionId
+        prefix: this.prefix
       }
     });
 
@@ -135,42 +101,73 @@ export class Incomer extends EventEmitter {
     await new Promise((resolve) => this.once("registered", resolve));
   }
 
-  private async registerPrivateChannel(data: Record<string, any>) {
-    this.incomerChannelName = `${this.prefix ? `${this.prefix}-` : ""}${data.uuid}`;
-    this.privateUuid = data.uuid;
+  private async handleMessages(channel: string, message: string) {
+    if (!message) {
+      return;
+    }
 
-    await this.subscriber.subscribe(this.incomerChannelName);
+    const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["DispatcherMessages"] |
+      IncomerChannelMessages["DispatcherMessages"];
 
-    this.incomerChannel = new Redis.Channel({
-      name: this.privateUuid,
-      prefix: this.prefix
-    });
+    // Avoid reacting to his own message
+    if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
+      return;
+    }
 
-    this.emit("registered");
+    try {
+      switch (channel) {
+        case this.dispatcherChannelName:
+          await this.handleDispatcherMessages(formattedMessage);
+
+          break;
+        default:
+          if (channel !== this.incomerChannelName) {
+            return;
+          }
+
+          await this.handleIncomerMessages(formattedMessage);
+
+          break;
+      }
+    }
+    catch (error) {
+      this.logger.error(error);
+    }
   }
 
-  private async handleDispatcherMessages(message: Record<string, any>): Promise<void> {
-    const { event, data, metadata } = message;
+  private async handleDispatcherMessages(message: DispatcherChannelMessages["DispatcherMessages"] | TransactionAck):
+    Promise<void> {
+    if (message.metadata.to !== this.privateUuid) {
+      return;
+    }
+
+    const { event } = message;
 
     switch (event) {
       case predefinedEvents.dispatcher.registration.approvement:
         this.logger.info({
-          event,
-          data,
-          metadata,
+          ...message,
           uptime: process.uptime()
-        }, "New approvement message from dispatcher");
+        }, "New approvement message on Dispatcher Channel");
 
-        await this.registerPrivateChannel(data);
+        // eslint-disable-next-line dot-notation
+        await this.registerPrivateChannel(message as DispatcherRegistrationMessage);
+
+        break;
+      case predefinedEvents.ack:
+        this.logger.info({
+          ...message,
+          uptime: process.uptime()
+        }, "New ack on Dispatcher Channel");
+
+        await this.handleAck(message.metadata.transactionId);
 
         break;
       default:
         this.logger.info({
-          event,
-          data,
-          metadata,
+          ...message,
           uptime: process.uptime()
-        }, "New unknown message from dispatcher");
+        }, "Unknown message on Dispatcher Channel");
 
         break;
     }
@@ -205,6 +202,46 @@ export class Incomer extends EventEmitter {
 
       console.log("not happening", event, data, metadata);
     }
+  }
+
+  private async registerPrivateChannel(message: DispatcherRegistrationMessage) {
+    const { data } = message;
+
+    this.incomerChannelName = `${this.prefix ? `${this.prefix}-` : ""}${data.uuid}`;
+    this.privateUuid = data.uuid;
+
+    await this.subscriber.subscribe(this.incomerChannelName);
+
+    this.incomerChannel = new Redis.Channel({
+      name: this.privateUuid,
+      prefix: this.prefix
+    });
+
+    await this.publishAck(this.dispatcherChannel, {
+      event: "ack",
+      metadata: {
+        origin: this.privateUuid,
+        transactionId: message.metadata.transactionId
+      }
+    });
+
+    this.emit("registered");
+  }
+
+  private async handleAck(transactionId: string) {
+    const transaction = await this.transactionStore.getTransaction(transactionId);
+    if (!transaction) {
+      throw new Error("Unknown transaction to ack");
+    }
+
+    await this.transactionStore.deleteTransaction(transactionId);
+  }
+
+  private async publishAck(
+    channel: Channel,
+    message: TransactionAck
+  ) {
+    await channel.publish(message);
   }
 }
 

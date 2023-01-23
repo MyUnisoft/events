@@ -28,5 +28,6 @@ export const predefinedEvents = {
       /* Send as a response to a ping */
       pong: "pong"
     }
-  }
+  },
+  ack: "ack"
 };
