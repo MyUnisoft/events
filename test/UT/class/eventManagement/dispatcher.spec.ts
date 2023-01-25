@@ -1,4 +1,3 @@
-/* eslint-disable max-nested-callbacks */
 // Import Third-party Dependencies
 import {
   initRedis,
@@ -94,7 +93,56 @@ describe("Dispatcher", () => {
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
+
+    describe("Publishing a well formed event", () => {
+      beforeAll(async() => {
+        const channel = new Channel({
+          name: "dispatcher"
+        });
+
+        await channel.publish({
+          event: "register",
+          data: {
+            name: "bar",
+            subscribeTo: []
+          },
+          metadata: {
+            origin: "foo"
+          }
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      });
+
+      test("It should handle the message and log infos about it", async() => {
+        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+        expect(mockedLoggerInfo).toHaveBeenCalled();
+      });
+
+      test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
+        const channel = new Channel({
+          name: "dispatcher"
+        });
+
+        await channel.publish({
+          event: "register",
+          data: {
+            name: "bar",
+            subscribeTo: []
+          },
+          metadata: {
+            origin: "foo"
+          }
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Forbidden multiple registration for a same instance"));
+      });
+    });
   });
+
 
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
@@ -327,21 +375,19 @@ describe("Dispatcher", () => {
               subscribeTo: []
             },
             metadata: {
-              origin: "foo"
+              origin: "bar"
             }
           });
+
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
         });
 
         test("it should set a new transaction", async() => {
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
-
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
           expect(mockedSetTransaction).toHaveBeenCalled();
         });
 
         test("it should publish a well formed approvement event and transactionId should be defined", async() => {
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
-
           expect(transactionId).toBeDefined();
         });
 

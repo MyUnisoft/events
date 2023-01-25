@@ -270,7 +270,7 @@ export class Dispatcher {
     // Avoid multiple init from a same instance of a service
     for (const service of Object.values(relatedIncomerTree)) {
       if (service.baseUuid === metadata.origin) {
-        return;
+        throw new Error("Forbidden multiple registration for a same instance");
       }
     }
 
