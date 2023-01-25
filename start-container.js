@@ -26,7 +26,5 @@ module.exports = async function startContainers() {
 };
 
 process.on("SIGTERM", () => {
-  if (redis && redis.stop) {
-    redis.stop();
-  }
+  redis?.stop?.();
 });
