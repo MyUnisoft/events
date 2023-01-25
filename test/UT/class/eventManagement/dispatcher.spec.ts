@@ -81,7 +81,7 @@ describe("Dispatcher", () => {
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
 
-    test("Publishing an Malformed message, it should log a new Error", async() => {
+    test("Publishing a malformed message, it should log a new Error", async() => {
       const channel = new Channel({
         name: "dispatcher"
       });
@@ -93,6 +93,108 @@ describe("Dispatcher", () => {
       expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Dispatcher with prefix", () => {
+    let dispatcher: Dispatcher;
+
+    beforeAll(async() => {
+      dispatcher = new Dispatcher({
+        prefix: "local"
+      });
+
+      await dispatcher.initialize();
+    });
+
+    afterAll(async() => {
+      await dispatcher.close();
+    });
+
+    beforeEach(() => {
+      mockedLoggerError.mockClear();
+      mockedLoggerInfo.mockClear();
+      mockedHandleDispatcherMessages.mockClear();
+      mockedHandleIncomerMessages.mockClear();
+    });
+
+    test("Dispatcher should be defined", () => {
+      expect(dispatcher).toBeInstanceOf(Dispatcher);
+      expect(dispatcher.prefix).toBe("local-");
+      expect(dispatcher.privateUuid).toBeDefined();
+    });
+
+    describe("Publishing on the dispatcher channel", () => {
+      describe("Publishing well formed register event", () => {
+        let transactionId;
+        let subscriber: Redis;
+
+        beforeAll(async() => {
+          subscriber = await initRedis({
+            port: process.env.REDIS_PORT,
+            host: process.env.REDIS_HOST
+          } as any, true);
+
+          await subscriber.subscribe("local-dispatcher");
+
+          subscriber.on("message", async(channel, message) => {
+            const formattedMessage = JSON.parse(message);
+
+            if (formattedMessage.event && formattedMessage.event === "approvement") {
+              transactionId = formattedMessage.metadata.transactionId;
+            }
+          });
+
+          const channel = new Channel({
+            name: "dispatcher",
+            prefix: "local"
+          });
+
+          await channel.publish({
+            event: "register",
+            data: {
+              name: "bar",
+              subscribeTo: []
+            },
+            metadata: {
+              origin: "foo"
+            }
+          });
+        });
+
+        test("it should set a new transaction", async() => {
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+          expect(mockedSetTransaction).toHaveBeenCalled();
+        });
+
+        test("it should publish a well formed approvement event and transactionId should be defined", async() => {
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+          expect(transactionId).toBeDefined();
+        });
+
+        test("Publishing a well formed ack event, it should be calling deleteTransaction", async() => {
+          const channel = new Channel({
+            name: "dispatcher",
+            prefix: "local"
+          });
+
+          await channel.publish({
+            event: "ack",
+            metadata: {
+              origin: "foo",
+              prefix: "local",
+              transactionId
+            }
+          });
+
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+          expect(mockedDeleteTransaction).toHaveBeenCalled();
+        });
+      });
     });
   });
 
@@ -237,7 +339,7 @@ describe("Dispatcher", () => {
           expect(mockedSetTransaction).toHaveBeenCalled();
         });
 
-        test("it should publish a well formed approvement event", async() => {
+        test("it should publish a well formed approvement event and transactionId should be defined", async() => {
           await new Promise((resolve) => setTimeout(resolve, 1_000));
 
           expect(transactionId).toBeDefined();
@@ -261,30 +363,6 @@ describe("Dispatcher", () => {
           expect(mockedDeleteTransaction).toHaveBeenCalled();
         });
       });
-
-      test(`Publishing well formed "register" event,
-            it should set a new transaction & publish a well formed "approvement" event`, async() => {
-        const channel = new Channel({
-          name: "dispatcher"
-        });
-
-        await channel.publish({
-          event: "register",
-          data: {
-            name: "bar",
-            subscribeTo: []
-          },
-          metadata: {
-            origin: "foo"
-          }
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
-
-        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
-      });
-
 
       test(`Publishing an unknown event on the dispatcher channel,
             it should log a new Error with the message "Unknown event on dispatcher channel"`,
