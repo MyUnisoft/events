@@ -1,9 +1,9 @@
 // Import Node.js Dependencies
 import { EventEmitter } from "events";
+import { randomUUID } from "crypto";
 
 // Import Third-party Dependencies
 import * as Redis from "@myunisoft/redis";
-import { v4 as uuidv4 } from "uuid";
 import * as logger from "pino";
 
 // Import Internal Dependencies
@@ -43,7 +43,7 @@ export class Incomer extends EventEmitter {
 
   protected subscriber: Redis.Redis;
 
-  private privateUuid: string = uuidv4();
+  private privateUuid: string = randomUUID();
   private logger: logger.Logger;
   private incomerChannelName: string;
   private incomerChannel: Redis.Channel<IncomerChannelMessages["IncomerMessage"]>;

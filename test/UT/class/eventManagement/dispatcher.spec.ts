@@ -1,3 +1,6 @@
+// Import Node.js Dependencies
+import timers from "timers/promises";
+
 // Import Third-party Dependencies
 import {
   initRedis,
@@ -73,7 +76,7 @@ describe("Dispatcher", () => {
 
       await channel.publish({ foo: "bar" });
 
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await timers.setTimeout(1_000);
 
       expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
@@ -87,7 +90,7 @@ describe("Dispatcher", () => {
 
       await channel.publish({ event: "foo" });
 
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await timers.setTimeout(1_000);
 
       expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
@@ -110,11 +113,11 @@ describe("Dispatcher", () => {
             origin: "foo"
           }
         });
-
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
       });
 
       test("It should handle the message and log infos about it", async() => {
+        await timers.setTimeout(1_000);
+
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
         expect(mockedLoggerInfo).toHaveBeenCalled();
       });
@@ -135,14 +138,13 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Forbidden multiple registration for a same instance"));
       });
     });
   });
-
 
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
@@ -205,20 +207,21 @@ describe("Dispatcher", () => {
               subscribeTo: []
             },
             metadata: {
-              origin: "foo"
+              origin: "foo",
+              prefix: "local"
             }
           });
         });
 
         test("it should set a new transaction", async() => {
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          await timers.setTimeout(1_000);
 
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
           expect(mockedSetTransaction).toHaveBeenCalled();
         });
 
         test("it should publish a well formed approvement event and transactionId should be defined", async() => {
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          await timers.setTimeout(1_000);
 
           expect(transactionId).toBeDefined();
         });
@@ -238,7 +241,7 @@ describe("Dispatcher", () => {
             }
           });
 
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          await timers.setTimeout(1_000);
 
           expect(mockedDeleteTransaction).toHaveBeenCalled();
         });
@@ -291,7 +294,7 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
@@ -312,7 +315,7 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
@@ -335,7 +338,7 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Unknown Event"));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
@@ -378,16 +381,18 @@ describe("Dispatcher", () => {
               origin: "bar"
             }
           });
-
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
         });
 
         test("it should set a new transaction", async() => {
+          await timers.setTimeout(1_000);
+
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
           expect(mockedSetTransaction).toHaveBeenCalled();
         });
 
         test("it should publish a well formed approvement event and transactionId should be defined", async() => {
+          await timers.setTimeout(1_000);
+
           expect(transactionId).toBeDefined();
         });
 
@@ -404,7 +409,7 @@ describe("Dispatcher", () => {
             }
           });
 
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          await timers.setTimeout(1_000);
 
           expect(mockedDeleteTransaction).toHaveBeenCalled();
         });
@@ -428,7 +433,7 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Unknown event on dispatcher channel"));
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
@@ -453,7 +458,7 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
@@ -481,7 +486,7 @@ describe("Dispatcher", () => {
           }
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).toHaveBeenCalled();
@@ -507,7 +512,7 @@ describe("Dispatcher", () => {
             }
           });
 
-          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          await timers.setTimeout(1_000);
 
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();

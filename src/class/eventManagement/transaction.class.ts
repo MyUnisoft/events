@@ -1,10 +1,12 @@
+// Import Node.js Dependencies
+import { randomUUID } from "crypto";
+
 // Import Third-party Dependencies
 import {
   KVOptions,
   KVPeer,
   Redis
 } from "@myunisoft/redis";
-import { v4 as uuidv4 } from "uuid";
 
 // Import Internal Dependencies
 import {
@@ -52,7 +54,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
   async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
     const transactions = await this.getTransactions();
 
-    const transactionId = uuidv4();
+    const transactionId = randomUUID();
 
     const formattedTransaction = {
       ...transaction,

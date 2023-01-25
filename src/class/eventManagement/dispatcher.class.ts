@@ -1,6 +1,8 @@
+// Import Node.js Dependencies
+import { randomUUID } from "crypto";
+
 // Import Third-party Dependencies
 import * as Redis from "@myunisoft/redis";
-import { v4 as uuidv4 } from "uuid";
 import * as logger from "pino";
 import Ajv, { ValidateFunction } from "ajv";
 
@@ -40,7 +42,7 @@ interface RegisteredIncomer {
 
 type IncomerStore = Record<string, RegisteredIncomer>;
 
-export interface DispachterOptions {
+export interface DispatcherOptions {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
   eventsValidationFunction?: Map<string, ValidateFunction>;
@@ -52,7 +54,7 @@ export class Dispatcher {
   readonly prefix: string;
   readonly dispatcherChannelName: string;
   readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"] | TransactionAck>;
-  readonly privateUuid: string = uuidv4();
+  readonly privateUuid: string = randomUUID();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
   readonly transactionStore: TransactionStore<"dispatcher">;
@@ -66,8 +68,8 @@ export class Dispatcher {
 
   public eventsValidationFunction: Map<string, ValidateFunction>;
 
-  constructor(options: DispachterOptions = {}, subscriber?: Redis.Redis) {
-    this.prefix = `${options.prefix ? `${options.prefix}-` : ""}`;
+  constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
+    this.prefix = options.prefix ? `${options.prefix}-` : "";
     this.dispatcherChannelName = this.prefix + channels.dispatcher;
 
     this.eventsValidationFunction = options.eventsValidationFunction ?? new Map();
@@ -164,7 +166,7 @@ export class Dispatcher {
   public async getTree(treeName: string): Promise<IncomerStore> {
     const tree = await this.incomerStore.getValue(treeName);
 
-    return tree ? tree : {};
+    return tree ?? {};
   }
 
   private async handleAck(transactionId) {
@@ -261,7 +263,7 @@ export class Dispatcher {
   private async approveService(message: IncomerRegistrationMessage) {
     const { data, metadata } = message;
 
-    const providedUuid: string = uuidv4();
+    const providedUuid: string = randomUUID();
 
     // Get Incomers Tree
     const incomerTreeName = `${metadata.prefix ? `${metadata.prefix}-` : ""}${incomerStoreName}`;
