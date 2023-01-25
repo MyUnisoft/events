@@ -77,12 +77,12 @@ export class Dispatcher {
     }
 
     this.incomerStore = new Redis.KVPeer({
-      prefix: this.prefix,
+      prefix: options.prefix,
       type: "object"
     });
 
     this.transactionStore = new TransactionStore({
-      prefix: this.prefix,
+      prefix: options.prefix,
       instance: "dispatcher"
     });
 
@@ -90,7 +90,7 @@ export class Dispatcher {
 
     this.dispatcherChannel = new Redis.Channel({
       name: channels.dispatcher,
-      prefix: this.prefix
+      prefix: options.prefix
     });
 
     this.subscriber = subscriber;

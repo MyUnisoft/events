@@ -15,6 +15,9 @@
           "to": {
             "type": "string"
           },
+          "prefix": {
+            "type": "string"
+          },
           "transactionId": {
             "type": "string"
           }
