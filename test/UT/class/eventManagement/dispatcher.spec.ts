@@ -1,4 +1,5 @@
 // Import Node.js Dependencies
+import { randomUUID } from "node:crypto";
 import timers from "timers/promises";
 
 // Import Third-party Dependencies
@@ -20,8 +21,11 @@ import { TransactionStore } from "../../../../src/class/eventManagement/transact
 const logger = Logger.pino();
 const mockedLoggerError = jest.spyOn(logger, "error");
 const mockedLoggerInfo = jest.spyOn(logger, "info");
+
 const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "handleDispatcherMessages");
 const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
+const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
+
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
 const mockedGetTransaction = jest.spyOn(TransactionStore.prototype, "getTransaction");
 const mockedDeleteTransaction = jest.spyOn(TransactionStore.prototype, "deleteTransaction");
@@ -52,7 +56,7 @@ describe("Dispatcher", () => {
     let dispatcher: Dispatcher;
 
     beforeAll(async() => {
-      dispatcher = new Dispatcher();
+      dispatcher = new Dispatcher({ pingInterval: 2_000 });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -97,7 +101,9 @@ describe("Dispatcher", () => {
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
 
-    describe("Publishing a well formed event", () => {
+    describe("Publishing a well formed register event", () => {
+      let incomerName = randomUUID();
+
       beforeAll(async() => {
         const channel = new Channel({
           name: "dispatcher"
@@ -106,11 +112,11 @@ describe("Dispatcher", () => {
         await channel.publish({
           event: "register",
           data: {
-            name: "bar",
+            name: incomerName,
             subscribeTo: []
           },
           metadata: {
-            origin: "foo"
+            origin: incomerName
           }
         });
       });
@@ -130,11 +136,11 @@ describe("Dispatcher", () => {
         await channel.publish({
           event: "register",
           data: {
-            name: "bar",
+            name: incomerName,
             subscribeTo: []
           },
           metadata: {
-            origin: "foo"
+            origin: incomerName
           }
         });
 
@@ -142,6 +148,77 @@ describe("Dispatcher", () => {
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
         expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Forbidden multiple registration for a same instance"));
+      });
+    });
+
+    describe("Publishing a well formed pong event", () => {
+      let incomerName = randomUUID();
+      let uuid: string;
+      let pingTransactionId: string;
+      let subscriber: Redis;
+
+      beforeAll(async() => {
+        subscriber = await initRedis({
+          port: process.env.REDIS_PORT,
+          host: process.env.REDIS_HOST
+        } as any, true);
+
+        await subscriber.subscribe("dispatcher");
+
+        subscriber.on("message", async(channel, message) => {
+          const formattedMessage = JSON.parse(message);
+
+          if (formattedMessage.event === "approvement") {
+            uuid = formattedMessage.data.uuid;
+
+            await subscriber.subscribe(formattedMessage.data.uuid);
+          }
+          else if (formattedMessage.event === "ping") {
+            pingTransactionId = formattedMessage.metadata.transactionId;
+          }
+        });
+
+        const channel = new Channel({
+          name: "dispatcher"
+        });
+
+        await channel.publish({
+          event: "register",
+          data: {
+            name: incomerName,
+            subscribeTo: []
+          },
+          metadata: {
+            origin: incomerName
+          }
+        });
+
+        await timers.setTimeout(1_000);
+      });
+
+      test("It should have ping and pingTransaction should be defined", async() => {
+        await timers.setTimeout(2_500);
+
+        expect(mockedPing).toHaveBeenCalled();
+        expect(pingTransactionId).toBeDefined();
+      });
+
+      test("It should handle the ping transaction", async() => {
+        const channel = new Channel({
+          name: uuid
+        });
+
+        await channel.publish({
+          event: "pong",
+          metadata: {
+            origin: uuid,
+            transactionId: pingTransactionId
+          }
+        });
+
+        await timers.setTimeout(1_000);
+
+        expect(mockedDeleteTransaction).toHaveBeenCalled();
       });
     });
   });
@@ -176,6 +253,7 @@ describe("Dispatcher", () => {
 
     describe("Publishing on the dispatcher channel", () => {
       describe("Publishing well formed register event", () => {
+        let incomerName = randomUUID();
         let transactionId;
         let subscriber: Redis;
 
@@ -203,14 +281,18 @@ describe("Dispatcher", () => {
           await channel.publish({
             event: "register",
             data: {
-              name: "bar",
+              name: incomerName,
               subscribeTo: []
             },
             metadata: {
-              origin: "foo",
+              origin: incomerName,
               prefix: "local"
             }
           });
+        });
+
+        afterAll(async() => {
+          await closeRedis(subscriber);
         });
 
         test("it should set a new transaction", async() => {
@@ -235,7 +317,7 @@ describe("Dispatcher", () => {
           await channel.publish({
             event: "ack",
             metadata: {
-              origin: "foo",
+              origin: incomerName,
               prefix: "local",
               transactionId
             }
@@ -348,6 +430,7 @@ describe("Dispatcher", () => {
 
     describe("Publishing on the dispatcher channel", () => {
       describe("Publishing well formed register event", () => {
+        let incomerName = randomUUID();
         let transactionId;
         let subscriber: Redis;
 
@@ -374,11 +457,11 @@ describe("Dispatcher", () => {
           await channel.publish({
             event: "register",
             data: {
-              name: "bar",
+              name: incomerName,
               subscribeTo: []
             },
             metadata: {
-              origin: "bar"
+              origin: incomerName
             }
           });
         });
@@ -404,7 +487,7 @@ describe("Dispatcher", () => {
           await channel.publish({
             event: "ack",
             metadata: {
-              origin: "foo",
+              origin: incomerName,
               transactionId
             }
           });
