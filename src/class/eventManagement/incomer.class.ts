@@ -1,6 +1,6 @@
 // Import Node.js Dependencies
 import { EventEmitter } from "events";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
 import * as Redis from "@myunisoft/redis";
@@ -195,7 +195,7 @@ export class Incomer extends EventEmitter {
         event,
         metadata,
         uptime: process.uptime()
-      }, "PUBLISHED PONG");
+      }, "Published new pong event");
     }
     else {
       const { data, metadata } = message;

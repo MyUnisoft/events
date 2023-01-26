@@ -1,10 +1,11 @@
 // Import Node.js Dependencies
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
 import * as Redis from "@myunisoft/redis";
 import * as logger from "pino";
 import Ajv, { ValidateFunction } from "ajv";
+
 
 // Import Internal Dependencies
 import {
@@ -20,15 +21,22 @@ import {
   TransactionAck
 } from "../../types/eventManagement/index";
 import {
-  PartialTransaction,
   TransactionStore
 } from "./transaction.class";
 import * as ChannelsMessages from "../../schema/eventManagement/index";
-import { Channel } from "@myunisoft/redis";
-import { IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
+import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
+import { DispatcherPingMessage } from "types/eventManagement/incomerChannel";
 
 // CONSTANTS
 const ajv = new Ajv();
+export const kPingInterval = 3_600;
+const treeNames = [
+  incomerStoreName,
+  `local-${incomerStoreName}`,
+  `dev-${incomerStoreName}`,
+  `preprod-${incomerStoreName}`,
+  `prod-${incomerStoreName}`
+];
 
 interface RegisteredIncomer {
   providedUuid: string;
@@ -47,6 +55,7 @@ export interface DispatcherOptions {
   prefix?: Prefix;
   eventsValidationFunction?: Map<string, ValidateFunction>;
   subscribeTo?: SubscribeTo[];
+  pingInterval?: number;
 }
 
 export class Dispatcher {
@@ -65,6 +74,8 @@ export class Dispatcher {
   private incomerChannels = new Map<string,
     Redis.Channel<IncomerChannelMessages["DispatcherMessages"]>
   >();
+
+  private pingInterval: NodeJS.Timer;
 
   public eventsValidationFunction: Map<string, ValidateFunction>;
 
@@ -96,6 +107,15 @@ export class Dispatcher {
     });
 
     this.subscriber = subscriber;
+
+    this.pingInterval = setInterval(async() => {
+      try {
+        await this.ping();
+      }
+      catch (error) {
+        console.error(error);
+      }
+    }, options.pingInterval ?? kPingInterval).unref();
   }
 
   public async initialize() {
@@ -116,6 +136,41 @@ export class Dispatcher {
         this.logger.error(error);
       }
     });
+  }
+
+  private async ping() {
+    for (const treeName of treeNames) {
+      const tree = await this.getTree(treeName);
+
+      for (const uuid of Object.keys(tree)) {
+        const incomerChannel = this.incomerChannels.get(uuid);
+
+        if (incomerChannel) {
+          const event: DispatcherPingMessage = {
+            event: predefinedEvents.dispatcher.check.ping,
+            data: null,
+            metadata: {
+              origin: this.privateUuid,
+              to: uuid
+            }
+          };
+
+          const transactionId = await this.transactionStore.setTransaction(event);
+
+          await incomerChannel.publish({
+            ...event,
+            metadata: {
+              ...event.metadata,
+              transactionId
+            }
+          });
+
+          this.logger.info({
+            ...event
+          }, "New Ping event");
+        }
+      }
+    }
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -159,6 +214,9 @@ export class Dispatcher {
       return;
     }
 
+    clearInterval(this.pingInterval);
+    this.pingInterval = undefined;
+
     await this.subscriber.quit();
     this.subscriber = undefined;
   }
@@ -179,7 +237,7 @@ export class Dispatcher {
   }
 
   private async publishAck(
-    channel: Channel,
+    channel: Redis.Channel,
     message: TransactionAck
   ) {
     await channel.publish(message);
@@ -303,7 +361,7 @@ export class Dispatcher {
 
     await this.subscriber.subscribe(`${metadata.prefix ? `${metadata.prefix}-` : ""}${providedUuid}`);
 
-    const event: PartialTransaction<"dispatcher"> = {
+    const event: DispatcherRegistrationMessage = {
       event: predefinedEvents.dispatcher.registration.approvement,
       data: {
         uuid: providedUuid
@@ -329,6 +387,6 @@ export class Dispatcher {
     this.logger.info({
       event,
       uptime: process.uptime()
-    }, "PUBLISHED APPROVEMENT");
+    }, "New approvement event");
   }
 }

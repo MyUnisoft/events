@@ -1,0 +1,32 @@
+{
+  "pong": {
+    "type": "object",
+    "properties": {
+      "event": {
+        "type": "string",
+        "pattern": "pong"
+      },
+      "data": {
+        "type": "null"
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          }
+        },
+        "required": ["origin", "transactionId"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["event", "metadata"],
+    "additionalProperties": false
+  }
+}
