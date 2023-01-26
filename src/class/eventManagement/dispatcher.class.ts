@@ -14,18 +14,18 @@ import {
   predefinedEvents
 } from "../../utils/config";
 import {
+  TransactionStore
+} from "./transaction.class";
+import {
   Prefix,
   SubscribeTo,
   DispatcherChannelMessages,
   IncomerChannelMessages,
   TransactionAck
 } from "../../types/eventManagement/index";
-import {
-  TransactionStore
-} from "./transaction.class";
 import * as ChannelsMessages from "../../schema/eventManagement/index";
 import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
-import { DispatcherPingMessage } from "types/eventManagement/incomerChannel";
+import { DispatcherPingMessage } from "../../types/eventManagement/incomerChannel";
 
 // CONSTANTS
 const ajv = new Ajv();

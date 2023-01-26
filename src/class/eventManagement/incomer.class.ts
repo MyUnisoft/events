@@ -12,6 +12,7 @@ import {
   predefinedEvents,
   redisPort
 } from "../../utils/config";
+import { TransactionStore } from "./transaction.class";
 import {
   Prefix,
   SubscribeTo,
@@ -19,9 +20,7 @@ import {
   IncomerChannelMessages,
   TransactionAck
 } from "../../types/eventManagement/index";
-import { TransactionStore } from "./transaction.class";
-import { Channel } from "@myunisoft/redis";
-import { DispatcherRegistrationMessage } from "types/eventManagement/dispatcherChannel";
+import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
 
 
 export type ServiceOptions = {
@@ -238,7 +237,7 @@ export class Incomer extends EventEmitter {
   }
 
   private async publishAck(
-    channel: Channel,
+    channel: Redis.Channel,
     message: TransactionAck
   ) {
     await channel.publish(message);
