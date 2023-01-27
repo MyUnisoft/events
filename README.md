@@ -62,15 +62,15 @@ MyEvents.validate<"connector">(event);
 ## API
 
 ### validate< T extends keyof Events >(options: EventOptions<T>): void
-Throw an error if a given event is not internaly known.
+Throw an error if a given event is not internally known.
 
 ## Events
 
-An Event fully constitued is composed by a `name`, an `operation` a multiple objects such as `data`, `scope` and `metadata`.
+An Event fully constituted is composed by a `name`, an `operation` and multiple objects such as `data`, `scope` and `metadata`.
 - The `name` identify the event.
 - The `operation` will define if it is a creation, update or deletion.
-- According to the name, we know the `data` and the differentes `metadata.origin.method` related.
-- The `metadata` object is used to determine differentes informations as the ecosystem, the entry point etc.
+- According to the name, we know the `data` and the different `metadata.origin.method` related.
+- The `metadata` object is used to determine different information as the ecosystem, the entry point etc.
 - The `scope` will define the **who**.
 
 ```ts
@@ -165,6 +165,27 @@ export interface Document {
 | Operation  | Agent  | Payload  |
 |---|---|---|
 | CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; kind: DocumentKind; <br/>}</pre>  |
+
+</details>
+
+<details><summary>Portfolio</summary>
+
+[JSON Schema](./docs/json-schema/events/portfolio.md)
+
+```ts
+export interface Portfolio {
+  name: "portfolio";
+  operation: PortfolioOperation;
+  data: {
+    id: string;
+  }
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre> |
 
 </details>
 <br/>
