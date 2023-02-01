@@ -1,3 +1,4 @@
+/* eslint-disable max-depth */
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
 
@@ -21,7 +22,8 @@ import {
   SubscribeTo,
   DispatcherChannelMessages,
   IncomerChannelMessages,
-  TransactionAck
+  TransactionAck,
+  DispatcherTransactionMetadata
 } from "../../types/eventManagement/index";
 import * as ChannelsMessages from "../../schema/eventManagement/index";
 import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
@@ -29,7 +31,9 @@ import { DispatcherPingMessage } from "../../types/eventManagement/incomerChanne
 
 // CONSTANTS
 const ajv = new Ajv();
-export const kPingInterval = 3_600;
+const kPingInterval = 3_600;
+const kCheckInterval = 14_400;
+const kIdleTime = 7_200;
 const treeNames = [
   incomerStoreName,
   `local-${incomerStoreName}`,
@@ -56,6 +60,8 @@ export interface DispatcherOptions {
   eventsValidationFunction?: Map<string, ValidateFunction>;
   subscribeTo?: SubscribeTo[];
   pingInterval?: number;
+  checkInterval?: number;
+  idleTime?: number;
 }
 
 export class Dispatcher {
@@ -71,17 +77,21 @@ export class Dispatcher {
   protected subscriber: Redis.Redis;
 
   private logger: logger.Logger;
-  private incomerChannels = new Map<string,
-    Redis.Channel<IncomerChannelMessages["DispatcherMessages"]>
-  >();
+  private incomerChannels: Map<string,
+    Redis.Channel<IncomerChannelMessages["DispatcherMessages"] | {
+      event: string; data: Record<string, any>, metadata: DispatcherTransactionMetadata
+    }>> = new Map();
 
   private pingInterval: NodeJS.Timer;
+  private checkInterval: NodeJS.Timer;
+  private idleTime: number;
 
   public eventsValidationFunction: Map<string, ValidateFunction>;
 
   constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
     this.prefix = options.prefix ? `${options.prefix}-` : "";
     this.dispatcherChannelName = this.prefix + channels.dispatcher;
+    this.idleTime = options.idleTime ?? kIdleTime;
 
     this.eventsValidationFunction = options.eventsValidationFunction ?? new Map();
 
@@ -116,6 +126,15 @@ export class Dispatcher {
         console.error(error);
       }
     }, options.pingInterval ?? kPingInterval).unref();
+
+    this.checkInterval = setInterval(async() => {
+      try {
+        await this.checkLastActivity();
+      }
+      catch (error) {
+        console.error(error);
+      }
+    }, options.checkInterval ?? kCheckInterval).unref();
   }
 
   public async initialize() {
@@ -129,11 +148,36 @@ export class Dispatcher {
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
     this.subscriber.on("message", async(channel, message) => {
+      if (!message) {
+        return;
+      }
+
+      const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["IncomerMessages"] |
+      IncomerChannelMessages["IncomerMessage"];
+
       try {
-        await this.handleMessages(channel, message);
+        if (!formattedMessage.event || !formattedMessage.metadata) {
+          throw new Error("Malformed message");
+        }
+
+        // Avoid reacting to his own message
+        if (formattedMessage.metadata.origin === this.privateUuid) {
+          return;
+        }
+
+        const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
+        if (!eventValidationSchema) {
+          throw new Error("Unknown Event");
+        }
+
+        if (!eventValidationSchema(formattedMessage)) {
+          throw new Error("Malformed message");
+        }
+
+        await this.handleMessages(channel, formattedMessage);
       }
       catch (error) {
-        this.logger.error(error);
+        this.logger.error({ channel, message: formattedMessage, error: error.message });
       }
     });
   }
@@ -147,7 +191,7 @@ export class Dispatcher {
 
         if (incomerChannel) {
           const event: DispatcherPingMessage = {
-            event: predefinedEvents.dispatcher.check.ping,
+            event: "ping",
             data: null,
             metadata: {
               origin: this.privateUuid,
@@ -158,6 +202,15 @@ export class Dispatcher {
           const transactionId = await this.transactionStore.setTransaction(event);
 
           await incomerChannel.publish({
+            event: "",
+            data: null,
+            metadata: {
+              ...event.metadata,
+              transactionId
+            }
+          });
+
+          await incomerChannel.publish({
             ...event,
             metadata: {
               ...event.metadata,
@@ -166,45 +219,63 @@ export class Dispatcher {
           });
 
           this.logger.info({
-            ...event
+            ...event,
+            uptime: process.uptime()
           }, "New Ping event");
         }
       }
     }
   }
 
-  private async handleMessages(channel: string, message: string) {
-    if (!message) {
-      return;
+  private async checkLastActivity() {
+    for (const treeName of treeNames) {
+      const tree = await this.getTree(treeName);
+
+      if (tree) {
+        const now = Date.now();
+
+        for (const [uuid, service] of Object.entries(tree)) {
+          if (now > service.lastActivity + this.idleTime) {
+            // Remove the service from the tree & update it.
+            delete tree[uuid];
+
+            await this.incomerStore.setValue({
+              key: treeName,
+              value: tree
+            });
+
+            for await (const [transactionId, transaction] of Object.entries(this.transactionStore.getTransactions())) {
+              if (transaction.metadata.to === uuid) {
+                // Delete ping interaction since the service is off
+                if (transaction.event === "ping") {
+                  this.transactionStore.deleteTransaction(transactionId);
+                }
+
+                // redistribute events & so transactions to according services
+
+                // delete the previous transactions
+              }
+            }
+
+            this.logger.info({
+              uuid,
+              service,
+              uptime: process.uptime()
+            }, "Removed inactive service");
+          }
+        }
+      }
     }
+  }
 
-    const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages["IncomerMessage"];
-
-    if (!formattedMessage.event || !formattedMessage.metadata) {
-      throw new Error("Malformed message");
-    }
-
-    // Avoid reacting to his own message
-    if (formattedMessage.metadata.origin === this.privateUuid) {
-      return;
-    }
-
-    const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
-    if (!eventValidationSchema) {
-      throw new Error("Unknown Event");
-    }
-
-    if (!eventValidationSchema(formattedMessage)) {
-      throw new Error("Malformed message");
-    }
-
+  private async handleMessages(channel: string, message: DispatcherChannelMessages["IncomerMessages"] |
+  IncomerChannelMessages["IncomerMessage"] | TransactionAck) {
     switch (channel) {
       case this.dispatcherChannelName:
-        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["IncomerMessages"] | TransactionAck);
+        await this.handleDispatcherMessages(message as DispatcherChannelMessages["IncomerMessages"] | TransactionAck);
         break;
       default:
-        await this.handleIncomerMessages(channel, formattedMessage as IncomerChannelMessages["IncomerMessage"]);
+        await this.handleIncomerMessages(channel, message as IncomerChannelMessages["IncomerMessage"]);
         break;
     }
   }
@@ -281,25 +352,13 @@ export class Dispatcher {
 
       const transaction = await this.transactionStore.getTransaction(transactionId);
       if (!transaction) {
-        this.logger.error({
-          channel,
-          event,
-          metadata
-        }, "Couldn't find the related transaction for the pong operation");
-
-        return;
+        throw new Error("Couldn't find the related transaction for the pong operation");
       }
 
       // Do I want this to break ?
       const incomerTree = await this.getTree(relatedIncomerTreeName) as IncomerStore;
       if (!incomerTree[origin]) {
-        this.logger.error({
-          channel,
-          event,
-          metadata
-        }, "Couldn't find the related incomer");
-
-        return;
+        throw new Error("Couldn't find the related incomer");
       }
 
       // Update the incomer last Activity
@@ -309,12 +368,13 @@ export class Dispatcher {
         value: incomerTree
       });
 
-      // Remove the transaction about the ping event
-      // Do I want this to break ?
       await this.transactionStore.deleteTransaction(transactionId);
     }
     else {
-      this.logger.info({ ...message }, "injected event");
+      this.logger.info({
+        ...message,
+        uptime: process.uptime()
+      }, "injected event");
     }
   }
 
@@ -362,7 +422,7 @@ export class Dispatcher {
     await this.subscriber.subscribe(`${metadata.prefix ? `${metadata.prefix}-` : ""}${providedUuid}`);
 
     const event: DispatcherRegistrationMessage = {
-      event: predefinedEvents.dispatcher.registration.approvement,
+      event: "approvement",
       data: {
         uuid: providedUuid
       },
@@ -385,7 +445,7 @@ export class Dispatcher {
     });
 
     this.logger.info({
-      event,
+      ...event,
       uptime: process.uptime()
     }, "New approvement event");
   }

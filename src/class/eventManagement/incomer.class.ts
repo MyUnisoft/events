@@ -21,6 +21,7 @@ import {
   TransactionAck
 } from "../../types/eventManagement/index";
 import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
+import { IncomerPongMessage } from "types/eventManagement/incomerChannel";
 
 
 export type ServiceOptions = {
@@ -84,7 +85,7 @@ export class Incomer extends EventEmitter {
     });
 
     await this.dispatcherChannel.publish({
-      event: predefinedEvents.incomer.registration.register,
+      event: "register",
       data: {
         name: this.name,
         subscribeTo: this.subscribeTo
@@ -106,7 +107,7 @@ export class Incomer extends EventEmitter {
     }
 
     const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["DispatcherMessages"] |
-      IncomerChannelMessages["DispatcherMessages"];
+      IncomerChannelMessages["DispatcherMessages"] | TransactionAck;
 
     // Avoid reacting to his own message
     if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
@@ -116,7 +117,8 @@ export class Incomer extends EventEmitter {
     try {
       switch (channel) {
         case this.dispatcherChannelName:
-          await this.handleDispatcherMessages(formattedMessage);
+          await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["DispatcherMessages"] |
+            TransactionAck);
 
           break;
         default:
@@ -178,11 +180,11 @@ export class Incomer extends EventEmitter {
     if (event === predefinedEvents.dispatcher.check.ping) {
       const { metadata } = message as IncomerChannelMessages["DispatcherMessages"];
 
-      const event = {
-        event: predefinedEvents.incomer.check.pong,
+      const event: IncomerPongMessage = {
+        event: "pong",
+        data: null,
         metadata: {
           origin: this.privateUuid,
-          to: metadata.origin,
           prefix: this.prefix,
           transactionId: metadata.transactionId
         }

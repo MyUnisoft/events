@@ -1,0 +1,29 @@
+{
+  "ping": {
+    "type": "object",
+    "properties": {
+      "event": {
+        "type": "string",
+        "pattern": "ping"
+      },
+      "data": {
+        "type": "null"
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          }
+        },
+        "required": ["origin", "transactionId"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["event", "metadata"],
+    "additionalProperties": false
+  }
+}

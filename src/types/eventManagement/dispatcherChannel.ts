@@ -1,6 +1,5 @@
 // Import Internal Dependencies
 import {
-  Message,
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   SubscribeTo
@@ -14,7 +13,8 @@ interface DispatcherRegistrationData {
   uuid: string;
 }
 
-export type DispatcherRegistrationMessage = Message & {
+export type DispatcherRegistrationMessage = {
+  event: "approvement";
   data: DispatcherRegistrationData;
   metadata: DispatcherTransactionMetadata;
 }
@@ -30,7 +30,8 @@ interface IncomerRegistrationDataIn {
   subscribeTo: SubscribeTo[];
 }
 
-export type IncomerRegistrationMessage = Message & {
+export type IncomerRegistrationMessage = {
+  event: "register";
   data: IncomerRegistrationDataIn;
   metadata: IncomerTransactionMetadata;
 }

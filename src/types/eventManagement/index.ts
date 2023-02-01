@@ -1,18 +1,16 @@
 export type Prefix = "local" | "dev" | "preprod" | "prod";
 
-export interface Message {
-  event: string;
-}
-
 export interface SubscribeTo<T extends string = string> {
   name: T;
   delay?: number;
   horizontalScale?: boolean;
 }
 
-export type TransactionAck = Message & {
+export type TransactionAck = {
+  event: "ack";
   metadata: {
     origin: string;
+    prefix?: string;
     to?: string;
     transactionId: string;
   };
