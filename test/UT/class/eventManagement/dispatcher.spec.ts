@@ -82,7 +82,7 @@ describe("Dispatcher", () => {
 
       await timers.setTimeout(1_000);
 
-      expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
+      expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: { foo: "bar" }, error: "Malformed message" });
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
@@ -96,7 +96,7 @@ describe("Dispatcher", () => {
 
       await timers.setTimeout(1_000);
 
-      expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
+      expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: { event: "foo" }, error: "Malformed message" });
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
@@ -104,7 +104,7 @@ describe("Dispatcher", () => {
     describe("Publishing a well formed register event", () => {
       let incomerName = randomUUID();
 
-      beforeAll(async() => {
+      test("It should handle the message and log infos about it", async() => {
         const channel = new Channel({
           name: "dispatcher"
         });
@@ -119,9 +119,7 @@ describe("Dispatcher", () => {
             origin: incomerName
           }
         });
-      });
 
-      test("It should handle the message and log infos about it", async() => {
         await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
@@ -133,7 +131,7 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const event = {
           event: "register",
           data: {
             name: incomerName,
@@ -142,12 +140,14 @@ describe("Dispatcher", () => {
           metadata: {
             origin: incomerName
           }
-        });
+        };
+
+        await channel.publish(event);
 
         await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Forbidden multiple registration for a same instance"));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error:"Forbidden multiple registration for a same instance" });
       });
     });
 
@@ -296,7 +296,7 @@ describe("Dispatcher", () => {
         });
 
         test("it should set a new transaction", async() => {
-          await timers.setTimeout(1_000);
+          await timers.setTimeout(1_500);
 
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
           expect(mockedSetTransaction).toHaveBeenCalled();
@@ -366,7 +366,7 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const event = {
           data: {
             foo: "bar"
           },
@@ -374,11 +374,13 @@ describe("Dispatcher", () => {
             origin: "foo",
             transactionId: "bar"
           }
-        });
+        };
+
+        await channel.publish(event);
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -390,16 +392,18 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const event = {
           event: "foo",
           data: {
             foo: "bar"
           }
-        });
+        };
+
+        await channel.publish(event);
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -409,7 +413,7 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const event = {
           event: "bar",
           data: {
             foo: "bar"
@@ -418,11 +422,13 @@ describe("Dispatcher", () => {
             origin: "foo",
             transactionId: "bar"
           }
-        });
+        };
+
+        await channel.publish(event);
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Unknown Event"));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown Event" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -505,7 +511,7 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const event = {
           event: "foo",
           data: {
             foo: "bar"
@@ -514,11 +520,13 @@ describe("Dispatcher", () => {
             origin: "foo",
             transactionId: "bar"
           }
-        });
+        };
+
+        await channel.publish(event);
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Unknown event on dispatcher channel"));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on dispatcher channel" });
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -530,7 +538,7 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const event = {
           event: "foo",
           data: {
             bar: "foo"
@@ -539,11 +547,13 @@ describe("Dispatcher", () => {
             origin: "foo",
             transactionId: "bar"
           }
-        });
+        };
+
+        await channel.publish(event);
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith(new Error("Malformed message"));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });

@@ -36,10 +36,8 @@ describe("Transaction options", () => {
 
     beforeAll(async() => {
       const transaction: PartialTransaction<"dispatcher"> = {
-        event: "foo",
-        data: {
-          uuid: "foo"
-        },
+        event: "ping",
+        data: null,
         metadata: {
           origin: "foo",
           to: "foo"
@@ -62,10 +60,8 @@ describe("Transaction options", () => {
   describe("setTransaction", () => {
     test("calling setTransaction, it should add a new transaction to the transaction tree", async() => {
       const transaction: PartialTransaction<"dispatcher"> = {
-        event: "foo",
-        data: {
-          uuid: "foo"
-        },
+        event: "ping",
+        data: null,
         metadata: {
           origin: "foo",
           to: "foo"
@@ -85,10 +81,8 @@ describe("Transaction options", () => {
 
     beforeAll(async() => {
       const transaction: PartialTransaction<"dispatcher"> = {
-        event: "foo",
-        data: {
-          uuid: "foo"
-        },
+        event: "ping",
+        data: null,
         metadata: {
           origin: "foo",
           to: "foo"
@@ -112,10 +106,8 @@ describe("Transaction options", () => {
   describe("getTransactions", () => {
     beforeAll(async() => {
       const transaction: PartialTransaction<"dispatcher"> = {
-        event: "foo",
-        data: {
-          uuid: "foo"
-        },
+        event: "ping",
+        data: null,
         metadata: {
           origin: "foo",
           to: "foo"
