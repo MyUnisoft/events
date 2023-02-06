@@ -59,9 +59,22 @@ export interface Portfolio {
   }
 }
 
+export type AccountingLineEntryOperation = Operation[
+  keyof Omit<Operation, "update" | "delete" | "void">
+];
+
+export interface AccountingLineEntry {
+  name: "accountingLineEntry";
+  operation: AccountingLineEntryOperation;
+  data: {
+    id: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
   document: Document;
   portfolio: Portfolio;
+  accountingLineEntry: AccountingLineEntry;
 }

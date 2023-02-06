@@ -67,4 +67,18 @@ describe("eventsValidationFonction", () => {
       expect(portfolio.has("delete")).toBe(true);
     });
   });
+
+  describe("AccountingLineEntry", () => {
+    let accountingLineEntry;
+
+    beforeAll(() => {
+      expect(eventsValidationFonction.has("accountingLineEntry")).toBe(true);
+
+      accountingLineEntry = eventsValidationFonction.get("accountingLineEntry");
+    });
+
+    test("accountingLineEntry should have a validation function for \"create\"", () => {
+      expect(accountingLineEntry.has("create")).toBe(true);
+    });
+  });
 });
