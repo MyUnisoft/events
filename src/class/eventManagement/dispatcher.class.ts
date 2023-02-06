@@ -1,4 +1,3 @@
-/* eslint-disable max-depth */
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
 
@@ -6,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import * as Redis from "@myunisoft/redis";
 import * as logger from "pino";
 import Ajv, { ValidateFunction } from "ajv";
-
+import { match, P } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
@@ -64,12 +63,37 @@ export interface DispatcherOptions {
   idleTime?: number;
 }
 
+type DispatcherChannelEvents = | { event: "register" }
+| { event: "ack" };
+
+function isDispatcherChannelMessage(
+  value: DispatcherChannelMessages["IncomerMessages"] |
+  IncomerChannelMessages["IncomerMessage"] | TransactionAck
+): value is DispatcherChannelMessages["IncomerMessages"] | TransactionAck {
+  return value.event !== "pong";
+}
+
+function isIncomerChannelMessage(
+  value: DispatcherChannelMessages["IncomerMessages"] |
+  IncomerChannelMessages["IncomerMessage"] | TransactionAck
+): value is IncomerChannelMessages["IncomerMessage"] | TransactionAck {
+  return value.event !== "register";
+}
+
+function isIncomerRegistrationMessage(
+  value: DispatcherChannelMessages["IncomerMessages"] | TransactionAck
+): value is IncomerRegistrationMessage {
+  return typeof value.event === "string" &&
+    typeof value.data.name === "string" &&
+    typeof value.data.subscribeTo !== "undefined";
+}
+
 export class Dispatcher {
   readonly type = "dispatcher";
   readonly prefix: string;
   readonly dispatcherChannelName: string;
   readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"] | TransactionAck>;
-  readonly privateUuid: string = randomUUID();
+  readonly privateUuid = randomUUID();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
   readonly transactionStore: TransactionStore<"dispatcher">;
@@ -147,39 +171,48 @@ export class Dispatcher {
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
-    this.subscriber.on("message", async(channel, message) => {
-      if (!message) {
+    this.subscriber.on("message", this.handleMessages.bind(this));
+  }
+
+  private async handleMessages(channel: string, message: string) {
+    if (!message) {
+      return;
+    }
+
+    const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
+      IncomerChannelMessages["IncomerMessage"] | TransactionAck = JSON.parse(message);
+
+    try {
+      if (!formattedMessage.event || !formattedMessage.metadata) {
+        throw new Error("Malformed message");
+      }
+
+      // Avoid reacting to his own message
+      if (formattedMessage.metadata.origin === this.privateUuid) {
         return;
       }
 
-      const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages["IncomerMessage"];
-
-      try {
-        if (!formattedMessage.event || !formattedMessage.metadata) {
-          throw new Error("Malformed message");
-        }
-
-        // Avoid reacting to his own message
-        if (formattedMessage.metadata.origin === this.privateUuid) {
-          return;
-        }
-
-        const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
-        if (!eventValidationSchema) {
-          throw new Error("Unknown Event");
-        }
-
-        if (!eventValidationSchema(formattedMessage)) {
-          throw new Error("Malformed message");
-        }
-
-        await this.handleMessages(channel, formattedMessage);
+      const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
+      if (!eventValidationSchema) {
+        throw new Error("Unknown Event");
       }
-      catch (error) {
-        this.logger.error({ channel, message: formattedMessage, error: error.message });
+
+      if (!eventValidationSchema(formattedMessage)) {
+        throw new Error("Malformed message");
       }
-    });
+
+      if (channel === this.dispatcherChannelName) {
+        if (isDispatcherChannelMessage(formattedMessage)) {
+          await this.handleDispatcherMessages(formattedMessage);
+        }
+      }
+      else if (isIncomerChannelMessage(formattedMessage)) {
+        await this.handleIncomerMessages(channel, formattedMessage);
+      }
+    }
+    catch (error) {
+      this.logger.error({ channel, message: formattedMessage, error: error.message });
+    }
   }
 
   private async ping() {
@@ -202,15 +235,6 @@ export class Dispatcher {
           const transactionId = await this.transactionStore.setTransaction(event);
 
           await incomerChannel.publish({
-            event: "",
-            data: null,
-            metadata: {
-              ...event.metadata,
-              transactionId
-            }
-          });
-
-          await incomerChannel.publish({
             ...event,
             metadata: {
               ...event.metadata,
@@ -231,52 +255,57 @@ export class Dispatcher {
     for (const treeName of treeNames) {
       const tree = await this.getTree(treeName);
 
-      if (tree) {
-        const now = Date.now();
+      if (!tree) {
+        continue;
+      }
 
-        for (const [uuid, service] of Object.entries(tree)) {
-          if (now > service.lastActivity + this.idleTime) {
-            // Remove the service from the tree & update it.
-            delete tree[uuid];
+      const now = Date.now();
 
-            await this.incomerStore.setValue({
-              key: treeName,
-              value: tree
-            });
-
-            for await (const [transactionId, transaction] of Object.entries(this.transactionStore.getTransactions())) {
-              if (transaction.metadata.to === uuid) {
-                // Delete ping interaction since the service is off
-                if (transaction.event === "ping") {
-                  this.transactionStore.deleteTransaction(transactionId);
-                }
-
-                // redistribute events & so transactions to according services
-
-                // delete the previous transactions
-              }
-            }
-
-            this.logger.info({
-              uuid,
-              service,
-              uptime: process.uptime()
-            }, "Removed inactive service");
-          }
+      for (const [uuid, incomer] of Object.entries(tree)) {
+        if (now <= incomer.lastActivity + this.idleTime) {
+          continue;
         }
+
+        // Remove the incomer from the tree & update it.
+        await this.handleInactiveIncomer(tree, treeName, uuid);
+
+        this.logger.info({
+          uuid,
+          incomer,
+          uptime: process.uptime()
+        }, "Removed inactive incomer");
       }
     }
   }
 
-  private async handleMessages(channel: string, message: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessage"] | TransactionAck) {
-    switch (channel) {
-      case this.dispatcherChannelName:
-        await this.handleDispatcherMessages(message as DispatcherChannelMessages["IncomerMessages"] | TransactionAck);
-        break;
-      default:
-        await this.handleIncomerMessages(channel, message as IncomerChannelMessages["IncomerMessage"]);
-        break;
+  private async handleInactiveIncomer(
+    tree: IncomerStore,
+    treeName: string,
+    uuid: string
+  ) {
+    delete tree[uuid];
+
+    if (Object.entries(tree).length > 0) {
+      await this.incomerStore.setValue({
+        key: treeName,
+        value: tree
+      });
+    }
+    else {
+      await this.incomerStore.deleteValue(treeName);
+    }
+
+    for await (const [transactionId, transaction] of Object.entries(this.transactionStore.getTransactions())) {
+      if (transaction.metadata.to === uuid) {
+        // Delete ping interaction since the incomer is off
+        if (transaction.event === "ping") {
+          this.transactionStore.deleteTransaction(transactionId);
+        }
+
+        // redistribute events & so transactions to according incomers
+
+        // delete the previous transactions
+      }
     }
   }
 
@@ -288,6 +317,9 @@ export class Dispatcher {
     clearInterval(this.pingInterval);
     this.pingInterval = undefined;
 
+    clearInterval(this.checkInterval);
+    this.checkInterval = undefined;
+
     await this.subscriber.quit();
     this.subscriber = undefined;
   }
@@ -298,8 +330,8 @@ export class Dispatcher {
     return tree ?? {};
   }
 
-  private async handleAck(transactionId) {
-    const transaction = await this.transactionStore.getTransaction(transactionId);
+  private async handleAck(transactionId: string) {
+    const transaction = await this.transactionStore.getTransactionById(transactionId);
     if (!transaction) {
       throw new Error("Unknown transaction to ack");
     }
@@ -314,49 +346,62 @@ export class Dispatcher {
     await channel.publish(message);
   }
 
-  private async handleDispatcherMessages(message: DispatcherChannelMessages["IncomerMessages"] | TransactionAck) {
+  private async handleDispatcherMessages(
+    message: DispatcherChannelMessages["IncomerMessages"] | TransactionAck
+  ) {
     const { event } = message;
 
-    switch (event) {
-      case predefinedEvents.incomer.registration.register:
-        this.logger.info({
-          ...message,
-          uptime: process.uptime()
-        }, "New Registration on Dispatcher Channel");
+    const logData = {
+      ...message,
+      uptime: process.uptime()
+    };
 
-        await this.approveService(message as IncomerRegistrationMessage);
+    match<DispatcherChannelEvents>({ event })
+      .with({ event: "register" }, async() => {
+        this.logger.info(logData, "New Registration on Dispatcher Channel");
 
-        break;
-      case predefinedEvents.ack:
-        this.logger.info({
-          ...message,
-          uptime: process.uptime()
-        }, "New Ack on Dispatcher Channel");
+        if (isIncomerRegistrationMessage(message)) {
+          await this.approveService(message);
+        }
+      })
+      .with({ event: "ack" }, async() => {
+        this.logger.info(logData, "New Ack on Dispatcher Channel");
 
         await this.handleAck(message.metadata.transactionId);
-
-        break;
-      default:
-        throw new Error("Unknown event on dispatcher channel");
-    }
+      })
+      .with(P._, () => {
+        throw new Error("Unknown event on Dispatcher Channel");
+      })
+      .exhaustive()
+      .catch((error) => {
+        this.logger.error({ channel: "dispatcher", error: error.message, message });
+      });
   }
 
-  private async handleIncomerMessages(channel: string, message: IncomerChannelMessages["IncomerMessage"] | TransactionAck) {
+  private async handleIncomerMessages(
+    channel: string,
+    message: IncomerChannelMessages["IncomerMessage"] | TransactionAck
+  ) {
     const { event, metadata } = message;
     const { prefix } = metadata;
+
+    const logData = {
+      ...message,
+      uptime: process.uptime()
+    };
 
     const relatedIncomerTreeName = `${prefix ? `${prefix}-` : ""}${incomerStoreName}`;
 
     if (event === predefinedEvents.incomer.check.pong) {
       const { transactionId, origin } = metadata;
 
-      const transaction = await this.transactionStore.getTransaction(transactionId);
+      const transaction = await this.transactionStore.getTransactionById(transactionId);
       if (!transaction) {
         throw new Error("Couldn't find the related transaction for the pong operation");
       }
 
       // Do I want this to break ?
-      const incomerTree = await this.getTree(relatedIncomerTreeName) as IncomerStore;
+      const incomerTree = await this.getTree(relatedIncomerTreeName);
       if (!incomerTree[origin]) {
         throw new Error("Couldn't find the related incomer");
       }
@@ -369,23 +414,22 @@ export class Dispatcher {
       });
 
       await this.transactionStore.deleteTransaction(transactionId);
+
+      this.logger.info(logData, "Deleted with pong event");
     }
     else {
-      this.logger.info({
-        ...message,
-        uptime: process.uptime()
-      }, "injected event");
+      this.logger.info(logData, "injected event");
     }
   }
 
   private async approveService(message: IncomerRegistrationMessage) {
     const { data, metadata } = message;
 
-    const providedUuid: string = randomUUID();
+    const providedUuid = randomUUID();
 
     // Get Incomers Tree
     const incomerTreeName = `${metadata.prefix ? `${metadata.prefix}-` : ""}${incomerStoreName}`;
-    const relatedIncomerTree = await this.getTree(incomerTreeName) as IncomerStore;
+    const relatedIncomerTree = await this.getTree(incomerTreeName);
 
     // Avoid multiple init from a same instance of a service
     for (const service of Object.values(relatedIncomerTree)) {
