@@ -72,7 +72,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     return transactionId;
   }
 
-  async getTransaction(transactionId: string): Promise<Transaction | null> {
+  async getTransactionById(transactionId: string): Promise<Transaction | null> {
     const transactions = await this.getTransactions();
 
     return transactions[transactionId];
@@ -85,11 +85,10 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
 
     if (Object.entries(finalTransactions).length === 0) {
       await super.deleteValue(this.key);
-
-      return;
     }
-
-    await this.updateTransactions(finalTransactions);
+    else {
+      await this.updateTransactions(finalTransactions);
+    }
   }
 
   private async updateTransactions(transactions: Transactions<T>): Promise<string | Buffer> {

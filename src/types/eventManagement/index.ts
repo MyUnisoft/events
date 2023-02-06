@@ -8,6 +8,7 @@ export interface SubscribeTo<T extends string = string> {
 
 export type TransactionAck = {
   event: "ack";
+  data: null;
   metadata: {
     origin: string;
     prefix?: string;

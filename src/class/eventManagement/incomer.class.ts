@@ -43,7 +43,7 @@ export class Incomer extends EventEmitter {
 
   protected subscriber: Redis.Redis;
 
-  private privateUuid: string = randomUUID();
+  private privateUuid = randomUUID();
   private logger: logger.Logger;
   private incomerChannelName: string;
   private incomerChannel: Redis.Channel<IncomerChannelMessages["IncomerMessage"]>;
@@ -96,7 +96,9 @@ export class Incomer extends EventEmitter {
       }
     });
 
-    this.logger.info({ uptime: process.uptime() }, "Registering as a new incomer on dispatcher");
+    this.logger.info({
+      uptime: process.uptime()
+    }, "Registering as a new incomer on dispatcher");
 
     await new Promise((resolve) => this.once("registered", resolve));
   }
@@ -114,61 +116,50 @@ export class Incomer extends EventEmitter {
       return;
     }
 
-    try {
-      switch (channel) {
-        case this.dispatcherChannelName:
-          await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["DispatcherMessages"] |
-            TransactionAck);
+    switch (channel) {
+      case this.dispatcherChannelName:
+        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["DispatcherMessages"] |
+          TransactionAck);
 
-          break;
-        default:
-          if (channel !== this.incomerChannelName) {
-            return;
-          }
-
+        break;
+      default:
+        if (channel === this.incomerChannelName) {
           await this.handleIncomerMessages(formattedMessage);
+        }
 
-          break;
-      }
-    }
-    catch (error) {
-      this.logger.error(error);
+        break;
     }
   }
 
-  private async handleDispatcherMessages(message: DispatcherChannelMessages["DispatcherMessages"] | TransactionAck):
-    Promise<void> {
+  private async handleDispatcherMessages(
+    message: DispatcherChannelMessages["DispatcherMessages"] | TransactionAck
+  ): Promise<void> {
     if (message.metadata.to !== this.privateUuid) {
       return;
     }
+
+    const logData = {
+      ...message,
+      uptime: process.uptime()
+    };
 
     const { event } = message;
 
     switch (event) {
       case predefinedEvents.dispatcher.registration.approvement:
-        this.logger.info({
-          ...message,
-          uptime: process.uptime()
-        }, "New approvement message on Dispatcher Channel");
+        this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-        // eslint-disable-next-line dot-notation
         await this.registerPrivateChannel(message as DispatcherRegistrationMessage);
 
         break;
       case predefinedEvents.ack:
-        this.logger.info({
-          ...message,
-          uptime: process.uptime()
-        }, "New ack on Dispatcher Channel");
+        this.logger.info(logData, "New ack on Dispatcher Channel");
 
         await this.handleAck(message.metadata.transactionId);
 
         break;
       default:
-        this.logger.info({
-          ...message,
-          uptime: process.uptime()
-        }, "Unknown message on Dispatcher Channel");
+        this.logger.info(logData, "Unknown message on Dispatcher Channel");
 
         break;
     }
@@ -220,6 +211,7 @@ export class Incomer extends EventEmitter {
 
     await this.publishAck(this.dispatcherChannel, {
       event: "ack",
+      data: null,
       metadata: {
         origin: this.privateUuid,
         transactionId: message.metadata.transactionId
@@ -230,7 +222,7 @@ export class Incomer extends EventEmitter {
   }
 
   private async handleAck(transactionId: string) {
-    const transaction = await this.transactionStore.getTransaction(transactionId);
+    const transaction = await this.transactionStore.getTransactionById(transactionId);
     if (!transaction) {
       throw new Error("Unknown transaction to ack");
     }

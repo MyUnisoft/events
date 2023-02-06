@@ -51,7 +51,7 @@ describe("Transaction options", () => {
     test("calling deleteTransaction, it should delete the transaction & return void", async() => {
       await transactionStore.deleteTransaction(transactionId);
 
-      const result = await transactionStore.getTransaction(transactionId);
+      const result = await transactionStore.getTransactionById(transactionId);
 
       expect(result).toBeUndefined();
     });
@@ -76,7 +76,7 @@ describe("Transaction options", () => {
     });
   });
 
-  describe("getTransaction", () => {
+  describe("getTransactionById", () => {
     let transactionId: string;
 
     beforeAll(async() => {
@@ -96,8 +96,8 @@ describe("Transaction options", () => {
       await transactionStore.deleteTransaction(transactionId);
     });
 
-    test("calling getTransaction, it should return the according transaction", async() => {
-      const finalTransaction = await transactionStore.getTransaction(transactionId);
+    test("calling getTransactionById, it should return the according transaction", async() => {
+      const finalTransaction = await transactionStore.getTransactionById(transactionId);
 
       expect(finalTransaction).toBeDefined();
     });

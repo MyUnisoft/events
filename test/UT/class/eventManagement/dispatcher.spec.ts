@@ -25,9 +25,10 @@ const mockedLoggerInfo = jest.spyOn(logger, "info");
 const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "handleDispatcherMessages");
 const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
+const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
+const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "handleInactiveIncomer");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
-const mockedGetTransaction = jest.spyOn(TransactionStore.prototype, "getTransaction");
 const mockedDeleteTransaction = jest.spyOn(TransactionStore.prototype, "deleteTransaction");
 
 // CONSTANTS
@@ -56,7 +57,7 @@ describe("Dispatcher", () => {
     let dispatcher: Dispatcher;
 
     beforeAll(async() => {
-      dispatcher = new Dispatcher({ pingInterval: 2_000 });
+      dispatcher = new Dispatcher({ pingInterval: 2_000, checkInterval: 3_000 });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -220,6 +221,18 @@ describe("Dispatcher", () => {
 
         expect(mockedDeleteTransaction).toHaveBeenCalled();
       });
+
+      test("It should have update the update the incomer last activity", async () => {
+        expect(mockedCheckLastActivity).toHaveBeenCalled();
+        expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
+      });
+
+      test("It should remove the inactive incomers", async() => {
+        await timers.setTimeout(4_000);
+
+        expect(mockedCheckLastActivity).toHaveBeenCalled();
+        expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
+      });
     });
   });
 
@@ -296,7 +309,7 @@ describe("Dispatcher", () => {
         });
 
         test("it should set a new transaction", async() => {
-          await timers.setTimeout(1_500);
+          await timers.setTimeout(1_800);
 
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
           expect(mockedSetTransaction).toHaveBeenCalled();
@@ -526,7 +539,7 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on dispatcher channel" });
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
