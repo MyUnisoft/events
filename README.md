@@ -26,45 +26,11 @@ $ npm i @myunisoft/events
 $ yarn add @myunisoft/events
 ```
 
-## 📚 Usage
+---
 
-Define an event with TypeScript and validate it
+## Publishing Events
 
-```ts
-import * as MyEvents, { EventOptions } from "@myunisoft/events";
-
-const event: EventOptions<"connector"> = {
-  name: "connector",
-  operation: "CREATE",
-  scope: {
-    schemaId: 1
-  },
-  metadata: {
-    agent: "Node",
-    origin: {
-      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
-      method: "POST",
-      requestId: crypto.randomUUID();
-    },
-    createdAt: Date.now()
-  },
-  data: {
-    id: 1,
-    code: "JFAC"
-  }
-};
-
-MyEvents.validate<"connector">(event);
-```
-
-> 👀 See [**here**](./example/fastify/feature/webhook.ts) for an example of exploiting webhooks with an http server.
-
-## API
-
-### validate< T extends keyof Events >(options: EventOptions<T>): void
-Throw an error if a given event is not internally known.
-
-## Events
+### Events
 
 An Event fully constituted is composed by a `name`, an `operation` and multiple objects such as `data`, `scope` and `metadata`.
 - The `name` identify the event.
@@ -94,125 +60,45 @@ export interface Metadata {
 }
 ```
 
-**Below is an exhaustive list of the MyUnisoft Events available**
+### 📚 Usage
 
-<details><summary>Connector</summary>
-
-[JSON Schema](./docs/json-schema/events/connector.md)
+Define and validate an event.
 
 ```ts
-export interface Connector {
-  name: "connector";
-  operation: "CREATE" | "UPDATE" | "DELETE";
+import * as MyEvents, { EventOptions } from "@myunisoft/events";
+
+const event: EventOptions<"connector"> = {
+  name: "connector",
+  operation: "CREATE",
+  scope: {
+    schemaId: 1
+  },
+  metadata: {
+    agent: "Node",
+    origin: {
+      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
+      method: "POST",
+      requestId: crypto.randomUUID();
+    },
+    createdAt: Date.now()
+  },
   data: {
-    id: string;
-    code: string;
-  };
-}
-```
-
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
-| UPDATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
-| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre> |
-
-
-</details>
-
-
-<details><summary>AccountingFolder</summary>
-
-[JSON Schema](./docs/json-schema/events/accountingFolder.md)
-
-```ts
-export interface AccountingFolder {
-  name: "accountingFolder";
-  operation: "CREATE";
-  data: {
-    id: string;
-  };
-}
-```
-
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Windev  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
-
-</details>
-
-<details><summary>Document</summary>
-
-[JSON Schema](./docs/json-schema/events/document.md)
-
-```ts
-export enum DocumentKind {
-  DossierAnnuel = "AF",
-  DossierPermanent = "PF",
-  BaseDocumentaire = "DB"
-}
-
-export interface Document {
-  name: "document";
-  operation: "CREATE";
-  data: {
-    id: string;
-    kind: DocumentKind;
-  };
-}
-```
-
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; kind: DocumentKind; <br/>}</pre>  |
-
-</details>
-
-<details><summary>Portfolio</summary>
-
-[JSON Schema](./docs/json-schema/events/portfolio.md)
-
-```ts
-export interface Portfolio {
-  name: "portfolio";
-  operation: PortfolioOperation;
-  data: {
-    id: string;
+    id: 1,
+    code: "JFAC"
   }
-}
+};
+
+MyEvents.validate<"connector">(event);
 ```
 
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
-| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre> |
+### API
 
-</details>
+#### validate< T extends keyof Events >(options: EventOptions<T>): void
+Throw an error if a given event is not internaly known.
 
-<details><summary>AccountingLineEntry</summary>
+### Types
 
-[JSON Schema](./docs/json-schema/events/accountingLineEntry.md)
-
-```ts
-export interface AccountingLineEntry {
-  name: "accountingLineEntry";
-  operation: AccountingLineEntryOperation;
-  data: {
-    id: string;
-  }
-}
-```
-
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
-
-</details>
-<br/>
-
-## Types
-
-<details><summary>EventOptions</summary>
+#### EventOptions
 
 ```ts
 export type EventOptions<K extends keyof EventsDefinition.Events> = {
@@ -238,9 +124,7 @@ const event: EventOptions<"connector"> = {
 }
 ```
 
-</details>
-
-<details><summary>EventsOptions</summary>
+#### EventsOptions
 
 ```ts
 type TupleToObject<T extends readonly any[],
@@ -302,9 +186,25 @@ const event: EventsOptions<["connector", "accountingFolder"]> = {
   }
 }
 ```
-</details>
 
-<details><summary>WebhooksResponse</summary>
+
+---
+
+## Exploiting Webhooks
+
+### 📚 Usage
+
+> 👀 See [**here**](./example/fastify/feature/webhook.ts) for an example of exploiting webhooks with an http server.
+
+> 👀 See [**here**](./docs/events.md) for an exhaustive list of MyUnisoft Events you can subscribe to.
+
+> ⚠️ A Webhook can send multiple Events on a single HTTP POST request.
+
+### Types
+
+#### WebhooksResponse
+
+[JSON Schema](./docs/json-schema/webhook.md)
 
 ```ts
 type WebhookResponse<K extends keyof EventTypes.Events> = {
@@ -345,7 +245,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   },
 ];
 ```
-</details>
+
 
 <br/>
 
