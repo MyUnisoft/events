@@ -599,13 +599,79 @@ describe("Dispatcher", () => {
       });
 
       describe("Publishing an injected event", () => {
-        test("it should log info", async() => {
-          const channel = new Channel({
-            name: "foo"
+        const firstIncomerName = randomUUID();
+        const secondIncomerName = randomUUID();
+        let firstIncomerProvidedUuid;
+        let secondIncomerProvidedUuid;
+        let subscriber: Redis;
+        let hasDistributedEvents = false;
+
+        beforeAll(async() => {
+          subscriber = await initRedis({
+            port: process.env.REDIS_PORT,
+            host: process.env.REDIS_HOST
+          } as any, true);
+
+          await subscriber.subscribe("dispatcher");
+
+          subscriber.on("message", async(channel, message) => {
+            const formattedMessage = JSON.parse(message);
+
+            if (channel === "dispatcher") {
+              if (formattedMessage.event === "approvement") {
+                const uuid = formattedMessage.data.uuid;
+
+                if (formattedMessage.metadata.to === firstIncomerName) {
+                  firstIncomerProvidedUuid = uuid
+                }
+                else {
+                  secondIncomerProvidedUuid = uuid;
+                }
+
+                await subscriber.subscribe(uuid);
+              }
+            }
+            else {
+              if (channel === secondIncomerProvidedUuid) {
+                hasDistributedEvents = true;
+              }
+            }
           });
 
-          // eslint-disable-next-line dot-notation
-          await dispatcher["subscriber"].subscribe("foo");
+          const channel = new Channel({
+            name: "dispatcher"
+          });
+
+          await Promise.all([
+            channel.publish({
+              event: "register",
+              data: {
+                name: firstIncomerName,
+                subscribeTo: []
+              },
+              metadata: {
+                origin: firstIncomerName
+              }
+            }),
+            channel.publish({
+              event: "register",
+              data: {
+                name: secondIncomerName,
+                subscribeTo: [{ name: "foo" }]
+              },
+              metadata: {
+                origin: secondIncomerName
+              }
+            })
+          ]);
+
+          await timers.setTimeout(1_000);
+        });
+
+        test("it should log info", async() => {
+          const channel = new Channel({
+            name: firstIncomerProvidedUuid
+          });
 
           await channel.publish({
             event: "foo",
@@ -613,7 +679,7 @@ describe("Dispatcher", () => {
               foo: "foo"
             },
             metadata: {
-              origin: "bar",
+              origin: firstIncomerProvidedUuid,
               transactionId: "1"
             }
           });
@@ -622,6 +688,7 @@ describe("Dispatcher", () => {
 
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
+          expect(hasDistributedEvents).toBe(true);
         });
       });
     });

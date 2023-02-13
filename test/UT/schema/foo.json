@@ -3,7 +3,8 @@
     "type": "object",
     "properties": {
       "event": {
-        "type": "string"
+        "type": "string",
+        "pattern": "foo"
       },
       "data": {
         "type": "object",

@@ -33,6 +33,7 @@ const ajv = new Ajv();
 const kPingInterval = 3_600;
 const kCheckInterval = 14_400;
 const kIdleTime = 7_200;
+const kNbMainTransaction = 1;
 const treeNames = [
   incomerStoreName,
   `local-${incomerStoreName}`,
@@ -83,9 +84,7 @@ function isIncomerChannelMessage(
 function isIncomerRegistrationMessage(
   value: DispatcherChannelMessages["IncomerMessages"] | TransactionAck
 ): value is IncomerRegistrationMessage {
-  return typeof value.event === "string" &&
-    typeof value.data.name === "string" &&
-    typeof value.data.subscribeTo !== "undefined";
+  return value.event === "register";
 }
 
 export class Dispatcher {
@@ -336,6 +335,34 @@ export class Dispatcher {
       throw new Error("Unknown transaction to ack");
     }
 
+    if (transaction.relatedTransaction) {
+      const transactions = await this.transactionStore.getTransactions();
+
+      const relatedTransactions = Object.values(transactions).filter((subTransaction) => subTransaction.relatedTransaction &&
+          subTransaction.relatedTransaction === transaction.relatedTransaction);
+
+
+      if (relatedTransactions.length === kNbMainTransaction) {
+        const relatedTransaction = relatedTransactions[0];
+        const relatedChannel = this.incomerChannels.get(relatedTransaction.metadata.origin);
+
+        if (!relatedChannel) {
+          throw new Error("foo");
+        }
+
+        await this.publishAck(relatedChannel, {
+          event: "ack",
+          data: null,
+          metadata: {
+            origin: this.privateUuid,
+            prefix: relatedTransaction.metadata.prefix,
+            to: relatedTransaction.metadata.origin,
+            transactionId: relatedTransaction.transactionId
+          }
+        });
+      }
+    }
+
     await this.transactionStore.deleteTransaction(transactionId);
   }
 
@@ -383,7 +410,7 @@ export class Dispatcher {
     message: IncomerChannelMessages["IncomerMessage"] | TransactionAck
   ) {
     const { event, metadata } = message;
-    const { prefix } = metadata;
+    const { prefix, origin } = metadata;
 
     const logData = {
       ...message,
@@ -392,18 +419,17 @@ export class Dispatcher {
 
     const relatedIncomerTreeName = `${prefix ? `${prefix}-` : ""}${incomerStoreName}`;
 
+    const incomerTree = await this.getTree(relatedIncomerTreeName);
+    if (!incomerTree[origin]) {
+      throw new Error("Couldn't find the related incomer");
+    }
+
     if (event === predefinedEvents.incomer.check.pong) {
-      const { transactionId, origin } = metadata;
+      const { transactionId } = metadata;
 
       const transaction = await this.transactionStore.getTransactionById(transactionId);
       if (!transaction) {
         throw new Error("Couldn't find the related transaction for the pong operation");
-      }
-
-      // Do I want this to break ?
-      const incomerTree = await this.getTree(relatedIncomerTreeName);
-      if (!incomerTree[origin]) {
-        throw new Error("Couldn't find the related incomer");
       }
 
       // Update the incomer last Activity
@@ -415,10 +441,62 @@ export class Dispatcher {
 
       await this.transactionStore.deleteTransaction(transactionId);
 
-      this.logger.info(logData, "Deleted with pong event");
+      this.logger.info(channel, logData, "Dealed with pong event");
     }
     else {
-      this.logger.info(logData, "injected event");
+      const concernedIncomers = Object.values(incomerTree)
+        .filter((incomer) => incomer.subscribeTo.find((value) => value.name === event));
+
+      const toPublish: RegisteredIncomer[] = [];
+      for (const incomer of concernedIncomers) {
+        const relatedEvent: SubscribeTo = incomer.subscribeTo.find((value) => value.name === event);
+
+        if (!relatedEvent.horizontalScale && toPublish.find((value) => value.name === incomer.name)) {
+          continue;
+        }
+
+        toPublish.push(incomer);
+      }
+
+      const mainTransactionId = await this.transactionStore.setTransaction({
+        ...message,
+        metadata: {
+          origin,
+          to: this.privateUuid
+        },
+        relatedTransaction: metadata.transactionId
+      });
+
+      for (const incomer of toPublish) {
+        const relatedChannel = this.incomerChannels.get(incomer.providedUuid);
+
+        if (!relatedChannel) {
+          throw new Error("Channel not found");
+        }
+
+        const formattedEvent = {
+          ...message,
+          metadata: {
+            origin: this.privateUuid,
+            to: incomer.providedUuid
+          }
+        };
+
+        const transactionId = await this.transactionStore.setTransaction(Object.assign({}, formattedEvent, {
+          relatedTransaction: mainTransactionId
+        }));
+
+        // Send the event to the incomer.
+        await relatedChannel.publish({
+          ...formattedEvent,
+          metadata: {
+            ...formattedEvent.metadata,
+            transactionId
+          }
+        });
+      }
+
+      this.logger.info(channel, logData, "injected event");
     }
   }
 
