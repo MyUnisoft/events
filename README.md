@@ -188,6 +188,26 @@ export interface Portfolio {
 | DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre> |
 
 </details>
+
+<details><summary>AccountingLineEntry</summary>
+
+[JSON Schema](./docs/json-schema/events/accountingLineEntry.md)
+
+```ts
+export interface AccountingLineEntry {
+  name: "accountingLineEntry";
+  operation: AccountingLineEntryOperation;
+  data: {
+    id: string;
+  }
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+
+</details>
 <br/>
 
 ## Types
