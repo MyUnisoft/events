@@ -25,13 +25,9 @@ export type EventOptions<T extends keyof Events = keyof Events> = {
   metadata: Metadata;
 } & Events[T];
 
-type TupleToObject<T extends readonly any[],
-  M extends Record<Exclude<keyof T, keyof any[]>, PropertyKey>> =
-  { [K in Exclude<keyof T, keyof any[]> as M[K]]: T[K] };
-
-export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = TupleToObject<[
+export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = [
   ...(EventOptions<T[number]>)[]
-], []>;
+];
 
 type WebhookResponse<K extends keyof Events> = {
   scope: Scope;
