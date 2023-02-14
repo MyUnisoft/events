@@ -61,3 +61,41 @@ export interface Document {
 | Operation  | Agent  | Payload  |
 |---|---|---|
 | CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; kind: DocumentKind; <br/>}</pre>  |
+
+# Portfolio
+
+[JSON Schema](./docs/json-schema/events/portfolio.md)
+
+```ts
+export interface Portfolio {
+  name: "portfolio";
+  operation: PortfolioOperation;
+  data: {
+    id: string;
+  }
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre> |
+
+# AccountingLineEntry
+
+[JSON Schema](./docs/json-schema/events/accountingLineEntry.md)
+
+```ts
+export interface AccountingLineEntry {
+  name: "accountingLineEntry";
+  operation: AccountingLineEntryOperation;
+  data: {
+    id: string;
+  }
+}
+```
+
+| Operation  | Agent  | Payload  |
+|---|---|---|
+| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
+
