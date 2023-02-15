@@ -6,17 +6,6 @@ export interface SubscribeTo<T extends string = string> {
   horizontalScale?: boolean;
 }
 
-export type TransactionAck = {
-  event: "ack";
-  data: null;
-  metadata: {
-    origin: string;
-    prefix?: string;
-    to?: string;
-    transactionId: string;
-  };
-};
-
 export interface DispatcherTransactionMetadata {
   origin: string;
   to: string;

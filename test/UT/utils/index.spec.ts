@@ -54,9 +54,9 @@ describe("eventsValidationFunction", () => {
     let portfolio;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("portfolio")).toBe(true);
+      expect(eventsValidationFunction.has("portfolio")).toBe(true);
 
-      portfolio = eventsValidationFonction.get("portfolio");
+      portfolio = eventsValidationFunction.get("portfolio");
     });
 
     test("portfolio should have a validation function for \"create\"", () => {
@@ -72,9 +72,9 @@ describe("eventsValidationFunction", () => {
     let accountingLineEntry;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("accountingLineEntry")).toBe(true);
+      expect(eventsValidationFunction.has("accountingLineEntry")).toBe(true);
 
-      accountingLineEntry = eventsValidationFonction.get("accountingLineEntry");
+      accountingLineEntry = eventsValidationFunction.get("accountingLineEntry");
     });
 
     test("accountingLineEntry should have a validation function for \"create\"", () => {

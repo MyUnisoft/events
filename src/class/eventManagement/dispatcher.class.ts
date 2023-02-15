@@ -21,7 +21,6 @@ import {
   SubscribeTo,
   DispatcherChannelMessages,
   IncomerChannelMessages,
-  TransactionAck,
   DispatcherTransactionMetadata
 } from "../../types/eventManagement/index";
 import * as ChannelsMessages from "../../schema/eventManagement/index";
@@ -33,7 +32,6 @@ const ajv = new Ajv();
 const kPingInterval = 3_600;
 const kCheckInterval = 14_400;
 const kIdleTime = 7_200;
-const kNbMainTransaction = 1;
 const treeNames = [
   incomerStoreName,
   `local-${incomerStoreName}`,
@@ -64,25 +62,24 @@ export interface DispatcherOptions {
   idleTime?: number;
 }
 
-type DispatcherChannelEvents = | { event: "register" }
-| { event: "ack" };
+type DispatcherChannelEvents = { event: "register" };
 
 function isDispatcherChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessage"] | TransactionAck
-): value is DispatcherChannelMessages["IncomerMessages"] | TransactionAck {
+  IncomerChannelMessages["IncomerMessage"]
+): value is DispatcherChannelMessages["IncomerMessages"] {
   return value.event !== "pong";
 }
 
 function isIncomerChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessage"] | TransactionAck
-): value is IncomerChannelMessages["IncomerMessage"] | TransactionAck {
+  IncomerChannelMessages["IncomerMessage"]
+): value is IncomerChannelMessages["IncomerMessage"] {
   return value.event !== "register";
 }
 
 function isIncomerRegistrationMessage(
-  value: DispatcherChannelMessages["IncomerMessages"] | TransactionAck
+  value: DispatcherChannelMessages["IncomerMessages"]
 ): value is IncomerRegistrationMessage {
   return value.event === "register";
 }
@@ -91,7 +88,7 @@ export class Dispatcher {
   readonly type = "dispatcher";
   readonly prefix: string;
   readonly dispatcherChannelName: string;
-  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"] | TransactionAck>;
+  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
   readonly privateUuid = randomUUID();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
@@ -179,7 +176,7 @@ export class Dispatcher {
     }
 
     const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages["IncomerMessage"] | TransactionAck = JSON.parse(message);
+      IncomerChannelMessages["IncomerMessage"] = JSON.parse(message);
 
     try {
       if (!formattedMessage.event || !formattedMessage.metadata) {
@@ -231,7 +228,12 @@ export class Dispatcher {
             }
           };
 
-          const transactionId = await this.transactionStore.setTransaction(event);
+          const transactionId = await this.transactionStore.setTransaction({
+            ...event,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
 
           await incomerChannel.publish({
             ...event,
@@ -329,52 +331,8 @@ export class Dispatcher {
     return tree ?? {};
   }
 
-  private async handleAck(transactionId: string) {
-    const transaction = await this.transactionStore.getTransactionById(transactionId);
-    if (!transaction) {
-      throw new Error("Unknown transaction to ack");
-    }
-
-    if (transaction.relatedTransaction) {
-      const transactions = await this.transactionStore.getTransactions();
-
-      const relatedTransactions = Object.values(transactions).filter((subTransaction) => subTransaction.relatedTransaction &&
-          subTransaction.relatedTransaction === transaction.relatedTransaction);
-
-
-      if (relatedTransactions.length === kNbMainTransaction) {
-        const relatedTransaction = relatedTransactions[0];
-        const relatedChannel = this.incomerChannels.get(relatedTransaction.metadata.origin);
-
-        if (!relatedChannel) {
-          throw new Error("foo");
-        }
-
-        await this.publishAck(relatedChannel, {
-          event: "ack",
-          data: null,
-          metadata: {
-            origin: this.privateUuid,
-            prefix: relatedTransaction.metadata.prefix,
-            to: relatedTransaction.metadata.origin,
-            transactionId: relatedTransaction.transactionId
-          }
-        });
-      }
-    }
-
-    await this.transactionStore.deleteTransaction(transactionId);
-  }
-
-  private async publishAck(
-    channel: Redis.Channel,
-    message: TransactionAck
-  ) {
-    await channel.publish(message);
-  }
-
   private async handleDispatcherMessages(
-    message: DispatcherChannelMessages["IncomerMessages"] | TransactionAck
+    message: DispatcherChannelMessages["IncomerMessages"]
   ) {
     const { event } = message;
 
@@ -391,11 +349,6 @@ export class Dispatcher {
           await this.approveService(message);
         }
       })
-      .with({ event: "ack" }, async() => {
-        this.logger.info(logData, "New Ack on Dispatcher Channel");
-
-        await this.handleAck(message.metadata.transactionId);
-      })
       .with(P._, () => {
         throw new Error("Unknown event on Dispatcher Channel");
       })
@@ -407,7 +360,7 @@ export class Dispatcher {
 
   private async handleIncomerMessages(
     channel: string,
-    message: IncomerChannelMessages["IncomerMessage"] | TransactionAck
+    message: IncomerChannelMessages["IncomerMessage"]
   ) {
     const { event, metadata } = message;
     const { prefix, origin } = metadata;
@@ -445,29 +398,22 @@ export class Dispatcher {
     }
     else {
       const concernedIncomers = Object.values(incomerTree)
-        .filter((incomer) => incomer.subscribeTo.find((value) => value.name === event));
+        .filter((incomer) => incomer.subscribeTo.find((subscribedEvent) => subscribedEvent.name === event));
 
-      const toPublish: RegisteredIncomer[] = [];
+      const filteredConcernedIncomers: RegisteredIncomer[] = [];
       for (const incomer of concernedIncomers) {
         const relatedEvent: SubscribeTo = incomer.subscribeTo.find((value) => value.name === event);
 
-        if (!relatedEvent.horizontalScale && toPublish.find((value) => value.name === incomer.name)) {
+        // Prevent publishing an event to multiple instance of a same service if no horizontalScale of the event
+        if (!relatedEvent.horizontalScale && filteredConcernedIncomers.find((value) => value.name === incomer.name)) {
           continue;
         }
 
-        toPublish.push(incomer);
+        filteredConcernedIncomers.push(incomer);
       }
 
-      const mainTransactionId = await this.transactionStore.setTransaction({
-        ...message,
-        metadata: {
-          origin,
-          to: this.privateUuid
-        },
-        relatedTransaction: metadata.transactionId
-      });
-
-      for (const incomer of toPublish) {
+      // All or nothing ?
+      for (const incomer of filteredConcernedIncomers) {
         const relatedChannel = this.incomerChannels.get(incomer.providedUuid);
 
         if (!relatedChannel) {
@@ -482,16 +428,20 @@ export class Dispatcher {
           }
         };
 
-        const transactionId = await this.transactionStore.setTransaction(Object.assign({}, formattedEvent, {
-          relatedTransaction: mainTransactionId
-        }));
+        // Create dispatcher transaction for the concerned incomer
+        const dispatcherTransactionId = await this.transactionStore.setTransaction({
+          ...formattedEvent,
+          mainTransaction: null,
+          relatedTransaction: metadata.transactionId,
+          resolved: false
+        });
 
-        // Send the event to the incomer.
+        // Send the event to the concerned incomer.
         await relatedChannel.publish({
           ...formattedEvent,
           metadata: {
             ...formattedEvent.metadata,
-            transactionId
+            transactionId: dispatcherTransactionId
           }
         });
       }
@@ -554,7 +504,12 @@ export class Dispatcher {
       }
     };
 
-    const transactionId = await this.transactionStore.setTransaction(event);
+    const transactionId = await this.transactionStore.setTransaction({
+      ...event,
+      mainTransaction: false,
+      relatedTransaction: metadata.transactionId,
+      resolved: false
+    });
 
     // Approve the service & send him info so he can use the dedicated channel
     await this.dispatcherChannel.publish({

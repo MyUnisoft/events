@@ -22,13 +22,34 @@ type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "di
   Omit<DispatcherTransactionMetadata, "transactionId"> :
   Omit<IncomerTransactionMetadata, "transactionId">;
 
+type MainTransaction = {
+  mainTransaction: true;
+  relatedTransaction: null;
+  resolved: null;
+}
+
+type DispatcherTransaction = {
+  mainTransaction: false;
+  relatedTransaction: string;
+  resolved: boolean;
+}
+
+type HandlerTransaction = {
+  mainTransaction: false;
+  relatedTransaction: string;
+  resolved: null;
+}
+
 export type Transaction<T extends Instance = Instance> = (T extends "dispatcher" ?
-DispatcherChannelMessages["DispatcherMessages"] |
-(IncomerChannelMessages["DispatcherMessages"] | { event: string, data: Record<string, any> }) :
-DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]) & {
-  aliveSince: number;
-  relatedTransaction?: string;
-};
+  DispatcherChannelMessages["DispatcherMessages"] |
+  (IncomerChannelMessages["DispatcherMessages"] |
+  { event: string, data: Record<string, any> }) :
+  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]) & {
+    aliveSince: number;
+  } & (
+    (T extends "dispatcher" ? DispatcherTransaction : HandlerTransaction) |
+    MainTransaction
+  );
 
 export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "metadata" | "aliveSince"> & {
   metadata: MetadataWithoutTransactionId;

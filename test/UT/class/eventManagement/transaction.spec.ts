@@ -41,7 +41,10 @@ describe("Transaction options", () => {
         metadata: {
           origin: "foo",
           to: "foo"
-        }
+        },
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: null
       };
 
       transactionId = await transactionStore.setTransaction(transaction);
@@ -65,7 +68,10 @@ describe("Transaction options", () => {
         metadata: {
           origin: "foo",
           to: "foo"
-        }
+        },
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: null
       };
 
       const transactionId = await transactionStore.setTransaction(transaction);
@@ -86,7 +92,10 @@ describe("Transaction options", () => {
         metadata: {
           origin: "foo",
           to: "foo"
-        }
+        },
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: null
       };
 
       transactionId = await transactionStore.setTransaction(transaction);
@@ -111,7 +120,10 @@ describe("Transaction options", () => {
         metadata: {
           origin: "foo",
           to: "foo"
-        }
+        },
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: null
       };
 
       await transactionStore.setTransaction(transaction);

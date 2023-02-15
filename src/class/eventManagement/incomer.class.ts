@@ -17,8 +17,7 @@ import {
   Prefix,
   SubscribeTo,
   DispatcherChannelMessages,
-  IncomerChannelMessages,
-  TransactionAck
+  IncomerChannelMessages
 } from "../../types/eventManagement/index";
 import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
 import { IncomerPongMessage } from "types/eventManagement/incomerChannel";
@@ -36,7 +35,7 @@ export class Incomer extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
   readonly subscribeTo: SubscribeTo[];
-  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"] | TransactionAck>;
+  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
   readonly dispatcherChannelName: string;
 
   readonly transactionStore: TransactionStore;
@@ -109,7 +108,7 @@ export class Incomer extends EventEmitter {
     }
 
     const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["DispatcherMessages"] |
-      IncomerChannelMessages["DispatcherMessages"] | TransactionAck;
+      IncomerChannelMessages["DispatcherMessages"];
 
     // Avoid reacting to his own message
     if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
@@ -118,8 +117,7 @@ export class Incomer extends EventEmitter {
 
     switch (channel) {
       case this.dispatcherChannelName:
-        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["DispatcherMessages"] |
-          TransactionAck);
+        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["DispatcherMessages"]);
 
         break;
       default:
@@ -132,7 +130,7 @@ export class Incomer extends EventEmitter {
   }
 
   private async handleDispatcherMessages(
-    message: DispatcherChannelMessages["DispatcherMessages"] | TransactionAck
+    message: DispatcherChannelMessages["DispatcherMessages"]
   ): Promise<void> {
     if (message.metadata.to !== this.privateUuid) {
       return;
@@ -209,15 +207,6 @@ export class Incomer extends EventEmitter {
       prefix: this.prefix
     });
 
-    await this.publishAck(this.dispatcherChannel, {
-      event: "ack",
-      data: null,
-      metadata: {
-        origin: this.privateUuid,
-        transactionId: message.metadata.transactionId
-      }
-    });
-
     this.emit("registered");
   }
 
@@ -228,13 +217,6 @@ export class Incomer extends EventEmitter {
     }
 
     await this.transactionStore.deleteTransaction(transactionId);
-  }
-
-  private async publishAck(
-    channel: Redis.Channel,
-    message: TransactionAck
-  ) {
-    await channel.publish(message);
   }
 }
 
