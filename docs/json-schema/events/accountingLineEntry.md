@@ -15,9 +15,6 @@
     "scope": {
       "$ref": "Scope"
     },
-    "metadata": {
-      "$ref": "Metadata"
-    },
     "data": {
       "type": "object",
       "properties": {
