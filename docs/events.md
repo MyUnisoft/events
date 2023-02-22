@@ -1,6 +1,9 @@
 # Connector
 
-[JSON Schema](./json-schema/events/connector.md)
+Event notifying the modification of a partner integration.
+
+- **Operations**: CREATE, UPDATE, DELETE
+- [JSON Schema](./json-schema/events/connector.md)
 
 ```ts
 export interface Connector {
@@ -13,15 +16,12 @@ export interface Connector {
 }
 ```
 
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
-| UPDATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre>  |
-| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; code: string; <br/>}</pre> |
-
 # AccountingFolder
 
-[JSON Schema](./json-schema/events/accountingFolder.md)
+Event notifying the creation of a new Accounting Folder (a company). 
+
+- **Operations**: CREATE
+- [JSON Schema](./json-schema/events/accountingFolder.md)
 
 ```ts
 export interface AccountingFolder {
@@ -33,13 +33,12 @@ export interface AccountingFolder {
 }
 ```
 
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Windev  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
-
 # Document
 
-[JSON Schema](./docs/json-schema/events/document.md)
+Event notifying the creation/addition of a document.
+
+- **Operations**: CREATE
+- [JSON Schema](./docs/json-schema/events/document.md)
 
 ```ts
 export enum DocumentKind {
@@ -58,13 +57,12 @@ export interface Document {
 }
 ```
 
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/> &emsp; kind: DocumentKind; <br/>}</pre>  |
-
 # Portfolio
 
-[JSON Schema](./docs/json-schema/events/portfolio.md)
+Event notifying the creation or deletion of an Accounting Portfolio (or Accounting Wallet). Wallet allow to define access to a set of accounting folders.
+
+- **Operations**: CREATE, DELETE
+- [JSON Schema](./docs/json-schema/events/portfolio.md)
 
 ```ts
 export interface Portfolio {
@@ -76,14 +74,10 @@ export interface Portfolio {
 }
 ```
 
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
-| DELETE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre> |
-
 # AccountingLineEntry
 
-[JSON Schema](./docs/json-schema/events/accountingLineEntry.md)
+- **Operations**: CREATE
+- [JSON Schema](./docs/json-schema/events/accountingLineEntry.md)
 
 ```ts
 export interface AccountingLineEntry {
@@ -94,8 +88,3 @@ export interface AccountingLineEntry {
   }
 }
 ```
-
-| Operation  | Agent  | Payload  |
-|---|---|---|
-| CREATE  | Node  | <pre>{ <br/> &emsp; id: string; <br/>}</pre>  |
-
