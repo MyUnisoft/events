@@ -24,6 +24,6 @@
       "required": ["id", "kind"]
     }
   },
-  "required": ["name", "operation", "scope", "metadata", "data"]
+  "required": ["name", "operation", "scope", "data"]
 }
 ```

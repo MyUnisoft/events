@@ -24,7 +24,7 @@
       "additionalProperties": false
     }
   },
-  "required": ["name", "operation", "scope", "metadata", "data"],
+  "required": ["name", "operation", "scope", "data"],
   "additionalProperties": false
 }
 ```
