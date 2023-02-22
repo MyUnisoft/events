@@ -38,7 +38,7 @@ export interface AccountingFolder {
 Event notifying the creation/addition of a document.
 
 - **Operations**: CREATE
-- [JSON Schema](./docs/json-schema/events/document.md)
+- [JSON Schema](./json-schema/events/document.md)
 
 ```ts
 export enum DocumentKind {
@@ -62,7 +62,7 @@ export interface Document {
 Event notifying the creation or deletion of an Accounting Portfolio (or Accounting Wallet). Wallet allow to define access to a set of accounting folders.
 
 - **Operations**: CREATE, DELETE
-- [JSON Schema](./docs/json-schema/events/portfolio.md)
+- [JSON Schema](./json-schema/events/portfolio.md)
 
 ```ts
 export interface Portfolio {
@@ -76,8 +76,8 @@ export interface Portfolio {
 
 # AccountingLineEntry
 
-- **Operations**: CREATE
-- [JSON Schema](./docs/json-schema/events/accountingLineEntry.md)
+- **Operations**: CREATE 
+- [JSON Schema](./json-schema/events/accountingLineEntry.md)
 
 ```ts
 export interface AccountingLineEntry {
