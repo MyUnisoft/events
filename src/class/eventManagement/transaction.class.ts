@@ -95,6 +95,14 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     return transactionId;
   }
 
+  async updateTransaction(transactionId: string, transaction: Transaction<T>): Promise<void> {
+    const transactions = await this.getTransactions();
+
+    transactions[transactionId] = transaction;
+
+    await this.updateTransactions(transactions);
+  }
+
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
     const transactions = await this.getTransactions();
 

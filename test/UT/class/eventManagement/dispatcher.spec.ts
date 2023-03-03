@@ -57,7 +57,7 @@ describe("Dispatcher", () => {
     let dispatcher: Dispatcher;
 
     beforeAll(async() => {
-      dispatcher = new Dispatcher({ pingInterval: 2_000, checkInterval: 3_000 });
+      dispatcher = new Dispatcher({ pingInterval: 2_000, checkLastActivityInterval: 3_000 });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -105,12 +105,45 @@ describe("Dispatcher", () => {
     describe("Publishing a well formed register event", () => {
       let incomerName = randomUUID();
 
+      test("without unresolved transaction, it should fail and throw a new Error", async() => {
+        const channel = new Channel({
+          name: "dispatcher"
+        });
+
+        const event = {
+          event: "register",
+          data: {
+            name: incomerName,
+            subscribeTo: []
+          },
+          metadata: {
+            origin: incomerName,
+            transactionId: "foo"
+          }
+        };
+
+        await channel.publish(event);
+
+        await timers.setTimeout(1_000);
+
+        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+        expect(mockedLoggerError).toHaveBeenCalledWith({
+          channel: "dispatcher",
+          message: event,
+          error: "No related transaction found next to register event"
+        });
+      });
+
       test("It should handle the message and log infos about it", async() => {
         const channel = new Channel({
           name: "dispatcher"
         });
 
-        await channel.publish({
+        const incomerTransactionStore = new TransactionStore({
+          instance: "incomer"
+        });
+
+        const event = {
           event: "register",
           data: {
             name: incomerName,
@@ -118,6 +151,21 @@ describe("Dispatcher", () => {
           },
           metadata: {
             origin: incomerName
+          }
+        };
+
+        const transactionId = await incomerTransactionStore.setTransaction({
+          ...event,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: null
+        });
+
+        await channel.publish({
+          ...event,
+          metadata: {
+            ...event.metadata,
+            transactionId
           }
         });
 
@@ -132,6 +180,10 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
+        const incomerTransactionStore = new TransactionStore({
+          instance: "incomer"
+        });
+
         const event = {
           event: "register",
           data: {
@@ -143,12 +195,35 @@ describe("Dispatcher", () => {
           }
         };
 
-        await channel.publish(event);
+        const transactionId = await incomerTransactionStore.setTransaction({
+          ...event,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: null
+        });
+
+        await channel.publish({
+          ...event,
+          metadata: {
+            ...event.metadata,
+            transactionId
+          }
+        });
 
         await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error:"Forbidden multiple registration for a same instance" });
+        expect(mockedLoggerError).toHaveBeenCalledWith({
+          channel: "dispatcher",
+          message: {
+            ...event,
+            metadata: {
+              ...event.metadata,
+              transactionId
+            }
+          },
+          error: "Forbidden multiple registration for a same instance"
+        });
       });
     });
 
@@ -157,6 +232,7 @@ describe("Dispatcher", () => {
       let uuid: string;
       let pingTransactionId: string;
       let subscriber: Redis;
+      let incomerTransactionStore: TransactionStore<"incomer">
 
       beforeAll(async() => {
         subscriber = await initRedis({
@@ -183,7 +259,11 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        await channel.publish({
+        let incomerTransactionStore = new TransactionStore({
+          instance: "incomer"
+        });
+
+        const event = {
           event: "register",
           data: {
             name: incomerName,
@@ -191,6 +271,25 @@ describe("Dispatcher", () => {
           },
           metadata: {
             origin: incomerName
+          }
+        };
+
+        const transactionId = await incomerTransactionStore.setTransaction({
+          ...event,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: null
+        });
+
+        await channel.publish({
+          event: "register",
+          data: {
+            name: incomerName,
+            subscribeTo: []
+          },
+          metadata: {
+            origin: incomerName,
+            transactionId
           }
         });
 
@@ -267,7 +366,7 @@ describe("Dispatcher", () => {
     describe("Publishing on the dispatcher channel", () => {
       describe("Publishing well formed register event", () => {
         let incomerName = randomUUID();
-        let transactionId;
+        let approved = false;
         let subscriber: Redis;
 
         beforeAll(async() => {
@@ -282,7 +381,7 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (formattedMessage.event && formattedMessage.event === "approvement") {
-              transactionId = formattedMessage.metadata.transactionId;
+              approved = true;
             }
           });
 
@@ -291,15 +390,35 @@ describe("Dispatcher", () => {
             prefix: "local"
           });
 
-          await channel.publish({
+          const incomerTransactionStore = new TransactionStore({
+            prefix: "local",
+            instance: "incomer"
+          });
+
+          const event = {
             event: "register",
             data: {
               name: incomerName,
               subscribeTo: []
             },
             metadata: {
+              origin: incomerName
+            }
+          }
+
+          const transactionId = await incomerTransactionStore.setTransaction({
+            ...event,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
+
+          await channel.publish({
+            ...event,
+            metadata: {
               origin: incomerName,
-              prefix: "local"
+              prefix: "local",
+              transactionId
             }
           });
         });
@@ -308,37 +427,17 @@ describe("Dispatcher", () => {
           await closeRedis(subscriber);
         });
 
-        test("it should set a new transaction", async() => {
+        test("it should delete the main transaction in Incomer store", async() => {
           await timers.setTimeout(1_800);
 
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
           expect(mockedSetTransaction).toHaveBeenCalled();
         });
 
-        test("it should publish a well formed approvement event and transactionId should be defined", async() => {
+        test("it should publish a well formed approvement event", async() => {
           await timers.setTimeout(1_000);
 
-          expect(transactionId).toBeDefined();
-        });
-
-        test("Publishing a well formed ack event, it should be calling deleteTransaction", async() => {
-          const channel = new Channel({
-            name: "dispatcher",
-            prefix: "local"
-          });
-
-          await channel.publish({
-            event: "ack",
-            metadata: {
-              origin: incomerName,
-              prefix: "local",
-              transactionId
-            }
-          });
-
-          await timers.setTimeout(1_000);
-
-          expect(mockedDeleteTransaction).toHaveBeenCalled();
+          expect(approved).toBe(true);
         });
       });
     });
@@ -450,7 +549,7 @@ describe("Dispatcher", () => {
     describe("Publishing on the dispatcher channel", () => {
       describe("Publishing well formed register event", () => {
         let incomerName = randomUUID();
-        let transactionId;
+        let approved = false;
         let subscriber: Redis;
 
         beforeAll(async() => {
@@ -465,7 +564,7 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (formattedMessage.event && formattedMessage.event === "approvement") {
-              transactionId = formattedMessage.metadata.transactionId;
+              approved = true;
             }
           });
 
@@ -473,7 +572,11 @@ describe("Dispatcher", () => {
             name: "dispatcher"
           });
 
-          await channel.publish({
+          const incomerTransactionStore = new TransactionStore({
+            instance: "incomer"
+          });
+
+          const event = {
             event: "register",
             data: {
               name: incomerName,
@@ -482,38 +585,35 @@ describe("Dispatcher", () => {
             metadata: {
               origin: incomerName
             }
-          });
-        });
+          }
 
-        test("it should set a new transaction", async() => {
-          await timers.setTimeout(1_000);
-
-          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-          expect(mockedSetTransaction).toHaveBeenCalled();
-        });
-
-        test("it should publish a well formed approvement event and transactionId should be defined", async() => {
-          await timers.setTimeout(1_000);
-
-          expect(transactionId).toBeDefined();
-        });
-
-        test("Publishing a well formed ack event, it should be calling deleteTransaction", async() => {
-          const channel = new Channel({
-            name: "dispatcher"
+          const transactionId = await incomerTransactionStore.setTransaction({
+            ...event,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
           });
 
           await channel.publish({
-            event: "ack",
+            ...event,
             metadata: {
               origin: incomerName,
               transactionId
             }
           });
+        });
 
+        test("it should delete the main transaction in Incomer store", async() => {
+          await timers.setTimeout(1_800);
+
+          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+          expect(mockedSetTransaction).toHaveBeenCalled();
+        });
+
+        test("it should publish a well formed approvement event", async() => {
           await timers.setTimeout(1_000);
 
-          expect(mockedDeleteTransaction).toHaveBeenCalled();
+          expect(approved).toBe(true);
         });
       });
 
@@ -642,25 +742,60 @@ describe("Dispatcher", () => {
             name: "dispatcher"
           });
 
+          const incomerTransactionStore = new TransactionStore({
+            instance: "incomer"
+          });
+
+          const firstEvent = {
+            event: "register",
+            data: {
+              name: firstIncomerName,
+              subscribeTo: []
+            },
+            metadata: {
+              origin: firstIncomerName
+            }
+          };
+
+          const secondEvent = {
+            event: "register",
+            data: {
+              name: secondIncomerName,
+              subscribeTo: [{ name: "foo" }]
+            },
+            metadata: {
+              origin: secondIncomerName
+            }
+          };
+
+          const [ firstTransactionId, secondTransactionId ] = await Promise.all([
+            incomerTransactionStore.setTransaction({
+              ...firstEvent,
+              mainTransaction: true,
+              relatedTransaction: null,
+              resolved: null
+            }),
+            incomerTransactionStore.setTransaction({
+              ...secondEvent,
+              mainTransaction: true,
+              relatedTransaction: null,
+              resolved: null
+            })
+          ]);
+
           await Promise.all([
             channel.publish({
-              event: "register",
-              data: {
-                name: firstIncomerName,
-                subscribeTo: []
-              },
+              ...firstEvent,
               metadata: {
-                origin: firstIncomerName
+                ...firstEvent.metadata,
+                transactionId: firstTransactionId
               }
             }),
             channel.publish({
-              event: "register",
-              data: {
-                name: secondIncomerName,
-                subscribeTo: [{ name: "foo" }]
-              },
+              ...secondEvent,
               metadata: {
-                origin: secondIncomerName
+                ...secondEvent.metadata,
+                transactionId: secondTransactionId
               }
             })
           ]);

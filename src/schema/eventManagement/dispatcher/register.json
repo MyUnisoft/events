@@ -43,9 +43,12 @@
           },
           "prefix": {
             "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
           }
         },
-        "required": ["origin"],
+        "required": ["origin", "transactionId"],
         "additionalProperties": false
       }
     },
