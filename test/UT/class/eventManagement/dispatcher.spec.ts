@@ -618,7 +618,7 @@ describe("Dispatcher", () => {
       });
 
       test(`Publishing an unknown event on the dispatcher channel,
-            it should log a new Error with the message "Unknown event on dispatcher channel"`,
+            it should log a new Error with the message "Unknown event on Dispatcher Channel"`,
       async() => {
         const channel = new Channel({
           name: "dispatcher"
@@ -640,7 +640,7 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
-        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+        expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
 

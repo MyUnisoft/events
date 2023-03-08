@@ -10,10 +10,11 @@ import { match, P } from "ts-pattern";
 // Import Internal Dependencies
 import {
   channels,
-  incomerStoreName,
-  predefinedEvents
+  kIncomerStoreName
 } from "../../utils/config";
 import {
+  Transaction,
+  Transactions,
   TransactionStore
 } from "./transaction.class";
 import {
@@ -34,11 +35,11 @@ const kCheckLastActivityInterval = 14_400;
 const kCheckRelatedTransactionInterval = 3_600;
 const kIdleTime = 7_200;
 const treeNames = [
-  incomerStoreName,
-  `local-${incomerStoreName}`,
-  `dev-${incomerStoreName}`,
-  `preprod-${incomerStoreName}`,
-  `prod-${incomerStoreName}`
+  kIncomerStoreName,
+  `local-${kIncomerStoreName}`,
+  `dev-${kIncomerStoreName}`,
+  `preprod-${kIncomerStoreName}`,
+  `prod-${kIncomerStoreName}`
 ];
 
 interface RegisteredIncomer {
@@ -69,7 +70,7 @@ function isDispatcherChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
   IncomerChannelMessages["IncomerMessage"]
 ): value is DispatcherChannelMessages["IncomerMessages"] {
-  return value.event !== "pong";
+  return value.event === "register";
 }
 
 function isIncomerChannelMessage(
@@ -171,78 +172,10 @@ export class Dispatcher {
       ]);
 
       // Resolve Dispatcher transactions
-      for (const [dispatcherTransactionId, dispatcherTransaction] of Object.entries(dispatcherTransactions)) {
-        // If Transaction is already resolved, skip
-        if (dispatcherTransaction.resolved) {
-          continue;
-        }
-
-        const relatedTransactionId = Object.keys(incomerTransactions).find(
-          (incomerTransactionId) => incomerTransactions[incomerTransactionId].relatedTransaction === dispatcherTransactionId
-        );
-
-        // Event not resolved yet
-        if (!relatedTransactionId) {
-          continue;
-        }
-
-        // Only in case of ping event
-        if (dispatcherTransaction.mainTransaction) {
-          await Promise.all([
-            this.incomerTransactionStore.deleteTransaction(relatedTransactionId),
-            this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
-          ]);
-
-          continue;
-        }
-
-        await Promise.all([
-          this.incomerTransactionStore.deleteTransaction(relatedTransactionId),
-          this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, {
-            ...dispatcherTransaction,
-            resolved: true
-          })
-        ]);
-      }
+      await this.resolveDispatcherTransactions(dispatcherTransactions, incomerTransactions);
 
       // Resolve main transactions
-      for (const [incomerTransactionId, incomerTransaction] of Object.entries(incomerTransactions)) {
-        if (!incomerTransaction.mainTransaction) {
-          continue;
-        }
-
-        const relatedTransactions = Object.keys(dispatcherTransactions).filter(
-          (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction === incomerTransactionId
-        );
-
-        // Event not resolved yet by the dispatcher
-        if (relatedTransactions.length === 0) {
-          continue;
-        }
-
-        const unResolvedRelatedTransactions = [];
-        for (const relatedTransaction of unResolvedRelatedTransactions) {
-          if (!dispatcherTransactions[relatedTransaction].resolved) {
-            unResolvedRelatedTransactions.push(relatedTransaction);
-          }
-        }
-
-        // Event not resolved yet by the different incomers
-        if (unResolvedRelatedTransactions.length > 0) {
-          continue;
-        }
-
-        const transactionsToResolve = [];
-
-        for (const relatedTransaction of relatedTransactions) {
-          transactionsToResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedTransaction));
-        }
-
-        await Promise.all([
-          ...transactionsToResolve,
-          this.incomerTransactionStore.deleteTransaction(incomerTransactionId)
-        ]);
-      }
+      await this.resolveIncomerMainTransactions(dispatcherTransactions, incomerTransactions);
     }, options.checkTransactionInterval ?? kCheckRelatedTransactionInterval).unref();
   }
 
@@ -259,50 +192,28 @@ export class Dispatcher {
     this.subscriber.on("message", this.handleMessages.bind(this));
   }
 
-  private async handleMessages(channel: string, message: string) {
-    if (!message) {
+  public async close() {
+    if (!this.subscriber) {
       return;
     }
 
-    const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages["IncomerMessage"] = JSON.parse(message);
+    clearInterval(this.pingInterval);
+    this.pingInterval = undefined;
 
-    try {
-      if (!formattedMessage.event || !formattedMessage.metadata) {
-        throw new Error("Malformed message");
-      }
+    clearInterval(this.checkLastActivityInterval);
+    this.checkLastActivityInterval = undefined;
 
-      // Avoid reacting to his own message
-      if (formattedMessage.metadata.origin === this.privateUuid) {
-        return;
-      }
-
-      const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
-      if (!eventValidationSchema) {
-        throw new Error("Unknown Event");
-      }
-
-      if (!eventValidationSchema(formattedMessage)) {
-        throw new Error("Malformed message");
-      }
-
-      if (channel === this.dispatcherChannelName) {
-        if (isDispatcherChannelMessage(formattedMessage)) {
-          await this.handleDispatcherMessages(formattedMessage);
-        }
-      }
-      else if (isIncomerChannelMessage(formattedMessage)) {
-        await this.handleIncomerMessages(channel, formattedMessage);
-      }
-    }
-    catch (error) {
-      this.logger.error({ channel, message: formattedMessage, error: error.message });
-    }
+    await this.subscriber.quit();
+    this.subscriber = undefined;
   }
 
   private async ping() {
     for (const treeName of treeNames) {
       const tree = await this.getTree(treeName);
+
+      if (!tree) {
+        continue;
+      }
 
       for (const uuid of Object.keys(tree)) {
         const incomerChannel = this.incomerChannels.get(uuid);
@@ -399,25 +310,155 @@ export class Dispatcher {
     }
   }
 
-  public async close() {
-    if (!this.subscriber) {
-      return;
+  private async resolveDispatcherTransactions(
+    dispatcherTransactions: Transactions<"dispatcher">,
+    incomerTransactions: Transactions<"incomer">
+  ) {
+    for (const [dispatcherTransactionId, dispatcherTransaction] of Object.entries(dispatcherTransactions)) {
+      // If Transaction is already resolved, skip
+      if (dispatcherTransaction.resolved) {
+        continue;
+      }
+
+      const relatedTransactionId = Object.keys(incomerTransactions).find(
+        (incomerTransactionId) => incomerTransactions[incomerTransactionId].relatedTransaction === dispatcherTransactionId
+      );
+
+      // Event not resolved yet
+      if (!relatedTransactionId) {
+        continue;
+      }
+
+      // Only in case of ping event
+      if (dispatcherTransaction.mainTransaction) {
+        await Promise.all([
+          this.updateIncomerState(incomerTransactions[relatedTransactionId]),
+          this.incomerTransactionStore.deleteTransaction(relatedTransactionId),
+          this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+        ]);
+
+        continue;
+      }
+
+      dispatcherTransaction.resolved = true;
+      await Promise.all([
+        this.incomerTransactionStore.deleteTransaction(relatedTransactionId),
+        this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
+      ]);
     }
-
-    clearInterval(this.pingInterval);
-    this.pingInterval = undefined;
-
-    clearInterval(this.checkLastActivityInterval);
-    this.checkLastActivityInterval = undefined;
-
-    await this.subscriber.quit();
-    this.subscriber = undefined;
   }
 
-  public async getTree(treeName: string): Promise<IncomerStore> {
+  private async resolveIncomerMainTransactions(
+    dispatcherTransactions: Transactions<"dispatcher">,
+    incomerTransactions: Transactions<"incomer">
+  ) {
+    for (const [incomerTransactionId, incomerTransaction] of Object.entries(incomerTransactions)) {
+      if (!incomerTransaction.mainTransaction) {
+        continue;
+      }
+
+      const relatedTransactionsId = Object.keys(dispatcherTransactions).filter(
+        (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction === incomerTransactionId
+      );
+
+      // Event not resolved yet by the dispatcher
+      if (relatedTransactionsId.length === 0) {
+        continue;
+      }
+
+      const unResolvedRelatedTransactions = [];
+      for (const relatedTransaction of unResolvedRelatedTransactions) {
+        if (!dispatcherTransactions[relatedTransaction].resolved) {
+          unResolvedRelatedTransactions.push(relatedTransaction);
+        }
+      }
+
+      // Event not resolved yet by the different incomers
+      if (unResolvedRelatedTransactions.length > 0) {
+        continue;
+      }
+
+      const transactionsToResolve = [];
+      const incomerStateToUpdate = [];
+
+      for (const relatedTransactionId of relatedTransactionsId) {
+        incomerStateToUpdate.push(this.updateIncomerState(incomerTransactions[relatedTransactionId]));
+        transactionsToResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedTransactionId));
+      }
+
+      await Promise.all([
+        ...transactionsToResolve,
+        this.incomerTransactionStore.deleteTransaction(incomerTransactionId)
+      ]);
+    }
+  }
+
+  private async updateIncomerState(transaction: Transaction<"incomer">) {
+    const { aliveSince, metadata } = transaction;
+    const { prefix, origin } = metadata;
+    const treeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
+    const tree = await this.getTree(treeName);
+
+    if (!tree[origin]) {
+      throw new Error("Couldn't find the related incomer");
+    }
+
+    tree[origin].lastActivity = aliveSince;
+
+    await this.incomerStore.setValue({
+      key: treeName,
+      value: tree
+    });
+  }
+
+  private async getTree(treeName: string): Promise<IncomerStore> {
     const tree = await this.incomerStore.getValue(treeName);
 
     return tree ?? {};
+  }
+
+  private async handleMessages(channel: string, message: string) {
+    if (!message) {
+      return;
+    }
+
+    const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
+      IncomerChannelMessages["IncomerMessage"] = JSON.parse(message);
+
+    try {
+      if (!formattedMessage.event || !formattedMessage.metadata) {
+        throw new Error("Malformed message");
+      }
+
+      // Avoid reacting to his own message
+      if (formattedMessage.metadata.origin === this.privateUuid) {
+        return;
+      }
+
+      const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
+      if (!eventValidationSchema) {
+        throw new Error("Unknown Event");
+      }
+
+      if (!eventValidationSchema(formattedMessage)) {
+        throw new Error("Malformed message");
+      }
+
+      if (channel === this.dispatcherChannelName) {
+        if (isDispatcherChannelMessage(formattedMessage)) {
+          await this.handleDispatcherMessages(formattedMessage);
+        }
+        else {
+          throw new Error("Unknown event on Dispatcher Channel");
+        }
+      }
+      else if (isIncomerChannelMessage(formattedMessage)) {
+        await this.handleIncomerMessages(channel, formattedMessage);
+      }
+    }
+    catch (error) {
+      this.logger.error({ channel, message: formattedMessage, error: error.message });
+    }
   }
 
   private async handleDispatcherMessages(
@@ -459,81 +500,60 @@ export class Dispatcher {
       uptime: process.uptime()
     };
 
-    const relatedIncomerTreeName = `${prefix ? `${prefix}-` : ""}${incomerStoreName}`;
+    const relatedIncomerTreeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
 
     const incomerTree = await this.getTree(relatedIncomerTreeName);
     if (!incomerTree[origin]) {
       throw new Error("Couldn't find the related incomer");
     }
 
-    if (event === predefinedEvents.incomer.check.pong) {
-      const { transactionId } = metadata;
+    const concernedIncomers = Object.values(incomerTree)
+      .filter((incomer) => incomer.subscribeTo.find((subscribedEvent) => subscribedEvent.name === event));
 
-      const transaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
-      if (!transaction) {
-        throw new Error("Couldn't find the related transaction for the pong operation");
+    const filteredConcernedIncomers: RegisteredIncomer[] = [];
+    for (const incomer of concernedIncomers) {
+      const relatedEvent: SubscribeTo = incomer.subscribeTo.find((value) => value.name === event);
+
+      // Prevent publishing an event to multiple instance of a same service if no horizontalScale of the event
+      if (!relatedEvent.horizontalScale && filteredConcernedIncomers.find((value) => value.name === incomer.name)) {
+        continue;
       }
 
-      // Update the incomer last Activity
-      incomerTree[origin].lastActivity = Date.now();
-      await this.incomerStore.setValue({
-        key: relatedIncomerTreeName,
-        value: incomerTree
+      filteredConcernedIncomers.push(incomer);
+    }
+
+    // All or nothing ?
+    for (const incomer of filteredConcernedIncomers) {
+      const relatedChannel = this.incomerChannels.get(incomer.providedUuid);
+
+      if (!relatedChannel) {
+        throw new Error("Channel not found");
+      }
+
+      const formattedEvent = {
+        ...message,
+        metadata: {
+          origin: this.privateUuid,
+          to: incomer.providedUuid
+        }
+      };
+
+      // Create dispatcher transaction for the concerned incomer
+      const dispatcherTransactionId = await this.dispatcherTransactionStore.setTransaction({
+        ...formattedEvent,
+        mainTransaction: null,
+        relatedTransaction: metadata.transactionId,
+        resolved: false
       });
 
-      await this.dispatcherTransactionStore.deleteTransaction(transactionId);
-
-      this.logger.info(channel, logData, "Dealed with pong event");
-    }
-    else {
-      const concernedIncomers = Object.values(incomerTree)
-        .filter((incomer) => incomer.subscribeTo.find((subscribedEvent) => subscribedEvent.name === event));
-
-      const filteredConcernedIncomers: RegisteredIncomer[] = [];
-      for (const incomer of concernedIncomers) {
-        const relatedEvent: SubscribeTo = incomer.subscribeTo.find((value) => value.name === event);
-
-        // Prevent publishing an event to multiple instance of a same service if no horizontalScale of the event
-        if (!relatedEvent.horizontalScale && filteredConcernedIncomers.find((value) => value.name === incomer.name)) {
-          continue;
+      // Send the event to the concerned incomer.
+      await relatedChannel.publish({
+        ...formattedEvent,
+        metadata: {
+          ...formattedEvent.metadata,
+          transactionId: dispatcherTransactionId
         }
-
-        filteredConcernedIncomers.push(incomer);
-      }
-
-      // All or nothing ?
-      for (const incomer of filteredConcernedIncomers) {
-        const relatedChannel = this.incomerChannels.get(incomer.providedUuid);
-
-        if (!relatedChannel) {
-          throw new Error("Channel not found");
-        }
-
-        const formattedEvent = {
-          ...message,
-          metadata: {
-            origin: this.privateUuid,
-            to: incomer.providedUuid
-          }
-        };
-
-        // Create dispatcher transaction for the concerned incomer
-        const dispatcherTransactionId = await this.dispatcherTransactionStore.setTransaction({
-          ...formattedEvent,
-          mainTransaction: null,
-          relatedTransaction: metadata.transactionId,
-          resolved: false
-        });
-
-        // Send the event to the concerned incomer.
-        await relatedChannel.publish({
-          ...formattedEvent,
-          metadata: {
-            ...formattedEvent.metadata,
-            transactionId: dispatcherTransactionId
-          }
-        });
-      }
+      });
 
       this.logger.info(channel, logData, "injected event");
     }
@@ -551,7 +571,7 @@ export class Dispatcher {
     }
 
     // Get Incomers Tree
-    const incomerTreeName = `${prefix ? `${prefix}-` : ""}${incomerStoreName}`;
+    const incomerTreeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
     const relatedIncomerTree = await this.getTree(incomerTreeName);
 
     // Avoid multiple init from a same instance of a service

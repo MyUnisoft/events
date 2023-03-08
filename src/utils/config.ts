@@ -1,7 +1,7 @@
 export const redisPort = process.env.MYUNISOFT_REDIS_PORT ?? 6379;
 
-export const incomerStoreName = "incomer";
-export const transactionStoreName = "transaction";
+export const kIncomerStoreName = "incomer";
+export const kTransactionStoreName = "transaction";
 
 export const channels = {
   dispatcher: "dispatcher"
@@ -23,10 +23,6 @@ export const predefinedEvents = {
     registration: {
       /* Send to communicate his new existence to the gateway */
       register: "register"
-    },
-    check: {
-      /* Send as a response to a ping */
-      pong: "pong"
     }
   },
   ack: "ack"

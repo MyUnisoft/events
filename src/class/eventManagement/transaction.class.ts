@@ -70,7 +70,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     this.key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }
 
-  async getTransactions(): Promise<Transactions<T> | Record<string, any>> {
+  async getTransactions(): Promise<Transactions<T>> {
     return await super.getValue(this.key) ?? {};
   }
 
