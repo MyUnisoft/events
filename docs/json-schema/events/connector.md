@@ -18,8 +18,12 @@
     "data": {
       "type": "object",
       "properties": {
-        "id": "string",
-        "code": "string"
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        }
       },
       "required": ["id", "code"],
       "additionalProperties": false

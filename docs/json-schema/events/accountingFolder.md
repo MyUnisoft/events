@@ -18,7 +18,9 @@
     "data": {
       "type": "object",
       "properties": {
-        "id": "string"
+        "id": {
+          "type": "string"
+        }
       },
       "required": ["id"],
       "additionalProperties": false
