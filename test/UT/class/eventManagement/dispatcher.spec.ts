@@ -7,7 +7,8 @@ import {
   initRedis,
   closeRedis,
   Redis,
-  Channel
+  Channel,
+  clearAllKeys
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 import Ajv from "ajv";
@@ -57,7 +58,7 @@ describe("Dispatcher", () => {
     let dispatcher: Dispatcher;
 
     beforeAll(async() => {
-      dispatcher = new Dispatcher({ pingInterval: 2_000, checkLastActivityInterval: 3_000 });
+      dispatcher = new Dispatcher({ pingInterval: 2_000, checkLastActivityInterval: 5_000, checkTransactionInterval: 3_600 });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -65,6 +66,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
+      clearAllKeys();
       await dispatcher.close();
     });
 
@@ -226,15 +228,39 @@ describe("Dispatcher", () => {
         });
       });
     });
+  });
 
-    describe("Publishing a well formed pong event", () => {
+  describe("Dispatcher without options", () => {
+    let dispatcher: Dispatcher;
+
+    beforeAll(async() => {
+      dispatcher = new Dispatcher({
+        pingInterval: 2_000,
+        checkLastActivityInterval: 5_000,
+        checkTransactionInterval: 3_600,
+        idleTime: 5_000
+      });
+
+      Reflect.set(dispatcher, "logger", logger);
+
+      await dispatcher.initialize();
+    });
+
+    afterAll(async() => {
+      clearAllKeys();
+      await dispatcher.close();
+    });
+
+    describe("Handling a ping event", () => {
       let incomerName = randomUUID();
       let uuid: string;
       let pingTransactionId: string;
+      let pongTransactionId: string;
       let subscriber: Redis;
       let incomerTransactionStore: TransactionStore<"incomer">
 
       beforeAll(async() => {
+        let index = 0;
         subscriber = await initRedis({
           port: process.env.REDIS_PORT,
           host: process.env.REDIS_HOST
@@ -250,8 +276,21 @@ describe("Dispatcher", () => {
 
             await subscriber.subscribe(formattedMessage.data.uuid);
           }
-          else if (formattedMessage.event === "ping") {
+          else if (formattedMessage.event === "ping" && index === 0) {
+            pongTransactionId = await incomerTransactionStore.setTransaction({
+              ...formattedMessage,
+              metadata: {
+                ...formattedMessage.metadata,
+                origin: formattedMessage.metadata.to
+              },
+              createdAt: Date.now(),
+              mainTransaction: false,
+              relatedTransaction: formattedMessage.metadata.transactionId,
+              resolved: null
+            });
+
             pingTransactionId = formattedMessage.metadata.transactionId;
+            index++;
           }
         });
 
@@ -259,7 +298,7 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        let incomerTransactionStore = new TransactionStore({
+        incomerTransactionStore = new TransactionStore({
           instance: "incomer"
         });
 
@@ -296,44 +335,33 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
       });
 
-      test("It should have ping and pingTransaction should be defined", async() => {
-        await timers.setTimeout(2_500);
+      test("It should have ping and a new transaction should have been create", async() => {
+        await timers.setTimeout(3_000);
 
         expect(mockedPing).toHaveBeenCalled();
-        expect(pingTransactionId).toBeDefined();
+        expect(pongTransactionId).toBeDefined();
       });
 
-      test("It should handle the ping transaction", async() => {
-        const channel = new Channel({
-          name: uuid
-        });
-
-        await channel.publish({
-          event: "pong",
-          metadata: {
-            origin: uuid,
-            transactionId: pingTransactionId
-          }
-        });
-
-        await timers.setTimeout(1_000);
-
-        expect(mockedDeleteTransaction).toHaveBeenCalled();
-      });
 
       test("It should have update the update the incomer last activity", async () => {
+        await timers.setTimeout(3_000);
+
+        const transaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
+
+        expect(transaction).not.toBeDefined();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
       });
 
       test("It should remove the inactive incomers", async() => {
-        await timers.setTimeout(4_000);
+        await timers.setTimeout(3_000);
 
         expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
       });
     });
   });
+
 
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
@@ -347,6 +375,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
+      clearAllKeys();
       await dispatcher.close();
     });
 
@@ -845,6 +874,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
+      clearAllKeys();
       await dispatcher.close();
       await closeRedis(subscriber);
     });

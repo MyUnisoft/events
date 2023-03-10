@@ -30,10 +30,10 @@ import { DispatcherPingMessage } from "../../types/eventManagement/incomerChanne
 
 // CONSTANTS
 const ajv = new Ajv();
-const kPingInterval = 3_600;
+const kPingInterval = 7_200;
 const kCheckLastActivityInterval = 14_400;
-const kCheckRelatedTransactionInterval = 3_600;
-const kIdleTime = 7_200;
+const kCheckRelatedTransactionInterval = 7_200;
+const kIdleTime = 10_800;
 const treeNames = [
   kIncomerStoreName,
   `local-${kIncomerStoreName}`,
@@ -166,16 +166,21 @@ export class Dispatcher {
     }, options.checkLastActivityInterval ?? kCheckLastActivityInterval).unref();
 
     this.checkRelatedTransactionInterval = setInterval(async() => {
-      const [dispatcherTransactions, incomerTransactions] = await Promise.all([
-        await this.dispatcherTransactionStore.getTransactions(),
-        await this.incomerTransactionStore.getTransactions()
-      ]);
+      try {
+        const [dispatcherTransactions, incomerTransactions] = await Promise.all([
+          await this.dispatcherTransactionStore.getTransactions(),
+          await this.incomerTransactionStore.getTransactions()
+        ]);
 
-      // Resolve Dispatcher transactions
-      await this.resolveDispatcherTransactions(dispatcherTransactions, incomerTransactions);
+        // Resolve Dispatcher transactions
+        await this.resolveDispatcherTransactions(dispatcherTransactions, incomerTransactions);
 
-      // Resolve main transactions
-      await this.resolveIncomerMainTransactions(dispatcherTransactions, incomerTransactions);
+        // Resolve main transactions
+        await this.resolveIncomerMainTransactions(dispatcherTransactions, incomerTransactions);
+      }
+      catch (error) {
+        console.error(error);
+      }
     }, options.checkTransactionInterval ?? kCheckRelatedTransactionInterval).unref();
   }
 
@@ -199,6 +204,9 @@ export class Dispatcher {
 
     clearInterval(this.pingInterval);
     this.pingInterval = undefined;
+
+    clearInterval(this.checkRelatedTransactionInterval);
+    this.checkRelatedTransactionInterval = undefined;
 
     clearInterval(this.checkLastActivityInterval);
     this.checkLastActivityInterval = undefined;
@@ -398,6 +406,7 @@ export class Dispatcher {
     const { prefix, origin } = metadata;
     const treeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
     const tree = await this.getTree(treeName);
+
 
     if (!tree[origin]) {
       throw new Error("Couldn't find the related incomer");
