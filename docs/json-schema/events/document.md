@@ -18,8 +18,12 @@
     "data": {
       "type": "object",
       "properties": {
-        "id": "string",
-        "kind": ["AF", "PF", "DB"]
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["AF", "PF", "DB"]
+        }
       },
       "required": ["id", "kind"]
     }
