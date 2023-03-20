@@ -125,10 +125,8 @@ describe("Transaction options", () => {
         resolved: null
       };
 
-      await Promise.all([
-        transactionStore.setTransaction(transaction),
-        transactionStore.setTransaction(transaction)
-      ]);
+      await transactionStore.setTransaction(transaction);
+      await transactionStore.setTransaction(transaction);
     });
 
 
