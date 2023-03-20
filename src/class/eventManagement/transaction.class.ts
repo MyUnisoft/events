@@ -122,7 +122,10 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     }
   }
 
-  private async updateTransactions(transactions: Transactions<T>): Promise<string | Buffer> {
-    return await super.setValue({ key: this.key, value: transactions });
+  private async updateTransactions(transactions: Transactions<T>): Promise<void> {
+    await Promise.all([
+      super.deleteValue(this.key),
+      super.setValue({ key: this.key, value: transactions })
+    ]);
   }
 }

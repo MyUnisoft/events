@@ -75,10 +75,9 @@ describe("Transaction options", () => {
       };
 
       const transactionId = await transactionStore.setTransaction(transaction);
+      await transactionStore.deleteTransaction(transactionId);
 
       expect(transactionId).toBeDefined();
-
-      await transactionStore.deleteTransaction(transactionId);
     });
   });
 
@@ -126,8 +125,10 @@ describe("Transaction options", () => {
         resolved: null
       };
 
-      await transactionStore.setTransaction(transaction);
-      await transactionStore.setTransaction(transaction);
+      await Promise.all([
+        transactionStore.setTransaction(transaction),
+        transactionStore.setTransaction(transaction)
+      ]);
     });
 
 

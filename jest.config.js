@@ -9,5 +9,8 @@ module.exports = {
     "/node_modules/",
     "/test/fixtures/"
   ],
+  testMatch: [
+    "**/test/**/*.spec.ts"
+  ],
   globalSetup: "./start-container.js"
 };

@@ -37,10 +37,7 @@ const ajv = new Ajv();
 
 describe("Dispatcher", () => {
   afterEach(() => {
-    mockedLoggerError.mockClear();
-    mockedLoggerInfo.mockClear();
-    mockedHandleDispatcherMessages.mockClear();
-    mockedHandleIncomerMessages.mockClear();
+    jest.clearAllMocks();
   });
 
   beforeAll(async() => {
@@ -58,7 +55,12 @@ describe("Dispatcher", () => {
     let dispatcher: Dispatcher;
 
     beforeAll(async() => {
-      dispatcher = new Dispatcher({ pingInterval: 2_000, checkLastActivityInterval: 5_000, checkTransactionInterval: 3_600 });
+      dispatcher = new Dispatcher({
+        pingInterval: 2_000,
+        checkLastActivityInterval: 5_000,
+        checkTransactionInterval: 3_600,
+        idleTime: 5_000
+       });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -66,7 +68,6 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
-      clearAllKeys();
       await dispatcher.close();
     });
 
@@ -228,38 +229,17 @@ describe("Dispatcher", () => {
         });
       });
     });
-  });
-
-  describe("Dispatcher without options", () => {
-    let dispatcher: Dispatcher;
-
-    beforeAll(async() => {
-      dispatcher = new Dispatcher({
-        pingInterval: 2_000,
-        checkLastActivityInterval: 5_000,
-        checkTransactionInterval: 3_600,
-        idleTime: 5_000
-      });
-
-      Reflect.set(dispatcher, "logger", logger);
-
-      await dispatcher.initialize();
-    });
-
-    afterAll(async() => {
-      clearAllKeys();
-      await dispatcher.close();
-    });
 
     describe("Handling a ping event", () => {
       let incomerName = randomUUID();
-      let uuid: string;
-      let pingTransactionId: string;
       let pongTransactionId: string;
       let subscriber: Redis;
       let incomerTransactionStore: TransactionStore<"incomer">
 
       beforeAll(async() => {
+        await clearAllKeys();
+        jest.clearAllMocks();
+
         let index = 0;
         subscriber = await initRedis({
           port: process.env.REDIS_PORT,
@@ -272,8 +252,6 @@ describe("Dispatcher", () => {
           const formattedMessage = JSON.parse(message);
 
           if (formattedMessage.event === "approvement") {
-            uuid = formattedMessage.data.uuid;
-
             await subscriber.subscribe(formattedMessage.data.uuid);
           }
           else if (formattedMessage.event === "ping" && index === 0) {
@@ -289,7 +267,6 @@ describe("Dispatcher", () => {
               resolved: null
             });
 
-            pingTransactionId = formattedMessage.metadata.transactionId;
             index++;
           }
         });
@@ -342,7 +319,6 @@ describe("Dispatcher", () => {
         expect(pongTransactionId).toBeDefined();
       });
 
-
       test("It should have update the update the incomer last activity", async () => {
         await timers.setTimeout(3_000);
 
@@ -362,28 +338,23 @@ describe("Dispatcher", () => {
     });
   });
 
-
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
-
+    let prefix = "local" as "local";
     beforeAll(async() => {
       dispatcher = new Dispatcher({
-        prefix: "local"
+        pingInterval: 2_000,
+        checkLastActivityInterval: 5_000,
+        checkTransactionInterval: 3_600,
+        idleTime: 5_000,
+        prefix
       });
 
       await dispatcher.initialize();
     });
 
     afterAll(async() => {
-      clearAllKeys();
       await dispatcher.close();
-    });
-
-    beforeEach(() => {
-      mockedLoggerError.mockClear();
-      mockedLoggerInfo.mockClear();
-      mockedHandleDispatcherMessages.mockClear();
-      mockedHandleIncomerMessages.mockClear();
     });
 
     test("Dispatcher should be defined", () => {
@@ -399,12 +370,14 @@ describe("Dispatcher", () => {
         let subscriber: Redis;
 
         beforeAll(async() => {
+          jest.clearAllMocks();
+
           subscriber = await initRedis({
             port: process.env.REDIS_PORT,
             host: process.env.REDIS_HOST
           } as any, true);
 
-          await subscriber.subscribe("local-dispatcher");
+          await subscriber.subscribe(`${prefix}-dispatcher`);
 
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
@@ -416,12 +389,12 @@ describe("Dispatcher", () => {
 
           const channel = new Channel({
             name: "dispatcher",
-            prefix: "local"
+            prefix
           });
 
           const incomerTransactionStore = new TransactionStore({
-            prefix: "local",
-            instance: "incomer"
+            instance: "incomer",
+            prefix
           });
 
           const event = {
@@ -446,7 +419,7 @@ describe("Dispatcher", () => {
             ...event,
             metadata: {
               origin: incomerName,
-              prefix: "local",
+              prefix,
               transactionId
             }
           });
@@ -470,19 +443,139 @@ describe("Dispatcher", () => {
         });
       });
     });
+
+    describe("Handling a ping event", () => {
+      let incomerName = randomUUID();
+      let pongTransactionId: string;
+      let subscriber: Redis;
+      let incomerTransactionStore: TransactionStore<"incomer">
+
+      beforeAll(async() => {
+        await clearAllKeys();
+        jest.clearAllMocks();
+
+        let index = 0;
+        subscriber = await initRedis({
+          port: process.env.REDIS_PORT,
+          host: process.env.REDIS_HOST
+        } as any, true);
+
+        await subscriber.subscribe(`${prefix}-dispatcher`);
+
+        subscriber.on("message", async(channel, message) => {
+          const formattedMessage = JSON.parse(message);
+
+          if (formattedMessage.event === "approvement") {
+            await subscriber.subscribe(`${prefix}-${formattedMessage.data.uuid}`);
+          }
+          else if (formattedMessage.event === "ping" && index === 0) {
+            pongTransactionId = await incomerTransactionStore.setTransaction({
+              ...formattedMessage,
+              metadata: {
+                ...formattedMessage.metadata,
+                prefix,
+                origin: formattedMessage.metadata.to
+              },
+              createdAt: Date.now(),
+              mainTransaction: false,
+              relatedTransaction: formattedMessage.metadata.transactionId,
+              resolved: null
+            });
+
+            index++;
+          }
+        });
+
+        const channel = new Channel({
+          name: "dispatcher",
+          prefix
+        });
+
+        incomerTransactionStore = new TransactionStore({
+          instance: "incomer",
+          prefix
+        });
+
+        const event = {
+          event: "register",
+          data: {
+            name: incomerName,
+            subscribeTo: []
+          },
+          metadata: {
+            origin: incomerName,
+            prefix
+          }
+        };
+
+        const transactionId = await incomerTransactionStore.setTransaction({
+          ...event,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: null
+        });
+
+        await channel.publish({
+          event: "register",
+          data: {
+            name: incomerName,
+            subscribeTo: []
+          },
+          metadata: {
+            origin: incomerName,
+            prefix,
+            transactionId
+          }
+        });
+
+        await timers.setTimeout(1_000);
+      });
+
+      test("It should have ping and a new transaction should have been create", async() => {
+        await timers.setTimeout(3_000);
+
+        expect(mockedPing).toHaveBeenCalled();
+        expect(pongTransactionId).toBeDefined();
+      });
+
+      test("It should have update the update the incomer last activity", async () => {
+        await timers.setTimeout(3_000);
+
+        const transaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
+
+        expect(transaction).not.toBeDefined();
+        expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
+      });
+
+      test("It should remove the inactive incomers", async() => {
+        await timers.setTimeout(3_000);
+
+        expect(mockedCheckLastActivity).toHaveBeenCalled();
+        expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
+      });
+    });
   });
 
   describe("Dispatcher with injected schemas", () => {
     let dispatcher: Dispatcher;
 
     beforeAll(async() => {
+      await clearAllKeys();
+      jest.clearAllMocks();
+
       const eventsValidationFunction = new Map();
 
       for (const [name, validationSchema] of Object.entries(EventsSchemas)) {
         eventsValidationFunction.set(name, ajv.compile(validationSchema));
       }
 
-      dispatcher = new Dispatcher({ eventsValidationFunction });
+      dispatcher = new Dispatcher({
+        eventsValidationFunction,
+        pingInterval: 2_000,
+        checkLastActivityInterval: 6_000,
+        checkTransactionInterval: 4_000,
+        idleTime: 6_000
+      });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -582,6 +675,9 @@ describe("Dispatcher", () => {
         let subscriber: Redis;
 
         beforeAll(async() => {
+          await clearAllKeys();
+          jest.clearAllMocks();
+
           subscriber = await initRedis({
             port: process.env.REDIS_PORT,
             host: process.env.REDIS_HOST
@@ -702,6 +798,11 @@ describe("Dispatcher", () => {
     });
 
     describe("Publishing on a dedicated channel", () => {
+      beforeAll(async() => {
+        await clearAllKeys();
+        jest.clearAllMocks();
+      });
+
       test("it should be calling handleIncomerMessages", async() => {
         const channel = new Channel({
           name: "foo"
@@ -734,6 +835,9 @@ describe("Dispatcher", () => {
         let secondIncomerProvidedUuid;
         let subscriber: Redis;
         let hasDistributedEvents = false;
+        let incomerTransactionStore: TransactionStore<"incomer">;
+        let resolvedTransactionId;
+        let mainTransactionId;
 
         beforeAll(async() => {
           subscriber = await initRedis({
@@ -751,7 +855,39 @@ describe("Dispatcher", () => {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.metadata.to === firstIncomerName) {
-                  firstIncomerProvidedUuid = uuid
+                  firstIncomerProvidedUuid = uuid;
+
+                  const channel = new Channel({
+                    name: firstIncomerProvidedUuid
+                  });
+
+                  const event = {
+                    event: "foo",
+                    data: {
+                      foo: "foo"
+                    },
+                    metadata: {
+                      origin: firstIncomerProvidedUuid
+                    }
+                  }
+
+                  mainTransactionId = await incomerTransactionStore.setTransaction({
+                    ...event,
+                    metadata: {
+                      ...event.metadata
+                    },
+                    mainTransaction: true,
+                    relatedTransaction: null,
+                    resolved: null
+                  });
+
+                  await channel.publish({
+                    ...event,
+                    metadata: {
+                      ...event.metadata,
+                      transactionId: mainTransactionId
+                    }
+                  });
                 }
                 else {
                   secondIncomerProvidedUuid = uuid;
@@ -762,17 +898,31 @@ describe("Dispatcher", () => {
             }
             else {
               if (channel === secondIncomerProvidedUuid) {
-                hasDistributedEvents = true;
+                if (formattedMessage.event === "foo") {
+
+                  hasDistributedEvents = true;
+                  resolvedTransactionId = await incomerTransactionStore.setTransaction({
+                    ...formattedMessage,
+                    metadata: {
+                      ...formattedMessage.metadata,
+                      origin: formattedMessage.metadata.to
+                    },
+                    createdAt: Date.now(),
+                    mainTransaction: false,
+                    relatedTransaction: formattedMessage.metadata.transactionId,
+                    resolved: null
+                  });
+                }
               }
             }
           });
 
-          const channel = new Channel({
-            name: "dispatcher"
+          incomerTransactionStore = new TransactionStore({
+            instance: "incomer"
           });
 
-          const incomerTransactionStore = new TransactionStore({
-            instance: "incomer"
+          const channel = new Channel({
+            name: "dispatcher"
           });
 
           const firstEvent = {
@@ -797,62 +947,53 @@ describe("Dispatcher", () => {
             }
           };
 
-          const [ firstTransactionId, secondTransactionId ] = await Promise.all([
-            incomerTransactionStore.setTransaction({
-              ...firstEvent,
-              mainTransaction: true,
-              relatedTransaction: null,
-              resolved: null
-            }),
-            incomerTransactionStore.setTransaction({
-              ...secondEvent,
-              mainTransaction: true,
-              relatedTransaction: null,
-              resolved: null
-            })
-          ]);
+          const firstTransactionId = await incomerTransactionStore.setTransaction({
+            ...firstEvent,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
 
-          await Promise.all([
-            channel.publish({
-              ...firstEvent,
-              metadata: {
-                ...firstEvent.metadata,
-                transactionId: firstTransactionId
-              }
-            }),
-            channel.publish({
-              ...secondEvent,
-              metadata: {
-                ...secondEvent.metadata,
-                transactionId: secondTransactionId
-              }
-            })
-          ]);
-
-          await timers.setTimeout(1_000);
-        });
-
-        test("it should log info", async() => {
-          const channel = new Channel({
-            name: firstIncomerProvidedUuid
+          const secondTransactionId = await incomerTransactionStore.setTransaction({
+            ...secondEvent,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
           });
 
           await channel.publish({
-            event: "foo",
-            data: {
-              foo: "foo"
-            },
+            ...firstEvent,
             metadata: {
-              origin: firstIncomerProvidedUuid,
-              transactionId: "1"
+              ...firstEvent.metadata,
+              transactionId: firstTransactionId
             }
           });
 
-          await timers.setTimeout(1_000);
+          await channel.publish({
+            ...secondEvent,
+            metadata: {
+              ...secondEvent.metadata,
+              transactionId: secondTransactionId
+            }
+          });
+
+          await timers.setTimeout(2_000);
+        });
+
+        test("it should have distributed the event", async() => {
+          await timers.setTimeout(3_000);
 
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
           expect(hasDistributedEvents).toBe(true);
+        });
+
+        test("it should have resolved the main transaction", async() => {
+          await timers.setTimeout(4_000);
+
+          const transaction = await incomerTransactionStore.getTransactionById(mainTransactionId);
+
+          expect(transaction).toBeUndefined();
         });
       });
     });
@@ -863,6 +1004,9 @@ describe("Dispatcher", () => {
     let subscriber: Redis;
 
     beforeAll(async() => {
+      await clearAllKeys();
+      jest.clearAllMocks();
+
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
         host: process.env.REDIS_HOST
@@ -874,16 +1018,8 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
-      clearAllKeys();
       await dispatcher.close();
       await closeRedis(subscriber);
-    });
-
-    beforeEach(() => {
-      mockedLoggerError.mockClear();
-      mockedLoggerInfo.mockClear();
-      mockedHandleDispatcherMessages.mockClear();
-      mockedHandleIncomerMessages.mockClear();
     });
 
     test("Dispatcher should be defined", () => {

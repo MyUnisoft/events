@@ -365,12 +365,12 @@ export class Dispatcher {
         continue;
       }
 
-      const relatedTransactionsId = Object.keys(dispatcherTransactions).filter(
+      const relatedDispatcherTransactionsId = Object.keys(dispatcherTransactions).filter(
         (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction === incomerTransactionId
       );
 
       // Event not resolved yet by the dispatcher
-      if (relatedTransactionsId.length === 0) {
+      if (relatedDispatcherTransactionsId.length === 0) {
         continue;
       }
 
@@ -389,13 +389,16 @@ export class Dispatcher {
       const transactionsToResolve = [];
       const incomerStateToUpdate = [];
 
-      for (const relatedTransactionId of relatedTransactionsId) {
-        incomerStateToUpdate.push(this.updateIncomerState(incomerTransactions[relatedTransactionId]));
-        transactionsToResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedTransactionId));
+      for (const relatedDispatcherTransactionId of relatedDispatcherTransactionsId) {
+        incomerStateToUpdate.push(this.updateIncomerState(
+          incomerTransactions[dispatcherTransactions[relatedDispatcherTransactionId].relatedTransaction]
+        ));
+        transactionsToResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId));
       }
 
       await Promise.all([
         ...transactionsToResolve,
+        ...incomerStateToUpdate,
         this.incomerTransactionStore.deleteTransaction(incomerTransactionId)
       ]);
     }
