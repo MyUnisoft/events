@@ -6,7 +6,7 @@ import { eventsValidationFonction } from "./utils/index";
 import { metadata as metadataSchema, scope as scopeSchema } from "./schema";
 
 // Import Types
-import { EventOptions, Events } from "./types/index";
+import { EventOptions, Events, Operation } from "./types/index";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -37,6 +37,24 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
   if (!scopeValidationFunction(scope)) {
     throw new Error("Wrong data for scope");
   }
+}
+
+export function isCreateOperation<T extends keyof Events>(
+  operation: EventOptions<T>["operation"]
+): operation is Operation["create"] {
+  return operation === "CREATE";
+}
+
+export function isUpdateOperation<T extends keyof Events>(
+  operation: EventOptions<T>["operation"]
+): operation is Operation["update"] {
+  return operation === "UPDATE";
+}
+
+export function isDeleteOperation<T extends keyof Events>(
+  operation: EventOptions<T>["operation"]
+): operation is Operation["delete"] {
+  return operation === "DELETE";
 }
 
 export * as EventSchemas from "./schema/events/index";

@@ -62,7 +62,7 @@ export interface Metadata {
 
 ### 📚 Usage
 
-Define and validate an event.
+> Define and validate an event.
 
 ```ts
 import * as MyEvents, { EventOptions } from "@myunisoft/events";
@@ -91,10 +91,53 @@ const event: EventOptions<"connector"> = {
 MyEvents.validate<"connector">(event);
 ```
 
+> Define which operation the event has.
+
+```ts
+const event: EventOptions<"connector"> = {
+  name: "connector",
+  operation: "CREATE",
+  scope: {
+    schemaId: 1
+  },
+  metadata: {
+    agent: "Node",
+    origin: {
+      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
+      method: "POST",
+      requestId: crypto.randomUUID();
+    },
+    createdAt: Date.now()
+  },
+  data: {
+    id: 1,
+    code: "JFAC"
+  }
+};
+
+if (isCreateOperation(event.operation)) {
+  // Do some code
+}
+
+if (isUpdateOperation(event.operation)) {
+  // Do some code
+}
+
+if (isDeleteOperation(event.operation)) {
+  // Do some code
+}
+```
+
 ### API
 
 #### validate< T extends keyof Events >(options: EventOptions<T>): void
 Throw an error if a given event is not internaly known.
+
+#### isCreateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["create"]
+
+#### isUpdateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["update"]
+
+#### isDeleteOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["delete"]
 
 ### Types
 
