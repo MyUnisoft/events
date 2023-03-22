@@ -1,8 +1,8 @@
 export interface Operation {
-  create: "CREATE",
-  update: "UPDATE",
-  delete: "DELETE",
-  void: "VOID"
+  create: "CREATE";
+  update: "UPDATE";
+  delete: "DELETE";
+  void: "VOID";
 }
 
 export type ConnectorOperation = Operation[keyof Omit<Operation, "void">];
