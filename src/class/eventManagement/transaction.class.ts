@@ -41,9 +41,9 @@ type HandlerTransaction = {
 }
 
 export type Transaction<T extends Instance = Instance> = (T extends "dispatcher" ?
-  DispatcherChannelMessages["DispatcherMessages"] |
-  (IncomerChannelMessages["DispatcherMessages"] |
-  { event: string, data: Record<string, any> }) :
+  (DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]) |
+    (Omit<IncomerChannelMessages["IncomerMessage"], "metadata"> & Pick<IncomerChannelMessages["DispatcherMessages"], "metadata">)
+    :
   DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]) & {
     aliveSince: number;
   } & (
@@ -57,9 +57,10 @@ export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction
 
 export type Transactions<T extends Instance = Instance> = Record<string, Transaction<T>>;
 
-export type TransactionStoreOptions<T extends Instance = Instance> = {
-  instance: T
-} & Partial<KVOptions<Transactions<T>>>;
+export type TransactionStoreOptions<T extends Instance = Instance> = (Partial<KVOptions<Transactions<T>>> &
+  T extends "incomer" ? { prefix: string; } : { prefix?: string; }) & {
+    instance: T;
+};
 
 export class TransactionStore<T extends Instance = Instance> extends KVPeer<Transactions<T>> {
   private key: string;

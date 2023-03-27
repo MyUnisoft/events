@@ -34,13 +34,6 @@ const kPingInterval = 7_200;
 const kCheckLastActivityInterval = 14_400;
 const kCheckRelatedTransactionInterval = 7_200;
 const kIdleTime = 10_800;
-const treeNames = [
-  kIncomerStoreName,
-  `local-${kIncomerStoreName}`,
-  `dev-${kIncomerStoreName}`,
-  `preprod-${kIncomerStoreName}`,
-  `prod-${kIncomerStoreName}`
-];
 
 interface RegisteredIncomer {
   providedUuid: string;
@@ -89,12 +82,12 @@ function isIncomerRegistrationMessage(
 export class Dispatcher {
   readonly type = "dispatcher";
   readonly prefix: string;
+  readonly treeName: string;
   readonly dispatcherChannelName: string;
   readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
   readonly privateUuid = randomUUID();
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
-  readonly incomerTransactionStore: TransactionStore<"incomer">;
   readonly dispatcherTransactionStore: TransactionStore<"dispatcher">;
 
   protected subscriber: Redis.Redis;
@@ -114,6 +107,7 @@ export class Dispatcher {
 
   constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
     this.prefix = options.prefix ? `${options.prefix}-` : "";
+    this.treeName = `${this.prefix ? `${this.prefix}-` : ""}${kIncomerStoreName}`;
     this.dispatcherChannelName = this.prefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
 
@@ -128,11 +122,6 @@ export class Dispatcher {
       type: "object"
     });
 
-    this.incomerTransactionStore = new TransactionStore({
-      prefix: options.prefix,
-      instance: "incomer"
-    });
-
     this.dispatcherTransactionStore = new TransactionStore({
       prefix: options.prefix,
       instance: "dispatcher"
@@ -141,8 +130,8 @@ export class Dispatcher {
     this.logger = logger.pino().child({ incomer: this.prefix + this.type });
 
     this.dispatcherChannel = new Redis.Channel({
-      name: channels.dispatcher,
-      prefix: options.prefix
+      prefix: options.prefix,
+      name: channels.dispatcher
     });
 
     this.subscriber = subscriber;
@@ -167,16 +156,13 @@ export class Dispatcher {
 
     this.checkRelatedTransactionInterval = setInterval(async() => {
       try {
-        const [dispatcherTransactions, incomerTransactions] = await Promise.all([
-          await this.dispatcherTransactionStore.getTransactions(),
-          await this.incomerTransactionStore.getTransactions()
-        ]);
+        const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
 
         // Resolve Dispatcher transactions
-        await this.resolveDispatcherTransactions(dispatcherTransactions, incomerTransactions);
+        await this.resolveDispatcherTransactions(dispatcherTransactions);
 
         // Resolve main transactions
-        await this.resolveIncomerMainTransactions(dispatcherTransactions, incomerTransactions);
+        await this.resolveIncomerMainTransactions(dispatcherTransactions);
       }
       catch (error) {
         console.error(error);
@@ -216,92 +202,79 @@ export class Dispatcher {
   }
 
   private async ping() {
-    for (const treeName of treeNames) {
-      const tree = await this.getTree(treeName);
+    const tree = await this.getTree(this.treeName);
 
-      if (!tree) {
-        continue;
-      }
+    for (const uuid of Object.keys(tree)) {
+      const incomerChannel = this.incomerChannels.get(uuid);
 
-      for (const uuid of Object.keys(tree)) {
-        const incomerChannel = this.incomerChannels.get(uuid);
+      if (incomerChannel) {
+        const event: DispatcherPingMessage = {
+          event: "ping",
+          data: null,
+          metadata: {
+            origin: this.privateUuid,
+            to: uuid
+          }
+        };
 
-        if (incomerChannel) {
-          const event: DispatcherPingMessage = {
-            event: "ping",
-            data: null,
-            metadata: {
-              origin: this.privateUuid,
-              to: uuid
-            }
-          };
+        const transactionId = await this.dispatcherTransactionStore.setTransaction({
+          ...event,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: null
+        });
 
-          const transactionId = await this.dispatcherTransactionStore.setTransaction({
-            ...event,
-            mainTransaction: true,
-            relatedTransaction: null,
-            resolved: null
-          });
+        await incomerChannel.publish({
+          ...event,
+          metadata: {
+            ...event.metadata,
+            transactionId
+          }
+        });
 
-          await incomerChannel.publish({
-            ...event,
-            metadata: {
-              ...event.metadata,
-              transactionId
-            }
-          });
-
-          this.logger.info({
-            ...event,
-            uptime: process.uptime()
-          }, "New Ping event");
-        }
+        this.logger.info({
+          ...event,
+          uptime: process.uptime()
+        }, "New Ping event");
       }
     }
   }
 
   private async checkLastActivity() {
-    for (const treeName of treeNames) {
-      const tree = await this.getTree(treeName);
+    const tree = await this.getTree(this.treeName);
 
-      if (!tree) {
+    const now = Date.now();
+
+    for (const [uuid, incomer] of Object.entries(tree)) {
+      if (now <= incomer.lastActivity + this.idleTime) {
         continue;
       }
 
-      const now = Date.now();
+      // Remove the incomer from the tree & update it.
+      await this.handleInactiveIncomer(tree, uuid);
 
-      for (const [uuid, incomer] of Object.entries(tree)) {
-        if (now <= incomer.lastActivity + this.idleTime) {
-          continue;
-        }
-
-        // Remove the incomer from the tree & update it.
-        await this.handleInactiveIncomer(tree, treeName, uuid);
-
-        this.logger.info({
-          uuid,
-          incomer,
-          uptime: process.uptime()
-        }, "Removed inactive incomer");
-      }
+      this.logger.info({
+        uuid,
+        incomer,
+        uptime: process.uptime()
+      }, "Removed inactive incomer");
     }
   }
 
   private async handleInactiveIncomer(
     tree: IncomerStore,
-    treeName: string,
     uuid: string
   ) {
     delete tree[uuid];
 
     if (Object.entries(tree).length > 0) {
       await this.incomerStore.setValue({
-        key: treeName,
+        key: this.treeName,
         value: tree
       });
     }
     else {
-      await this.incomerStore.deleteValue(treeName);
+      await this.incomerStore.deleteValue(this.treeName);
     }
 
     for await (const [transactionId, transaction] of Object.entries(this.dispatcherTransactionStore.getTransactions())) {
@@ -319,8 +292,7 @@ export class Dispatcher {
   }
 
   private async resolveDispatcherTransactions(
-    dispatcherTransactions: Transactions<"dispatcher">,
-    incomerTransactions: Transactions<"incomer">
+    dispatcherTransactions: Transactions<"dispatcher">
   ) {
     for (const [dispatcherTransactionId, dispatcherTransaction] of Object.entries(dispatcherTransactions)) {
       // If Transaction is already resolved, skip
@@ -328,8 +300,15 @@ export class Dispatcher {
         continue;
       }
 
-      const relatedTransactionId = Object.keys(incomerTransactions).find(
-        (incomerTransactionId) => incomerTransactions[incomerTransactionId].relatedTransaction === dispatcherTransactionId
+      const relatedIncomerTransactionStore = new TransactionStore({
+        prefix: dispatcherTransaction.metadata.to,
+        instance: "incomer"
+      });
+
+      const relatedIncomerTransactions = await relatedIncomerTransactionStore.getTransactions();
+
+      const relatedTransactionId = Object.keys(relatedIncomerTransactions).find(
+        (incomerTransactionId) => relatedIncomerTransactions[incomerTransactionId].relatedTransaction === dispatcherTransactionId
       );
 
       // Event not resolved yet
@@ -339,9 +318,9 @@ export class Dispatcher {
 
       // Only in case of ping event
       if (dispatcherTransaction.mainTransaction) {
-        await Promise.all([
-          this.updateIncomerState(incomerTransactions[relatedTransactionId]),
-          this.incomerTransactionStore.deleteTransaction(relatedTransactionId),
+        await Promise.allSettled([
+          this.updateIncomerState(relatedIncomerTransactions[relatedTransactionId]),
+          relatedIncomerTransactionStore.deleteTransaction(relatedTransactionId),
           this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
         ]);
 
@@ -349,66 +328,75 @@ export class Dispatcher {
       }
 
       dispatcherTransaction.resolved = true;
-      await Promise.all([
-        this.incomerTransactionStore.deleteTransaction(relatedTransactionId),
+      await Promise.allSettled([
+        this.updateIncomerState(relatedIncomerTransactions[relatedTransactionId]),
+        relatedIncomerTransactionStore.deleteTransaction(relatedTransactionId),
         this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
       ]);
     }
   }
 
   private async resolveIncomerMainTransactions(
-    dispatcherTransactions: Transactions<"dispatcher">,
-    incomerTransactions: Transactions<"incomer">
+    dispatcherTransactions: Transactions<"dispatcher">
   ) {
-    for (const [incomerTransactionId, incomerTransaction] of Object.entries(incomerTransactions)) {
-      if (!incomerTransaction.mainTransaction) {
-        continue;
-      }
+    const incomerTree = await this.getTree(this.treeName);
 
-      const relatedDispatcherTransactionsId = Object.keys(dispatcherTransactions).filter(
-        (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction === incomerTransactionId
-      );
+    // If Each related transaction resolved => cast internal event to call resolve on Main transaction with according transaction tree ?
+    for (const incomer of Object.values(incomerTree)) {
+      const incomerStore = new TransactionStore({
+        prefix: incomer.providedUuid,
+        instance: "incomer"
+      });
 
-      // Event not resolved yet by the dispatcher
-      if (relatedDispatcherTransactionsId.length === 0) {
-        continue;
-      }
+      const incomerTransactions = await incomerStore.getTransactions();
 
-      const unResolvedRelatedTransactions = [];
-      for (const relatedTransaction of unResolvedRelatedTransactions) {
-        if (!dispatcherTransactions[relatedTransaction].resolved) {
-          unResolvedRelatedTransactions.push(relatedTransaction);
+      for (const [incomerTransactionId, incomerTransaction] of Object.entries(incomerTransactions)) {
+        if (!incomerTransaction.mainTransaction) {
+          continue;
         }
+
+        const relatedDispatcherTransactionsId = Object.keys(dispatcherTransactions).filter(
+          (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction === incomerTransactionId
+        );
+
+        // Event not resolved yet by the dispatcher
+        if (relatedDispatcherTransactionsId.length === 0) {
+          continue;
+        }
+
+        const unResolvedRelatedTransactions = [];
+        for (const relatedTransaction of unResolvedRelatedTransactions) {
+          if (!dispatcherTransactions[relatedTransaction].resolved) {
+            unResolvedRelatedTransactions.push(relatedTransaction);
+          }
+        }
+
+        // Event not resolved yet by the different incomers
+        if (unResolvedRelatedTransactions.length > 0) {
+          continue;
+        }
+
+        const transactionToResolve: Promise<void>[] = [];
+
+        for (const relatedDispatcherTransactionId of relatedDispatcherTransactionsId) {
+          transactionToResolve.push(this.updateIncomerState(
+            incomerTransactions[dispatcherTransactions[relatedDispatcherTransactionId].relatedTransaction]
+          ));
+          transactionToResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId));
+        }
+
+        await Promise.allSettled([
+          ...transactionToResolve,
+          incomerStore.deleteTransaction(incomerTransactionId)
+        ]);
       }
-
-      // Event not resolved yet by the different incomers
-      if (unResolvedRelatedTransactions.length > 0) {
-        continue;
-      }
-
-      const transactionsToResolve = [];
-      const incomerStateToUpdate = [];
-
-      for (const relatedDispatcherTransactionId of relatedDispatcherTransactionsId) {
-        incomerStateToUpdate.push(this.updateIncomerState(
-          incomerTransactions[dispatcherTransactions[relatedDispatcherTransactionId].relatedTransaction]
-        ));
-        transactionsToResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId));
-      }
-
-      await Promise.all([
-        ...transactionsToResolve,
-        ...incomerStateToUpdate,
-        this.incomerTransactionStore.deleteTransaction(incomerTransactionId)
-      ]);
     }
   }
 
   private async updateIncomerState(transaction: Transaction<"incomer">) {
     const { aliveSince, metadata } = transaction;
-    const { prefix, origin } = metadata;
-    const treeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
-    const tree = await this.getTree(treeName);
+    const { origin } = metadata;
+    const tree = await this.getTree(this.treeName);
 
 
     if (!tree[origin]) {
@@ -418,7 +406,7 @@ export class Dispatcher {
     tree[origin].lastActivity = aliveSince;
 
     await this.incomerStore.setValue({
-      key: treeName,
+      key: this.treeName,
       value: tree
     });
   }
@@ -505,16 +493,15 @@ export class Dispatcher {
     message: IncomerChannelMessages["IncomerMessage"]
   ) {
     const { event, metadata } = message;
-    const { prefix, origin } = metadata;
+    const { origin } = metadata;
 
     const logData = {
       ...message,
       uptime: process.uptime()
     };
 
-    const relatedIncomerTreeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
 
-    const incomerTree = await this.getTree(relatedIncomerTreeName);
+    const incomerTree = await this.getTree(this.treeName);
     if (!incomerTree[origin]) {
       throw new Error("Couldn't find the related incomer");
     }
@@ -533,6 +520,7 @@ export class Dispatcher {
 
       filteredConcernedIncomers.push(incomer);
     }
+
 
     // All or nothing ?
     for (const incomer of filteredConcernedIncomers) {
@@ -577,14 +565,13 @@ export class Dispatcher {
 
     const providedUuid = randomUUID();
 
-    const relatedTransaction = await this.incomerTransactionStore.getTransactionById(transactionId);
+    const relatedTransaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
     if (!relatedTransaction) {
       throw new Error("No related transaction found next to register event");
     }
 
     // Get Incomers Tree
-    const incomerTreeName = `${prefix ? `${prefix}-` : ""}${kIncomerStoreName}`;
-    const relatedIncomerTree = await this.getTree(incomerTreeName);
+    const relatedIncomerTree = await this.getTree(this.treeName);
 
     // Avoid multiple init from a same instance of a service
     for (const service of Object.values(relatedIncomerTree)) {
@@ -608,7 +595,7 @@ export class Dispatcher {
     relatedIncomerTree[providedUuid] = service;
 
     await this.incomerStore.setValue({
-      key: incomerTreeName,
+      key: this.treeName,
       value: relatedIncomerTree
     });
 
@@ -633,7 +620,7 @@ export class Dispatcher {
 
     // Approve the service & send him info so he can use the dedicated channel
     await this.dispatcherChannel.publish(event);
-    await this.incomerTransactionStore.deleteTransaction(transactionId);
+    await this.dispatcherTransactionStore.deleteTransaction(transactionId);
 
     this.logger.info({
       ...event,

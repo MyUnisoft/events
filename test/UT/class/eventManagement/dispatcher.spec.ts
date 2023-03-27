@@ -142,8 +142,8 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        const incomerTransactionStore = new TransactionStore({
-          instance: "incomer"
+        const dispatcherTransactionStore = new TransactionStore({
+          instance: "dispatcher"
         });
 
         const event = {
@@ -157,7 +157,7 @@ describe("Dispatcher", () => {
           }
         };
 
-        const transactionId = await incomerTransactionStore.setTransaction({
+        const transactionId = await dispatcherTransactionStore.setTransaction({
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
@@ -183,8 +183,8 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        const incomerTransactionStore = new TransactionStore({
-          instance: "incomer"
+        const dispatcherTransactionStore = new TransactionStore({
+          instance: "dispatcher"
         });
 
         const event = {
@@ -198,7 +198,7 @@ describe("Dispatcher", () => {
           }
         };
 
-        const transactionId = await incomerTransactionStore.setTransaction({
+        const transactionId = await dispatcherTransactionStore.setTransaction({
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
@@ -234,7 +234,8 @@ describe("Dispatcher", () => {
       let incomerName = randomUUID();
       let pongTransactionId: string;
       let subscriber: Redis;
-      let incomerTransactionStore: TransactionStore<"incomer">
+      let incomerTransactionStore: TransactionStore<"incomer">;
+      let dispatcherTransactionStore: TransactionStore<"dispatcher">
 
       beforeAll(async() => {
         await clearAllKeys();
@@ -252,7 +253,14 @@ describe("Dispatcher", () => {
           const formattedMessage = JSON.parse(message);
 
           if (formattedMessage.event === "approvement") {
-            await subscriber.subscribe(formattedMessage.data.uuid);
+            const providedUuid = formattedMessage.data.uuid;
+
+            await subscriber.subscribe(providedUuid);
+
+            incomerTransactionStore = new TransactionStore({
+              prefix: providedUuid,
+              instance: "incomer"
+            });
           }
           else if (formattedMessage.event === "ping" && index === 0) {
             pongTransactionId = await incomerTransactionStore.setTransaction({
@@ -275,8 +283,8 @@ describe("Dispatcher", () => {
           name: "dispatcher"
         });
 
-        incomerTransactionStore = new TransactionStore({
-          instance: "incomer"
+        dispatcherTransactionStore = new TransactionStore({
+          instance: "dispatcher"
         });
 
         const event = {
@@ -290,7 +298,7 @@ describe("Dispatcher", () => {
           }
         };
 
-        const transactionId = await incomerTransactionStore.setTransaction({
+        const transactionId = await dispatcherTransactionStore.setTransaction({
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
@@ -392,8 +400,8 @@ describe("Dispatcher", () => {
             prefix
           });
 
-          const incomerTransactionStore = new TransactionStore({
-            instance: "incomer",
+          const dispatcherTransactionStore = new TransactionStore({
+            instance: "dispatcher",
             prefix
           });
 
@@ -404,16 +412,19 @@ describe("Dispatcher", () => {
               subscribeTo: []
             },
             metadata: {
-              origin: incomerName
+              origin: incomerName,
+              prefix
             }
           }
 
-          const transactionId = await incomerTransactionStore.setTransaction({
+          const transactionId = await dispatcherTransactionStore.setTransaction({
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
             resolved: null
           });
+
+          const foo = await dispatcherTransactionStore.getTransactionById(transactionId);
 
           await channel.publish({
             ...event,
@@ -448,7 +459,8 @@ describe("Dispatcher", () => {
       let incomerName = randomUUID();
       let pongTransactionId: string;
       let subscriber: Redis;
-      let incomerTransactionStore: TransactionStore<"incomer">
+      let dispatcherTransactionStore: TransactionStore<"dispatcher">;
+      let incomerTransactionStore: TransactionStore<"incomer">;
 
       beforeAll(async() => {
         await clearAllKeys();
@@ -466,7 +478,14 @@ describe("Dispatcher", () => {
           const formattedMessage = JSON.parse(message);
 
           if (formattedMessage.event === "approvement") {
-            await subscriber.subscribe(`${prefix}-${formattedMessage.data.uuid}`);
+            const providedUUid = formattedMessage.data.uuid;
+
+            incomerTransactionStore = new TransactionStore({
+              prefix: providedUUid,
+              instance: "incomer"
+            });
+
+            await subscriber.subscribe(`${prefix}-${providedUUid}`);
           }
           else if (formattedMessage.event === "ping" && index === 0) {
             pongTransactionId = await incomerTransactionStore.setTransaction({
@@ -491,8 +510,8 @@ describe("Dispatcher", () => {
           prefix
         });
 
-        incomerTransactionStore = new TransactionStore({
-          instance: "incomer",
+        dispatcherTransactionStore = new TransactionStore({
+          instance: "dispatcher",
           prefix
         });
 
@@ -508,7 +527,7 @@ describe("Dispatcher", () => {
           }
         };
 
-        const transactionId = await incomerTransactionStore.setTransaction({
+        const transactionId = await dispatcherTransactionStore.setTransaction({
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
@@ -697,8 +716,8 @@ describe("Dispatcher", () => {
             name: "dispatcher"
           });
 
-          const incomerTransactionStore = new TransactionStore({
-            instance: "incomer"
+          const dispatcherTransactionStore = new TransactionStore({
+            instance: "dispatcher"
           });
 
           const event = {
@@ -712,7 +731,7 @@ describe("Dispatcher", () => {
             }
           }
 
-          const transactionId = await incomerTransactionStore.setTransaction({
+          const transactionId = await dispatcherTransactionStore.setTransaction({
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
@@ -835,8 +854,9 @@ describe("Dispatcher", () => {
         let secondIncomerProvidedUuid;
         let subscriber: Redis;
         let hasDistributedEvents = false;
-        let incomerTransactionStore: TransactionStore<"incomer">;
-        let resolvedTransactionId;
+        let firstIncomerTransactionStore: TransactionStore<"incomer">;
+        let secondIncomerTransactionStore: TransactionStore<"incomer">;
+        let dispatcherTransactionStore: TransactionStore<"dispatcher">;
         let mainTransactionId;
 
         beforeAll(async() => {
@@ -857,7 +877,12 @@ describe("Dispatcher", () => {
                 if (formattedMessage.metadata.to === firstIncomerName) {
                   firstIncomerProvidedUuid = uuid;
 
-                  const channel = new Channel({
+                  firstIncomerTransactionStore = new TransactionStore({
+                    prefix: uuid,
+                    instance: "incomer"
+                  });
+
+                  const exclusiveChannel = new Channel({
                     name: firstIncomerProvidedUuid
                   });
 
@@ -871,17 +896,14 @@ describe("Dispatcher", () => {
                     }
                   }
 
-                  mainTransactionId = await incomerTransactionStore.setTransaction({
+                  mainTransactionId = await firstIncomerTransactionStore.setTransaction({
                     ...event,
-                    metadata: {
-                      ...event.metadata
-                    },
                     mainTransaction: true,
                     relatedTransaction: null,
                     resolved: null
                   });
 
-                  await channel.publish({
+                  await exclusiveChannel.publish({
                     ...event,
                     metadata: {
                       ...event.metadata,
@@ -891,17 +913,20 @@ describe("Dispatcher", () => {
                 }
                 else {
                   secondIncomerProvidedUuid = uuid;
+                  secondIncomerTransactionStore = new TransactionStore({
+                    prefix: secondIncomerProvidedUuid,
+                    instance: "incomer"
+                  });
                 }
 
-                await subscriber.subscribe(uuid);
+                await subscriber.subscribe(secondIncomerProvidedUuid);
               }
             }
             else {
               if (channel === secondIncomerProvidedUuid) {
                 if (formattedMessage.event === "foo") {
-
                   hasDistributedEvents = true;
-                  resolvedTransactionId = await incomerTransactionStore.setTransaction({
+                  await secondIncomerTransactionStore.setTransaction({
                     ...formattedMessage,
                     metadata: {
                       ...formattedMessage.metadata,
@@ -917,8 +942,8 @@ describe("Dispatcher", () => {
             }
           });
 
-          incomerTransactionStore = new TransactionStore({
-            instance: "incomer"
+          dispatcherTransactionStore = new TransactionStore({
+            instance: "dispatcher"
           });
 
           const channel = new Channel({
@@ -947,14 +972,14 @@ describe("Dispatcher", () => {
             }
           };
 
-          const firstTransactionId = await incomerTransactionStore.setTransaction({
+          const firstTransactionId = await dispatcherTransactionStore.setTransaction({
             ...firstEvent,
             mainTransaction: true,
             relatedTransaction: null,
             resolved: null
           });
 
-          const secondTransactionId = await incomerTransactionStore.setTransaction({
+          const secondTransactionId = await dispatcherTransactionStore.setTransaction({
             ...secondEvent,
             mainTransaction: true,
             relatedTransaction: null,
@@ -980,20 +1005,16 @@ describe("Dispatcher", () => {
           await timers.setTimeout(2_000);
         });
 
-        test("it should have distributed the event", async() => {
+        test("it should have distributed the event & resolve the main transaction", async() => {
           await timers.setTimeout(3_000);
+
+          const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId);
+
+          expect(transaction).toBeUndefined();
 
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
           expect(hasDistributedEvents).toBe(true);
-        });
-
-        test("it should have resolved the main transaction", async() => {
-          await timers.setTimeout(4_000);
-
-          const transaction = await incomerTransactionStore.getTransactionById(mainTransactionId);
-
-          expect(transaction).toBeUndefined();
         });
       });
     });

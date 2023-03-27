@@ -20,7 +20,6 @@ import {
   IncomerChannelMessages
 } from "../../types/eventManagement/index";
 import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
-import { IncomerPongMessage } from "types/eventManagement/incomerChannel";
 
 
 export type ServiceOptions = {
@@ -169,7 +168,7 @@ export class Incomer extends EventEmitter {
     if (event === predefinedEvents.dispatcher.check.ping) {
       const { metadata } = message as IncomerChannelMessages["DispatcherMessages"];
 
-      const event: IncomerPongMessage = {
+      const event = {
         event: "pong",
         data: null,
         metadata: {
