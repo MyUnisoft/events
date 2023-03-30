@@ -300,39 +300,50 @@ export class Dispatcher {
         continue;
       }
 
-      const relatedIncomerTransactionStore = new TransactionStore({
-        prefix: dispatcherTransaction.metadata.to,
-        instance: "incomer"
-      });
+      if (dispatcherTransaction.metadata.to) {
+        const tree = await this.getTree(this.treeName);
 
-      const relatedIncomerTransactions = await relatedIncomerTransactionStore.getTransactions();
+        if (!tree[dispatcherTransaction.metadata.to]) {
+          break;
+        }
 
-      const relatedTransactionId = Object.keys(relatedIncomerTransactions).find(
-        (incomerTransactionId) => relatedIncomerTransactions[incomerTransactionId].relatedTransaction === dispatcherTransactionId
-      );
+        const prefix = tree[dispatcherTransaction.metadata.to].prefix ?? "";
+        const relatedIncomerTransactionStore = new TransactionStore({
+          prefix: `${prefix ? `${prefix}-` : ""}${dispatcherTransaction.metadata.to}`,
+          instance: "incomer"
+        });
 
-      // Event not resolved yet
-      if (!relatedTransactionId) {
-        continue;
-      }
 
-      // Only in case of ping event
-      if (dispatcherTransaction.mainTransaction) {
+        const relatedIncomerTransactions = await relatedIncomerTransactionStore.getTransactions();
+
+        const relatedTransactionId = Object.keys(relatedIncomerTransactions).find(
+          (incomerTransactionId) => relatedIncomerTransactions[incomerTransactionId].relatedTransaction ===
+            dispatcherTransactionId
+        );
+
+        // Event not resolved yet
+        if (!relatedTransactionId) {
+          continue;
+        }
+
+        // Only in case of ping event
+        if (dispatcherTransaction.mainTransaction) {
+          await Promise.allSettled([
+            this.updateIncomerState(relatedIncomerTransactions[relatedTransactionId]),
+            relatedIncomerTransactionStore.deleteTransaction(relatedTransactionId),
+            this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+          ]);
+
+          continue;
+        }
+
+        dispatcherTransaction.resolved = true;
         await Promise.allSettled([
           this.updateIncomerState(relatedIncomerTransactions[relatedTransactionId]),
           relatedIncomerTransactionStore.deleteTransaction(relatedTransactionId),
-          this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+          this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
         ]);
-
-        continue;
       }
-
-      dispatcherTransaction.resolved = true;
-      await Promise.allSettled([
-        this.updateIncomerState(relatedIncomerTransactions[relatedTransactionId]),
-        relatedIncomerTransactionStore.deleteTransaction(relatedTransactionId),
-        this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
-      ]);
     }
   }
 
@@ -344,7 +355,7 @@ export class Dispatcher {
     // If Each related transaction resolved => cast internal event to call resolve on Main transaction with according transaction tree ?
     for (const incomer of Object.values(incomerTree)) {
       const incomerStore = new TransactionStore({
-        prefix: incomer.providedUuid,
+        prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomer.providedUuid}`,
         instance: "incomer"
       });
 
