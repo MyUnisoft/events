@@ -457,7 +457,7 @@ describe("Dispatcher", () => {
 
     describe("Handling a ping event", () => {
       let incomerName = randomUUID();
-      let pongTransactionId: string;
+      let pingResponseTransaction: string;
       let subscriber: Redis;
       let dispatcherTransactionStore: TransactionStore<"dispatcher">;
       let incomerTransactionStore: TransactionStore<"incomer">;
@@ -481,14 +481,14 @@ describe("Dispatcher", () => {
             const providedUUid = formattedMessage.data.uuid;
 
             incomerTransactionStore = new TransactionStore({
-              prefix: providedUUid,
+              prefix: `${prefix}-${providedUUid}`,
               instance: "incomer"
             });
 
             await subscriber.subscribe(`${prefix}-${providedUUid}`);
           }
           else if (formattedMessage.event === "ping" && index === 0) {
-            pongTransactionId = await incomerTransactionStore.setTransaction({
+            pingResponseTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
               metadata: {
                 ...formattedMessage.metadata,
@@ -554,13 +554,13 @@ describe("Dispatcher", () => {
         await timers.setTimeout(3_000);
 
         expect(mockedPing).toHaveBeenCalled();
-        expect(pongTransactionId).toBeDefined();
+        expect(pingResponseTransaction).toBeDefined();
       });
 
-      test("It should have update the update the incomer last activity", async () => {
-        await timers.setTimeout(3_000);
+      test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
+        await timers.setTimeout(1_000);
 
-        const transaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
+        const transaction = await incomerTransactionStore.getTransactionById(pingResponseTransaction);
 
         expect(transaction).not.toBeDefined();
         expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
@@ -1020,14 +1020,261 @@ describe("Dispatcher", () => {
     });
   });
 
-  describe("Dispatcher with subscriber", () => {
+  describe("Dispatcher with prefix & injected schema", () => {
     let dispatcher: Dispatcher;
-    let subscriber: Redis;
+    let prefix = "local" as "local";
 
     beforeAll(async() => {
       await clearAllKeys();
       jest.clearAllMocks();
 
+      const eventsValidationFunction = new Map();
+
+      for (const [name, validationSchema] of Object.entries(EventsSchemas)) {
+        eventsValidationFunction.set(name, ajv.compile(validationSchema));
+      }
+
+      dispatcher = new Dispatcher({
+        eventsValidationFunction,
+        pingInterval: 2_000,
+        checkLastActivityInterval: 6_000,
+        checkTransactionInterval: 4_000,
+        idleTime: 6_000,
+        prefix
+      });
+
+      Reflect.set(dispatcher, "logger", logger);
+
+      await dispatcher.initialize();
+    });
+
+    afterAll(async() => {
+      await dispatcher.close();
+    });
+
+    test("Dispatcher should be defined", () => {
+      expect(dispatcher).toBeInstanceOf(Dispatcher);
+      expect(dispatcher.prefix).toBe("local-");
+      expect(dispatcher.privateUuid).toBeDefined();
+    });
+
+    describe("Publishing on a dedicated channel", () => {
+      beforeAll(async() => {
+        await clearAllKeys();
+        jest.clearAllMocks();
+      });
+
+      test("it should be calling handleIncomerMessages", async() => {
+        const channel = new Channel({
+          name: "foo",
+          prefix
+        });
+
+        // eslint-disable-next-line dot-notation
+        await dispatcher["subscriber"].subscribe(`${prefix}-foo`);
+
+        await channel.publish({
+          event: "foo",
+          data: {
+            foo: "foo"
+          },
+          metadata: {
+            origin: "bar",
+            transactionId: "1",
+            prefix
+          }
+        });
+
+        await timers.setTimeout(1_000);
+
+        expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
+        expect(mockedHandleIncomerMessages).toHaveBeenCalled();
+      });
+
+      describe("Publishing an injected event", () => {
+        const firstIncomerName = randomUUID();
+        const secondIncomerName = randomUUID();
+        let firstIncomerProvidedUuid;
+        let secondIncomerProvidedUuid;
+        let subscriber: Redis;
+        let hasDistributedEvents = false;
+        let firstIncomerTransactionStore: TransactionStore<"incomer">;
+        let secondIncomerTransactionStore: TransactionStore<"incomer">;
+        let dispatcherTransactionStore: TransactionStore<"dispatcher">;
+        let mainTransactionId;
+
+        beforeAll(async() => {
+          subscriber = await initRedis({
+            port: process.env.REDIS_PORT,
+            host: process.env.REDIS_HOST
+          } as any, true);
+
+          await subscriber.subscribe(`${prefix}-dispatcher`);
+
+          subscriber.on("message", async(channel, message) => {
+            const formattedMessage = JSON.parse(message);
+
+            if (channel === `${prefix}-dispatcher`) {
+              if (formattedMessage.event === "approvement") {
+                const uuid = formattedMessage.data.uuid;
+
+                if (formattedMessage.metadata.to === firstIncomerName) {
+                  firstIncomerProvidedUuid = uuid;
+
+                  firstIncomerTransactionStore = new TransactionStore({
+                    prefix: `${prefix}-${uuid}`,
+                    instance: "incomer"
+                  });
+
+                  const exclusiveChannel = new Channel({
+                    name: firstIncomerProvidedUuid,
+                    prefix
+                  });
+
+                  const event = {
+                    event: "foo",
+                    data: {
+                      foo: "foo"
+                    },
+                    metadata: {
+                      origin: firstIncomerProvidedUuid,
+                      prefix
+                    }
+                  }
+
+                  mainTransactionId = await firstIncomerTransactionStore.setTransaction({
+                    ...event,
+                    mainTransaction: true,
+                    relatedTransaction: null,
+                    resolved: null
+                  });
+
+                  await exclusiveChannel.publish({
+                    ...event,
+                    metadata: {
+                      ...event.metadata,
+                      transactionId: mainTransactionId
+                    }
+                  });
+                }
+                else {
+                  secondIncomerProvidedUuid = uuid;
+                  secondIncomerTransactionStore = new TransactionStore({
+                    prefix: `${prefix}-${secondIncomerProvidedUuid}`,
+                    instance: "incomer"
+                  });
+                }
+
+                await subscriber.subscribe(`${prefix}-${secondIncomerProvidedUuid}`);
+              }
+            }
+            else {
+              if (channel === `${prefix}-${secondIncomerProvidedUuid}`) {
+                if (formattedMessage.event === "foo") {
+                  hasDistributedEvents = true;
+                  await secondIncomerTransactionStore.setTransaction({
+                    ...formattedMessage,
+                    metadata: {
+                      ...formattedMessage.metadata,
+                      origin: formattedMessage.metadata.to
+                    },
+                    createdAt: Date.now(),
+                    mainTransaction: false,
+                    relatedTransaction: formattedMessage.metadata.transactionId,
+                    resolved: null
+                  });
+                }
+              }
+            }
+          });
+
+          dispatcherTransactionStore = new TransactionStore({
+            instance: "dispatcher",
+            prefix
+          });
+
+          const channel = new Channel({
+            name: "dispatcher",
+            prefix
+          });
+
+          const firstEvent = {
+            event: "register",
+            data: {
+              name: firstIncomerName,
+              subscribeTo: []
+            },
+            metadata: {
+              origin: firstIncomerName,
+              prefix
+            }
+          };
+
+          const secondEvent = {
+            event: "register",
+            data: {
+              name: secondIncomerName,
+              subscribeTo: [{ name: "foo" }]
+            },
+            metadata: {
+              origin: secondIncomerName,
+              prefix
+            }
+          };
+
+          const firstTransactionId = await dispatcherTransactionStore.setTransaction({
+            ...firstEvent,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
+
+          const secondTransactionId = await dispatcherTransactionStore.setTransaction({
+            ...secondEvent,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
+
+          await channel.publish({
+            ...firstEvent,
+            metadata: {
+              ...firstEvent.metadata,
+              transactionId: firstTransactionId
+            }
+          });
+
+          await channel.publish({
+            ...secondEvent,
+            metadata: {
+              ...secondEvent.metadata,
+              transactionId: secondTransactionId
+            }
+          });
+
+          await timers.setTimeout(2_000);
+        });
+
+        test("it should have distributed the event & resolve the main transaction", async() => {
+          await timers.setTimeout(3_000);
+
+          const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId);
+
+
+          expect(mockedLoggerInfo).toHaveBeenCalled();
+          expect(mockedHandleIncomerMessages).toHaveBeenCalled();
+          expect(hasDistributedEvents).toBe(true);
+          expect(transaction).toBeUndefined();
+        });
+      });
+    });
+  });
+
+  describe("Dispatcher with subscriber", () => {
+    let dispatcher: Dispatcher;
+    let subscriber: Redis;
+
+    beforeAll(async() => {
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
         host: process.env.REDIS_HOST
