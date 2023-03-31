@@ -1,3 +1,4 @@
+/* eslint-disable func-style */
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
 
@@ -33,6 +34,7 @@ const ajv = new Ajv();
 const kPingInterval = 7_200;
 const kCheckLastActivityInterval = 14_400;
 const kCheckRelatedTransactionInterval = 7_200;
+const kBackupTransactionStoreName = "backup";
 const kIdleTime = 10_800;
 
 interface RegisteredIncomer {
@@ -58,6 +60,12 @@ export interface DispatcherOptions {
 }
 
 type DispatcherChannelEvents = { event: "register" };
+
+interface IncomerCustomChannelMessage {
+  event: string;
+  data: Record<string, any>;
+  metadata: DispatcherTransactionMetadata;
+}
 
 function isDispatcherChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
@@ -89,14 +97,13 @@ export class Dispatcher {
 
   readonly incomerStore: Redis.KVPeer<IncomerStore>;
   readonly dispatcherTransactionStore: TransactionStore<"dispatcher">;
+  readonly backupIncomerTransactionStore: TransactionStore<"incomer">;
 
   protected subscriber: Redis.Redis;
 
   private logger: logger.Logger;
   private incomerChannels: Map<string,
-    Redis.Channel<IncomerChannelMessages["DispatcherMessages"] | {
-      event: string; data: Record<string, any>, metadata: DispatcherTransactionMetadata
-    }>> = new Map();
+    Redis.Channel<IncomerChannelMessages["DispatcherMessages"] | IncomerCustomChannelMessage>> = new Map();
 
   private pingInterval: NodeJS.Timer;
   private checkLastActivityInterval: NodeJS.Timer;
@@ -106,8 +113,9 @@ export class Dispatcher {
   public eventsValidationFunction: Map<string, ValidateFunction>;
 
   constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
+    // options.prefix = "local";
     this.prefix = options.prefix ? `${options.prefix}-` : "";
-    this.treeName = `${this.prefix ? `${this.prefix}-` : ""}${kIncomerStoreName}`;
+    this.treeName = this.prefix + kIncomerStoreName;
     this.dispatcherChannelName = this.prefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
 
@@ -120,6 +128,11 @@ export class Dispatcher {
     this.incomerStore = new Redis.KVPeer({
       prefix: options.prefix,
       type: "object"
+    });
+
+    this.backupIncomerTransactionStore = new TransactionStore({
+      prefix: this.prefix + kBackupTransactionStoreName,
+      instance: "incomer"
     });
 
     this.dispatcherTransactionStore = new TransactionStore({
@@ -262,31 +275,150 @@ export class Dispatcher {
   }
 
   private async handleInactiveIncomer(
-    tree: IncomerStore,
-    uuid: string
+    incomerStore: IncomerStore,
+    incomerUuid: string
   ) {
-    delete tree[uuid];
+    const incomer = incomerStore[incomerUuid];
 
-    if (Object.entries(tree).length > 0) {
+    delete incomerStore[incomerUuid];
+    this.incomerChannels.delete(incomerUuid);
+
+    if (Object.entries(incomerStore).length > 0) {
       await this.incomerStore.setValue({
         key: this.treeName,
-        value: tree
+        value: incomerStore
       });
     }
     else {
       await this.incomerStore.deleteValue(this.treeName);
     }
 
-    for await (const [transactionId, transaction] of Object.entries(this.dispatcherTransactionStore.getTransactions())) {
-      if (transaction.metadata.to === uuid) {
-        // Delete ping interaction since the incomer is off
-        if (transaction.event === "ping") {
-          this.dispatcherTransactionStore.deleteTransaction(transactionId);
+    const incomerTransactionStore = new TransactionStore({
+      prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomerUuid}`,
+      instance: "incomer"
+    });
+
+    const [incomerTransactions, dispatcherTransactions] = await Promise.all([
+      incomerTransactionStore.getTransactions(),
+      this.dispatcherTransactionStore.getTransactions()
+    ]);
+
+    const toResolve: Promise<any>[] = [];
+
+    for (const [incomerTransactionId, incomerTransaction] of Object.entries(incomerTransactions)) {
+      // Remove possible ping response
+      if (incomerTransaction.event === "ping") {
+        toResolve.push(
+          incomerTransactionStore.deleteTransaction(incomerTransactionId),
+          this.dispatcherTransactionStore.deleteTransaction(incomerTransaction.relatedTransaction)
+        );
+
+        continue;
+      }
+
+      const concernedIncomer = Object.values(incomerStore).find(
+        (incomer) => incomer.subscribeTo.find(
+          (subscribedEvent) => subscribedEvent.name === incomerTransaction.event
+        )
+      );
+
+      // Either the event is a mainTransaction (the incomer is the sender) or a response to a dealed event
+
+      if (!concernedIncomer) {
+        // Cache the transaction awaiting for a concernedIncomer ? Trigger specific timer + warning ?
+        console.warn("No concerned Incomer !!");
+
+        continue;
+      }
+
+      const concernedIncomerStore = new TransactionStore({
+        prefix: `${concernedIncomer.prefix ? `${concernedIncomer.prefix}-` : ""}${incomerUuid}`,
+        instance: "incomer"
+      });
+
+      if (incomerTransaction.mainTransaction) {
+        if (incomerTransaction.event === "register") {
+          const relatedDispatcherTransactionId = Object.keys(dispatcherTransactions)
+            .find(
+              (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction ===
+                incomerTransactionId
+            );
+
+          if (relatedDispatcherTransactionId) {
+            toResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId));
+          }
+
+          toResolve.push(incomerTransactionStore.deleteTransaction(incomerTransactionId));
+
+          continue;
         }
 
-        // redistribute events & so transactions to according incomers
+        let concernedIncomerChannel = this.incomerChannels.get(incomerUuid);
 
-        // delete the previous transactions
+        if (!concernedIncomerChannel) {
+          concernedIncomerChannel = new Redis.Channel({
+            name: incomerUuid,
+            prefix: incomerStore[incomerUuid].prefix
+          });
+        }
+
+        const formattedEvent: IncomerCustomChannelMessage = {
+          event: incomerTransaction.event,
+          data: incomerTransaction.data,
+          metadata: {
+            origin: this.privateUuid,
+            to: incomerUuid
+          }
+        };
+
+        const publishEvent = async() => {
+          const transactionId = await concernedIncomerStore.setTransaction({
+            ...formattedEvent,
+            mainTransaction: incomerTransaction.mainTransaction,
+            relatedTransaction: incomerTransaction.relatedTransaction,
+            resolved: incomerTransaction.resolved
+          });
+
+
+          await concernedIncomerChannel.publish({
+            ...formattedEvent,
+            metadata: {
+              ...formattedEvent.metadata,
+              transactionId
+            }
+          });
+        };
+
+        toResolve.push(
+          publishEvent(),
+          concernedIncomerStore.setTransaction({
+            ...incomerTransaction,
+            metadata: {
+              ...incomerTransaction.metadata,
+              origin: concernedIncomer.providedUuid
+            }
+          }),
+          incomerTransactionStore.deleteTransaction(incomerTransactionId)
+        );
+
+        continue;
+      }
+
+      if (incomerTransaction.relatedTransaction) {
+        toResolve.push(
+          concernedIncomerStore.deleteTransaction(incomerTransactionId),
+          this.backupIncomerTransactionStore.setTransaction(incomerTransaction)
+        );
+
+        continue;
+      }
+    }
+
+    await Promise.allSettled(toResolve);
+
+    for (const [dispatcherTransactionId, dispatcherTransaction] of Object.entries(dispatcherTransactions)) {
+      if (dispatcherTransaction.metadata.to === incomerUuid && dispatcherTransaction.event === "ping") {
+        await this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
       }
     }
   }
@@ -304,7 +436,25 @@ export class Dispatcher {
         const tree = await this.getTree(this.treeName);
 
         if (!tree[dispatcherTransaction.metadata.to]) {
-          break;
+          const backedUpTransactions = await this.backupIncomerTransactionStore.getTransactions();
+
+          const relatedTransactionId = Object.keys(backedUpTransactions).find(
+            (incomerTransactionId) => relatedIncomerTransactions[incomerTransactionId].relatedTransaction ===
+              dispatcherTransactionId
+          );
+
+          if (!relatedTransactionId) {
+            continue;
+          }
+
+          dispatcherTransaction.resolved = true;
+          await Promise.allSettled([
+            this.updateIncomerState(backedUpTransactions[relatedTransactionId]),
+            this.backupIncomerTransactionStore.deleteTransaction(relatedTransactionId),
+            this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
+          ]);
+
+          continue;
         }
 
         const prefix = tree[dispatcherTransaction.metadata.to].prefix ?? "";
@@ -312,7 +462,6 @@ export class Dispatcher {
           prefix: `${prefix ? `${prefix}-` : ""}${dispatcherTransaction.metadata.to}`,
           instance: "incomer"
         });
-
 
         const relatedIncomerTransactions = await relatedIncomerTransactionStore.getTransactions();
 
@@ -487,7 +636,7 @@ export class Dispatcher {
         this.logger.info(logData, "New Registration on Dispatcher Channel");
 
         if (isIncomerRegistrationMessage(message)) {
-          await this.approveService(message);
+          await this.approveIncomer(message);
         }
       })
       .with(P._, () => {
@@ -570,7 +719,7 @@ export class Dispatcher {
     }
   }
 
-  private async approveService(message: IncomerRegistrationMessage) {
+  private async approveIncomer(message: IncomerRegistrationMessage) {
     const { data, metadata } = message;
     const { prefix, origin, transactionId } = metadata;
 
@@ -584,9 +733,9 @@ export class Dispatcher {
     // Get Incomers Tree
     const relatedIncomerTree = await this.getTree(this.treeName);
 
-    // Avoid multiple init from a same instance of a service
-    for (const service of Object.values(relatedIncomerTree)) {
-      if (service.baseUuid === origin) {
+    // Avoid multiple init from a same instance of a incomer
+    for (const incomer of Object.values(relatedIncomerTree)) {
+      if (incomer.baseUuid === origin) {
         throw new Error("Forbidden multiple registration for a same instance");
       }
     }
@@ -594,7 +743,7 @@ export class Dispatcher {
     // Update the tree
     const now = Date.now();
 
-    const service = Object.assign({}, {
+    const incomer = Object.assign({}, {
       providedUuid,
       baseUuid: origin,
       ...data,
@@ -603,7 +752,7 @@ export class Dispatcher {
       prefix
     });
 
-    relatedIncomerTree[providedUuid] = service;
+    relatedIncomerTree[providedUuid] = incomer;
 
     await this.incomerStore.setValue({
       key: this.treeName,
