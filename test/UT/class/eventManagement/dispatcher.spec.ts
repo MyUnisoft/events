@@ -56,18 +56,21 @@ describe("Dispatcher", () => {
 
     beforeAll(async() => {
       dispatcher = new Dispatcher({
-        pingInterval: 2_000,
-        checkLastActivityInterval: 5_000,
-        checkTransactionInterval: 3_600,
-        idleTime: 5_000
+        pingInterval: 1_600,
+        checkLastActivityInterval: 4_000,
+        checkTransactionInterval: 2_400,
+        idleTime: 4_000
        });
 
       Reflect.set(dispatcher, "logger", logger);
+
+      await clearAllKeys();
 
       await dispatcher.initialize();
     });
 
     afterAll(async() => {
+      await clearAllKeys();
       await dispatcher.close();
     });
 
@@ -108,6 +111,10 @@ describe("Dispatcher", () => {
     describe("Publishing a well formed register event", () => {
       let incomerName = randomUUID();
 
+      beforeAll(() => {
+        jest.clearAllMocks();
+      });
+
       test("without unresolved transaction, it should fail and throw a new Error", async() => {
         const channel = new Channel({
           name: "dispatcher"
@@ -137,14 +144,9 @@ describe("Dispatcher", () => {
         });
       });
 
-      test("It should handle the message and log infos about it", async() => {
-        const channel = new Channel({
-          name: "dispatcher"
-        });
-
-        const dispatcherTransactionStore = new TransactionStore({
-          instance: "dispatcher"
-        });
+      describe("Publishing a well formed register event but multiple times", () => {
+        let channel;
+        let dispatcherTransactionStore;
 
         const event = {
           event: "register",
@@ -157,75 +159,73 @@ describe("Dispatcher", () => {
           }
         };
 
-        const transactionId = await dispatcherTransactionStore.setTransaction({
-          ...event,
-          mainTransaction: true,
-          relatedTransaction: null,
-          resolved: null
-        });
+        beforeAll(async() => {
+          channel = new Channel({
+            name: "dispatcher"
+          });
 
-        await channel.publish({
-          ...event,
-          metadata: {
-            ...event.metadata,
-            transactionId
-          }
-        });
+          dispatcherTransactionStore = new TransactionStore({
+            instance: "dispatcher"
+          });
 
-        await timers.setTimeout(1_000);
+          jest.clearAllMocks();
 
-        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedLoggerInfo).toHaveBeenCalled();
-      });
+          const transactionId = await dispatcherTransactionStore.setTransaction({
+            ...event,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
 
-      test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
-        const channel = new Channel({
-          name: "dispatcher"
-        });
-
-        const dispatcherTransactionStore = new TransactionStore({
-          instance: "dispatcher"
-        });
-
-        const event = {
-          event: "register",
-          data: {
-            name: incomerName,
-            subscribeTo: []
-          },
-          metadata: {
-            origin: incomerName
-          }
-        };
-
-        const transactionId = await dispatcherTransactionStore.setTransaction({
-          ...event,
-          mainTransaction: true,
-          relatedTransaction: null,
-          resolved: null
-        });
-
-        await channel.publish({
-          ...event,
-          metadata: {
-            ...event.metadata,
-            transactionId
-          }
-        });
-
-        await timers.setTimeout(1_000);
-
-        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedLoggerError).toHaveBeenCalledWith({
-          channel: "dispatcher",
-          message: {
+          await channel.publish({
             ...event,
             metadata: {
               ...event.metadata,
               transactionId
             }
-          },
-          error: "Forbidden multiple registration for a same instance"
+          });
+
+          await timers.setTimeout(2_000);
+        });
+
+
+        test("It should handle the message and log infos about it", async() => {
+          await timers.setTimeout(2_000);
+
+          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+          expect(mockedLoggerInfo).toHaveBeenCalled();
+        });
+
+        test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
+          const transactionId = await dispatcherTransactionStore.setTransaction({
+            ...event,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: null
+          });
+
+          await channel.publish({
+            ...event,
+            metadata: {
+              ...event.metadata,
+              transactionId
+            }
+          });
+
+          await timers.setTimeout(4_000);
+
+          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+          expect(mockedLoggerError).toHaveBeenLastCalledWith({
+            channel: "dispatcher",
+            message: {
+              ...event,
+              metadata: {
+                ...event.metadata,
+                transactionId
+              }
+            },
+            error: "Forbidden multiple registration for a same instance"
+          });
         });
       });
     });
@@ -233,12 +233,12 @@ describe("Dispatcher", () => {
     describe("Handling a ping event", () => {
       let incomerName = randomUUID();
       let pongTransactionId: string;
+      let pingTransactionId: string;
       let subscriber: Redis;
       let incomerTransactionStore: TransactionStore<"incomer">;
       let dispatcherTransactionStore: TransactionStore<"dispatcher">
 
       beforeAll(async() => {
-        await clearAllKeys();
         jest.clearAllMocks();
 
         let index = 0;
@@ -263,6 +263,7 @@ describe("Dispatcher", () => {
             });
           }
           else if (formattedMessage.event === "ping" && index === 0) {
+            pingTransactionId = formattedMessage.metadata.transactionId;
             pongTransactionId = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
               metadata: {
@@ -302,7 +303,7 @@ describe("Dispatcher", () => {
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
-          resolved: null
+          resolved: false
         });
 
         await channel.publish({
@@ -316,12 +317,10 @@ describe("Dispatcher", () => {
             transactionId
           }
         });
-
-        await timers.setTimeout(1_000);
       });
 
       test("It should have ping and a new transaction should have been create", async() => {
-        await timers.setTimeout(3_000);
+        await timers.setTimeout(2_000);
 
         expect(mockedPing).toHaveBeenCalled();
         expect(pongTransactionId).toBeDefined();
@@ -330,15 +329,17 @@ describe("Dispatcher", () => {
       test("It should have update the update the incomer last activity", async () => {
         await timers.setTimeout(3_000);
 
-        const transaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
+        const pongTransaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
+        const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
 
-        expect(transaction).not.toBeDefined();
+        expect(pongTransaction).toBeNull();
+        expect(pingTransaction).toBeNull();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
       });
 
       test("It should remove the inactive incomers", async() => {
-        await timers.setTimeout(3_000);
+        await timers.setTimeout(4_000);
 
         expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
@@ -351,10 +352,10 @@ describe("Dispatcher", () => {
     let prefix = "local" as "local";
     beforeAll(async() => {
       dispatcher = new Dispatcher({
-        pingInterval: 2_000,
-        checkLastActivityInterval: 5_000,
-        checkTransactionInterval: 3_600,
-        idleTime: 5_000,
+        pingInterval: 1_600,
+        checkLastActivityInterval: 4_000,
+        checkTransactionInterval: 3_200,
+        idleTime: 4_000,
         prefix
       });
 
@@ -421,7 +422,7 @@ describe("Dispatcher", () => {
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           const foo = await dispatcherTransactionStore.getTransactionById(transactionId);
@@ -531,7 +532,7 @@ describe("Dispatcher", () => {
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
-          resolved: null
+          resolved: false
         });
 
         await channel.publish({
@@ -558,16 +559,17 @@ describe("Dispatcher", () => {
       });
 
       test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
-        await timers.setTimeout(1_000);
+        await timers.setTimeout(3_000);
 
         const transaction = await incomerTransactionStore.getTransactionById(pingResponseTransaction);
 
-        expect(transaction).not.toBeDefined();
+        expect(transaction).toBeNull();
+        expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
       });
 
       test("It should remove the inactive incomers", async() => {
-        await timers.setTimeout(3_000);
+        await timers.setTimeout(4_000);
 
         expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
@@ -735,7 +737,7 @@ describe("Dispatcher", () => {
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           await channel.publish({
@@ -900,7 +902,7 @@ describe("Dispatcher", () => {
                     ...event,
                     mainTransaction: true,
                     relatedTransaction: null,
-                    resolved: null
+                    resolved: false
                   });
 
                   await exclusiveChannel.publish({
@@ -976,14 +978,14 @@ describe("Dispatcher", () => {
             ...firstEvent,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           const secondTransactionId = await dispatcherTransactionStore.setTransaction({
             ...secondEvent,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           await channel.publish({
@@ -1010,7 +1012,7 @@ describe("Dispatcher", () => {
 
           const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId);
 
-          expect(transaction).toBeUndefined();
+          expect(transaction).toBeNull();
 
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
@@ -1146,7 +1148,7 @@ describe("Dispatcher", () => {
                     ...event,
                     mainTransaction: true,
                     relatedTransaction: null,
-                    resolved: null
+                    resolved: false
                   });
 
                   await exclusiveChannel.publish({
@@ -1158,11 +1160,13 @@ describe("Dispatcher", () => {
                   });
                 }
                 else {
-                  secondIncomerProvidedUuid = uuid;
-                  secondIncomerTransactionStore = new TransactionStore({
-                    prefix: `${prefix}-${secondIncomerProvidedUuid}`,
-                    instance: "incomer"
-                  });
+                  if (formattedMessage.metadata.to === secondIncomerName) {
+                    secondIncomerProvidedUuid = uuid;
+                    secondIncomerTransactionStore = new TransactionStore({
+                      prefix: `${prefix}-${secondIncomerProvidedUuid}`,
+                      instance: "incomer"
+                    });
+                  }
                 }
 
                 await subscriber.subscribe(`${prefix}-${secondIncomerProvidedUuid}`);
@@ -1222,35 +1226,62 @@ describe("Dispatcher", () => {
             }
           };
 
+          const thirdEvent = {
+            event: "register",
+            data: {
+              name: "foo",
+              subscribeTo: []
+            },
+            metadata: {
+              origin: "foo",
+              prefix
+            }
+          };
+
           const firstTransactionId = await dispatcherTransactionStore.setTransaction({
             ...firstEvent,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           const secondTransactionId = await dispatcherTransactionStore.setTransaction({
             ...secondEvent,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
-          await channel.publish({
-            ...firstEvent,
-            metadata: {
-              ...firstEvent.metadata,
-              transactionId: firstTransactionId
-            }
+          const thirdTransactionId = await dispatcherTransactionStore.setTransaction({
+            ...thirdEvent,
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: false
           });
 
-          await channel.publish({
-            ...secondEvent,
-            metadata: {
-              ...secondEvent.metadata,
-              transactionId: secondTransactionId
-            }
-          });
+          await Promise.all([
+            channel.publish({
+              ...firstEvent,
+              metadata: {
+                ...firstEvent.metadata,
+                transactionId: firstTransactionId
+              }
+            }),
+            channel.publish({
+              ...secondEvent,
+              metadata: {
+                ...secondEvent.metadata,
+                transactionId: secondTransactionId
+              }
+            }),
+            channel.publish({
+              ...thirdEvent,
+              metadata: {
+                ...thirdEvent.metadata,
+                transactionId: thirdTransactionId
+              }
+            })
+          ]);
 
           await timers.setTimeout(2_000);
         });
@@ -1264,7 +1295,7 @@ describe("Dispatcher", () => {
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
           expect(hasDistributedEvents).toBe(true);
-          expect(transaction).toBeUndefined();
+          expect(transaction).toBeNull();
         });
       });
     });

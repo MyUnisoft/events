@@ -44,7 +44,7 @@ describe("Transaction options", () => {
         },
         mainTransaction: true,
         relatedTransaction: null,
-        resolved: null
+        resolved: false
       };
 
       transactionId = await transactionStore.setTransaction(transaction);
@@ -56,7 +56,7 @@ describe("Transaction options", () => {
 
       const result = await transactionStore.getTransactionById(transactionId);
 
-      expect(result).toBeUndefined();
+      expect(result).toBeNull();
     });
   });
 
@@ -71,7 +71,7 @@ describe("Transaction options", () => {
         },
         mainTransaction: true,
         relatedTransaction: null,
-        resolved: null
+        resolved: false
       };
 
       const transactionId = await transactionStore.setTransaction(transaction);
@@ -94,7 +94,7 @@ describe("Transaction options", () => {
         },
         mainTransaction: true,
         relatedTransaction: null,
-        resolved: null
+        resolved: false
       };
 
       transactionId = await transactionStore.setTransaction(transaction);
@@ -122,7 +122,7 @@ describe("Transaction options", () => {
         },
         mainTransaction: true,
         relatedTransaction: null,
-        resolved: null
+        resolved: false
       };
 
       await transactionStore.setTransaction(transaction);
@@ -134,7 +134,7 @@ describe("Transaction options", () => {
       const transactionTree = await transactionStore.getTransactions();
 
       expect(transactionTree).toBeDefined();
-      expect(Object.entries(transactionTree).length).toBe(2);
+      expect(transactionTree.size).toBe(2);
 
       for (const transactionId of Object.keys(transactionTree)) {
         await transactionStore.deleteTransaction(transactionId);

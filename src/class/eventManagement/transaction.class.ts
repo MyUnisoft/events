@@ -19,16 +19,16 @@ import {
 export type Instance = "dispatcher" | "incomer";
 
 type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "dispatcher" ?
-  Omit<DispatcherTransactionMetadata, "transactionId"> :
+  Omit<DispatcherTransactionMetadata, "to" | "transactionId"> & { to?: string } :
   Omit<IncomerTransactionMetadata, "transactionId">;
 
 type MainTransaction = {
   mainTransaction: true;
   relatedTransaction: null;
-  resolved: null;
+  resolved: false;
 }
 
-type DispatcherTransaction = {
+type SpreedTransaction = {
   mainTransaction: false;
   relatedTransaction: string;
   resolved: boolean;
@@ -37,32 +37,44 @@ type DispatcherTransaction = {
 type HandlerTransaction = {
   mainTransaction: false;
   relatedTransaction: string;
-  resolved: null;
+  resolved: false;
 }
 
-export type Transaction<T extends Instance = Instance> = (T extends "dispatcher" ?
-  (DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]) |
-    (Omit<IncomerChannelMessages["IncomerMessage"], "metadata"> & Pick<IncomerChannelMessages["DispatcherMessages"], "metadata">)
-    :
-  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]) & {
-    aliveSince: number;
-  } & (
-    (T extends "dispatcher" ? DispatcherTransaction : HandlerTransaction) |
-    MainTransaction
-  );
+export type Transaction<T extends Instance = Instance> = (
+  T extends "dispatcher" ? (
+    (
+      (
+        DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
+      ) | (
+        Omit<IncomerChannelMessages["IncomerMessage"], "metadata"> &
+        Pick<IncomerChannelMessages["DispatcherMessages"], "metadata">
+      )
+    ) & (
+      SpreedTransaction | MainTransaction
+    )
+  ) : (
+    (
+      DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]
+    ) & (
+      HandlerTransaction | MainTransaction
+    )
+  )
+) & {
+  aliveSince: number;
+}
 
 export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "metadata" | "aliveSince"> & {
-  metadata: MetadataWithoutTransactionId;
+  metadata: MetadataWithoutTransactionId<T>
 };
 
-export type Transactions<T extends Instance = Instance> = Record<string, Transaction<T>>;
+export type Transactions<T extends Instance = Instance> = Map<string, Transaction<T>>;
 
 export type TransactionStoreOptions<T extends Instance = Instance> = (Partial<KVOptions<Transactions<T>>> &
   T extends "incomer" ? { prefix: string; } : { prefix?: string; }) & {
     instance: T;
 };
 
-export class TransactionStore<T extends Instance = Instance> extends KVPeer<Transactions<T>> {
+export class TransactionStore<T extends Instance = Instance> extends KVPeer<Transaction<T>> {
   private key: string;
 
   constructor(options: TransactionStoreOptions<T>, redis?: Redis) {
@@ -72,61 +84,51 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
   }
 
   async getTransactions(): Promise<Transactions<T>> {
-    return await super.getValue(this.key) ?? {};
+    const transactionsKey = await this.redis.keys(`${this.key}-*`);
+
+    const transactions: Transactions<T> = new Map();
+
+    for (const transactionKey of transactionsKey) {
+      const transaction = await super.getValue(transactionKey);
+      if (!transaction) {
+        continue;
+      }
+      transactions.set(transaction.metadata.transactionId, transaction);
+    }
+
+    return transactions;
   }
 
   async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
-    const transactions = await this.getTransactions();
-
     const transactionId = randomUUID();
+
+    const transactionKey = `${this.key}-${transactionId}`;
 
     const formattedTransaction = {
       ...transaction,
-      aliveSince: Date.now(),
       metadata: {
         ...transaction.metadata,
         transactionId
-      }
+      },
+      aliveSince: Date.now()
     } as Transaction<T>;
 
-    transactions[transactionId] = formattedTransaction;
-
-    await this.updateTransactions(transactions);
+    super.setValue({ key: transactionKey, value: formattedTransaction });
 
     return transactionId;
   }
 
   async updateTransaction(transactionId: string, transaction: Transaction<T>): Promise<void> {
-    const transactions = await this.getTransactions();
+    const key = `${this.key}-${transactionId}`;
 
-    transactions[transactionId] = transaction;
-
-    await this.updateTransactions(transactions);
+    super.setValue({ key, value: transaction });
   }
 
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
-    const transactions = await this.getTransactions();
-
-    return transactions[transactionId];
+    return await super.getValue(`${this.key}-${transactionId}`);
   }
 
   async deleteTransaction(transactionId: string) {
-    const transactions = await this.getTransactions();
-
-    const { [transactionId]: deletedTransaction, ...finalTransactions } = transactions;
-
-    if (Object.entries(finalTransactions).length === 0) {
-      await super.deleteValue(this.key);
-    }
-    else {
-      await this.updateTransactions(finalTransactions);
-    }
-  }
-
-  private async updateTransactions(transactions: Transactions<T>): Promise<void> {
-    await Promise.all([
-      super.deleteValue(this.key),
-      super.setValue({ key: this.key, value: transactions })
-    ]);
+    await super.deleteValue(`${this.key}-${transactionId}`);
   }
 }
