@@ -44,7 +44,8 @@ Event notifying the creation/addition of a document.
 export enum DocumentKind {
   DossierAnnuel = "AF",
   DossierPermanent = "PF",
-  BaseDocumentaire = "DB"
+  BaseDocumentaire = "DB",
+  ExternalDocument = "ED"
 }
 
 export interface Document {

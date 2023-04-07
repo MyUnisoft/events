@@ -35,7 +35,8 @@ export type DocumentOperation = Operation[
 export enum DocumentKind {
   DossierAnnuel = "AF",
   DossierPermanent = "PF",
-  BaseDocumentaire = "DB"
+  BaseDocumentaire = "DB",
+  ExternalDocument = "ED"
 }
 
 export interface Document {
