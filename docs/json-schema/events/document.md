@@ -22,7 +22,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["AF", "PF", "DB"]
+          "enum": ["AF", "PF", "DB", "ED"]
         }
       },
       "required": ["id", "kind"]
