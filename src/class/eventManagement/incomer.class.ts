@@ -5,12 +5,11 @@ import { randomUUID } from "node:crypto";
 // Import Third-party Dependencies
 import * as Redis from "@myunisoft/redis";
 import * as logger from "pino";
+import { P, match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
-  channels,
-  predefinedEvents,
-  redisPort
+  channels
 } from "../../utils/config";
 import { TransactionStore } from "./transaction.class";
 import {
@@ -20,13 +19,32 @@ import {
   IncomerChannelMessages
 } from "../../types/eventManagement/index";
 import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
+import { DispatcherPingMessage, DistributedEventMessage } from "types/eventManagement/incomerChannel";
 
+type DispatcherChannelEvents = { event: "approvement" };
+type IncomerChannelEvents = { event: "ping"; message: DispatcherPingMessage } |
+  { event: string; message: DistributedEventMessage };
 
-export type ServiceOptions = {
+function isDispatcherChannelMessage(value:
+  DispatcherChannelMessages["DispatcherMessages"] |
+  IncomerChannelMessages["DispatcherMessages"]
+): value is DispatcherChannelMessages["DispatcherMessages"] {
+  return value.event === "approvement";
+}
+
+function isIncomerChannelMessage(value:
+  DispatcherChannelMessages["DispatcherMessages"] |
+  IncomerChannelMessages["DispatcherMessages"]
+): value is IncomerChannelMessages["DispatcherMessages"] {
+  return value.event !== "approvement";
+}
+
+export type IncomerOptions = {
   /* Service name */
   name: string;
   /* Commonly used to distinguish envs */
   subscribeTo: SubscribeTo[];
+  eventCallback: (message: Omit<DistributedEventMessage, "metadata">) => Promise<void>;
   prefix?: Prefix;
 };
 
@@ -35,18 +53,20 @@ export class Incomer extends EventEmitter {
   readonly prefix: Prefix | undefined;
   readonly subscribeTo: SubscribeTo[];
   readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
+  readonly dispatcherTransactionStore: TransactionStore<"dispatcher">;
   readonly dispatcherChannelName: string;
+  readonly eventCallback: (message: Omit<DistributedEventMessage, "metadata">) => Promise<void>;
 
-  readonly transactionStore: TransactionStore;
 
   protected subscriber: Redis.Redis;
 
   private privateUuid = randomUUID();
   private logger: logger.Logger;
   private incomerChannelName: string;
-  private incomerChannel: Redis.Channel<IncomerChannelMessages["IncomerMessage"]>;
+  private incomerTransactionStore: TransactionStore<"incomer">;
+  private incomerChannel: Redis.Channel<IncomerChannelMessages["IncomerMessages"]>;
 
-  constructor(options: ServiceOptions) {
+  constructor(options: IncomerOptions, subscriber?: Redis.Redis) {
     super();
 
     Object.assign(this, {}, options);
@@ -55,9 +75,11 @@ export class Incomer extends EventEmitter {
 
     this.logger = logger.pino().child({ service: `${this.prefix ? `${this.prefix}-` : ""}${this.name}` });
 
-    this.transactionStore = new TransactionStore({
+    this.subscriber = subscriber;
+
+    this.dispatcherTransactionStore = new TransactionStore({
       prefix: this.prefix,
-      instance: "incomer"
+      instance: "dispatcher"
     });
 
     this.dispatcherChannel = new Redis.Channel({
@@ -69,18 +91,16 @@ export class Incomer extends EventEmitter {
   public async initialize() {
     // Every x ms, check transaction are dealed
     // If not, emit the event so he can dealed locally ?
+    if (!this.subscriber) {
+      this.subscriber = await Redis.initRedis({
+        port: process.env.REDIS_PORT,
+        host: process.env.REDIS_HOST
+      } as any, true);
+    }
 
-    this.subscriber = await Redis.initRedis({ port: redisPort } as any, true);
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
-    this.subscriber.on("message", async(channel: string, message: string) => {
-      try {
-        await this.handleMessages(channel, message);
-      }
-      catch (error) {
-        this.logger.error(error);
-      }
-    });
+    this.subscriber.on("message", async(channel: string, message: string) => await this.handleMessages(channel, message));
 
     await this.dispatcherChannel.publish({
       event: "register",
@@ -106,29 +126,28 @@ export class Incomer extends EventEmitter {
       return;
     }
 
-    const formattedMessage = JSON.parse(message) as DispatcherChannelMessages["DispatcherMessages"] |
-      IncomerChannelMessages["DispatcherMessages"];
+    const formattedMessage: DispatcherChannelMessages["DispatcherMessages"] |
+      IncomerChannelMessages["DispatcherMessages"] = JSON.parse(message);
 
-    // Avoid reacting to his own message
     if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
       return;
     }
 
-    switch (channel) {
-      case this.dispatcherChannelName:
-        await this.handleDispatcherMessages(formattedMessage as DispatcherChannelMessages["DispatcherMessages"]);
-
-        break;
-      default:
-        if (channel === this.incomerChannelName) {
-          await this.handleIncomerMessages(formattedMessage);
-        }
-
-        break;
+    try {
+      if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
+        await this.handleDispatcherMessages(channel, formattedMessage);
+      }
+      else if (channel === this.incomerChannelName && isIncomerChannelMessage(formattedMessage)) {
+        await this.handleIncomerMessages(channel, formattedMessage);
+      }
+    }
+    catch (error) {
+      this.logger.error({ channel, message: formattedMessage, error: error.message });
     }
   }
 
   private async handleDispatcherMessages(
+    channel: string,
     message: DispatcherChannelMessages["DispatcherMessages"]
   ): Promise<void> {
     if (message.metadata.to !== this.privateUuid) {
@@ -136,61 +155,76 @@ export class Incomer extends EventEmitter {
     }
 
     const logData = {
+      channel,
       ...message,
       uptime: process.uptime()
     };
 
     const { event } = message;
 
-    switch (event) {
-      case predefinedEvents.dispatcher.registration.approvement:
+    match<DispatcherChannelEvents>({ event })
+      .with({ event: "approvement" }, async() => {
         this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-        await this.registerPrivateChannel(message as DispatcherRegistrationMessage);
-
-        break;
-      case predefinedEvents.ack:
-        this.logger.info(logData, "New ack on Dispatcher Channel");
-
-        await this.handleAck(message.metadata.transactionId);
-
-        break;
-      default:
-        this.logger.info(logData, "Unknown message on Dispatcher Channel");
-
-        break;
-    }
+        await this.registerPrivateChannel(message);
+      })
+      .exhaustive()
+      .catch((error) => {
+        this.logger.error({ channel: "dispatcher", error: error.message, message });
+      });
   }
 
-  private async handleIncomerMessages(message: Record<string, any>): Promise<void> {
+  private async handleIncomerMessages(
+    channel: string,
+    message: IncomerChannelMessages["DispatcherMessages"]
+  ): Promise<void> {
     const { event } = message;
 
-    if (event === predefinedEvents.dispatcher.check.ping) {
-      const { metadata } = message as IncomerChannelMessages["DispatcherMessages"];
+    const logData = {
+      channel,
+      ...message,
+      uptime: process.uptime()
+    };
 
-      const event = {
-        event: "pong",
-        data: null,
-        metadata: {
-          origin: this.privateUuid,
-          prefix: this.prefix,
-          transactionId: metadata.transactionId
-        }
-      };
+    match<IncomerChannelEvents>({ event, message })
+      .with({ event: "ping" }, async(res: { event: "ping", message: DispatcherPingMessage }) => {
+        const { message } = res;
 
-      await this.incomerChannel.publish(event);
+        await this.incomerTransactionStore.setTransaction({
+          ...message,
+          metadata: {
+            ...message.metadata,
+            origin: message.metadata.to
+          },
+          mainTransaction: false,
+          relatedTransaction: message.metadata.transactionId,
+          resolved: false
+        });
 
-      this.logger.info({
-        event,
-        metadata,
-        uptime: process.uptime()
-      }, "Published new pong event");
-    }
-    else {
-      const { data, metadata } = message;
+        this.logger.info({
+          ...logData
+        }, "Published new pong event");
+      })
+      .with(P._, async(res: { event: string, message: DistributedEventMessage}) => {
+        const { message } = res;
 
-      console.log("not happening", event, data, metadata);
-    }
+        await this.eventCallback({ ...message });
+
+        await this.incomerTransactionStore.setTransaction({
+          ...message,
+          metadata: {
+            ...message.metadata,
+            origin: message.metadata.to
+          },
+          mainTransaction: false,
+          relatedTransaction: message.metadata.transactionId,
+          resolved: false
+        });
+      })
+      .exhaustive()
+      .catch((error) => {
+        this.logger.error({ channel: "incomer", error: error.message, message });
+      });
   }
 
   private async registerPrivateChannel(message: DispatcherRegistrationMessage) {
@@ -206,16 +240,12 @@ export class Incomer extends EventEmitter {
       prefix: this.prefix
     });
 
+    this.incomerTransactionStore = new TransactionStore({
+      prefix: `${this.prefix ? `${this.prefix}-` : ""}${this.privateUuid}`,
+      instance: "incomer"
+    });
+
     this.emit("registered");
-  }
-
-  private async handleAck(transactionId: string) {
-    const transaction = await this.transactionStore.getTransactionById(transactionId);
-    if (!transaction) {
-      throw new Error("Unknown transaction to ack");
-    }
-
-    await this.transactionStore.deleteTransaction(transactionId);
   }
 }
 
