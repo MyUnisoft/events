@@ -1,18 +1,20 @@
 // Import Internal Dependencies
 import {
-  DispatcherTransactionMetadata,
-  IncomerTransactionMetadata
+  DispatcherTransactionMetadata, IncomerTransactionMetadata
 } from "./index";
 
 // Send by the a Dispatcher
-type DispatcherMessages = DispatcherPingMessage;
+type DispatcherMessages = DispatcherPingMessage | DistributedEventMessage;
 
 export type DispatcherPingMessage = { event: "ping", data: null, metadata: DispatcherTransactionMetadata };
+export type DistributedEventMessage = { event: string, data: Record<string, any>, metadata: DispatcherTransactionMetadata };
 
 // Send by an Incomer
-type IncomerMessages = { event: string, data: Record<string, any>, metadata: IncomerTransactionMetadata };
+type IncomerMessages = EventMessage;
+
+export type EventMessage = { event: string, data: Record<string, any>, metadata: IncomerTransactionMetadata };
 
 export type IncomerChannelMessages = {
-  IncomerMessage: IncomerMessages;
+  IncomerMessages: IncomerMessages;
   DispatcherMessages: DispatcherMessages;
 };

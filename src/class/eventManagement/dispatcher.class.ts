@@ -1,4 +1,3 @@
-/* eslint-disable func-style */
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
 
@@ -6,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import * as Redis from "@myunisoft/redis";
 import * as logger from "pino";
 import Ajv, { ValidateFunction } from "ajv";
-import { match, P } from "ts-pattern";
+import { match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
@@ -69,15 +68,15 @@ interface IncomerCustomChannelMessage {
 
 function isDispatcherChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessage"]
+  IncomerChannelMessages["IncomerMessages"]
 ): value is DispatcherChannelMessages["IncomerMessages"] {
   return value.event === "register";
 }
 
 function isIncomerChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessage"]
-): value is IncomerChannelMessages["IncomerMessage"] {
+  IncomerChannelMessages["IncomerMessages"]
+): value is IncomerChannelMessages["IncomerMessages"] {
   return value.event !== "register";
 }
 
@@ -230,20 +229,16 @@ export class Dispatcher {
           }
         };
 
-        const transactionId = await this.dispatcherTransactionStore.setTransaction({
-          ...event,
-          mainTransaction: true,
-          relatedTransaction: null,
-          resolved: null
+        await this.publishEvent({
+          concernedChannel: incomerChannel,
+          transactionMeta: {
+            mainTransaction: true,
+            relatedTransaction: null,
+            resolved: false
+          },
+          formattedEvent: event
         });
 
-        await incomerChannel.publish({
-          ...event,
-          metadata: {
-            ...event.metadata,
-            transactionId
-          }
-        });
 
         this.logger.info({
           ...event,
@@ -274,38 +269,64 @@ export class Dispatcher {
     }
   }
 
-  private async handleInactiveIncomer(
-    incomerStore: IncomerStore,
-    incomerUuid: string
-  ) {
-    const incomer = incomerStore[incomerUuid];
+  private async publishEvent(options: {
+    concernedStore?: TransactionStore<"incomer">;
+    concernedChannel: Redis.Channel<
+      DispatcherChannelMessages["DispatcherMessages"] |
+      (IncomerChannelMessages["DispatcherMessages"] | IncomerCustomChannelMessage)
+    >;
+    transactionMeta: {
+      mainTransaction: boolean;
+      relatedTransaction: null | string;
+      resolved: boolean;
+    };
+    formattedEvent: any;
+  }) {
+    const {
+      concernedChannel,
+      transactionMeta,
+      formattedEvent
+    } = options;
 
-    delete incomerStore[incomerUuid];
-    this.incomerChannels.delete(incomerUuid);
+    const concernedStore = options.concernedStore ?? this.dispatcherTransactionStore;
 
-    if (Object.entries(incomerStore).length > 0) {
-      await this.incomerStore.setValue({
-        key: this.treeName,
-        value: incomerStore
-      });
-    }
-    else {
-      await this.incomerStore.deleteValue(this.treeName);
-    }
-
-    const incomerTransactionStore = new TransactionStore({
-      prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomerUuid}`,
-      instance: "incomer"
+    const transactionId = await concernedStore.setTransaction({
+      ...formattedEvent,
+      mainTransaction: transactionMeta.mainTransaction,
+      relatedTransaction: transactionMeta.relatedTransaction,
+      resolved: transactionMeta.resolved
     });
 
-    const [incomerTransactions, dispatcherTransactions] = await Promise.all([
-      incomerTransactionStore.getTransactions(),
-      this.dispatcherTransactionStore.getTransactions()
-    ]);
+    await concernedChannel.publish({
+      ...formattedEvent,
+      metadata: {
+        ...formattedEvent.metadata,
+        transactionId
+      }
+    });
+  }
+
+  private async InactiveIncomerTransactionsResolution(options: {
+    incomerStore: IncomerStore,
+    incomerUuid: string,
+    incomerTransactionStore: TransactionStore<"incomer">,
+    incomerTransactions: Transactions<"incomer">,
+    dispatcherTransactions: Transactions<"dispatcher">
+  }
+  ) {
+    const {
+      incomerStore,
+      incomerUuid,
+      incomerTransactionStore,
+      incomerTransactions,
+      dispatcherTransactions
+    } = options;
 
     const toResolve: Promise<any>[] = [];
 
-    for (const [incomerTransactionId, incomerTransaction] of Object.entries(incomerTransactions)) {
+    console.log("transactions inactive incomer", incomerTransactions);
+
+    for (const [incomerTransactionId, incomerTransaction] of incomerTransactions.entries()) {
       // Remove possible ping response
       if (incomerTransaction.event === "ping") {
         toResolve.push(
@@ -323,9 +344,8 @@ export class Dispatcher {
       );
 
       // Either the event is a mainTransaction (the incomer is the sender) or a response to a dealed event
-
       if (!concernedIncomer) {
-        // Cache the transaction awaiting for a concernedIncomer ? Trigger specific timer + warning ?
+        // Cache transaction in a specific transactionStore (prefix-cachedTransaction)
         console.warn("No concerned Incomer !!");
 
         continue;
@@ -371,25 +391,13 @@ export class Dispatcher {
           }
         };
 
-        const publishEvent = async() => {
-          const transactionId = await concernedIncomerStore.setTransaction({
-            ...formattedEvent,
-            mainTransaction: incomerTransaction.mainTransaction,
-            relatedTransaction: incomerTransaction.relatedTransaction,
-            resolved: incomerTransaction.resolved
-          });
-
-          await concernedIncomerChannel.publish({
-            ...formattedEvent,
-            metadata: {
-              ...formattedEvent.metadata,
-              transactionId
-            }
-          });
-        };
-
         toResolve.push(
-          publishEvent(),
+          this.publishEvent({
+            concernedStore: concernedIncomerStore,
+            concernedChannel: concernedIncomerChannel,
+            transactionMeta: { ...incomerTransaction },
+            formattedEvent
+          }),
           concernedIncomerStore.setTransaction({
             ...incomerTransaction,
             metadata: {
@@ -422,12 +430,50 @@ export class Dispatcher {
     }
   }
 
+  private async handleInactiveIncomer(
+    incomerStore: IncomerStore,
+    incomerUuid: string
+  ) {
+    const incomer = incomerStore[incomerUuid];
+
+    delete incomerStore[incomerUuid];
+    this.incomerChannels.delete(incomerUuid);
+
+    if (Object.entries(incomerStore).length > 0) {
+      await this.incomerStore.setValue({
+        key: this.treeName,
+        value: incomerStore
+      });
+    }
+    else {
+      await this.incomerStore.deleteValue(this.treeName);
+    }
+
+    const incomerTransactionStore = new TransactionStore({
+      prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomerUuid}`,
+      instance: "incomer"
+    });
+
+    const [incomerTransactions, dispatcherTransactions] = await Promise.all([
+      incomerTransactionStore.getTransactions(),
+      this.dispatcherTransactionStore.getTransactions()
+    ]);
+
+    await this.InactiveIncomerTransactionsResolution({
+      incomerStore,
+      incomerUuid,
+      incomerTransactionStore,
+      incomerTransactions,
+      dispatcherTransactions
+    });
+  }
+
   private async resolveDispatcherTransactions(
     dispatcherTransactions: Transactions<"dispatcher">
   ) {
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
       // If Transaction is already resolved, skip
-      if (dispatcherTransaction.resolved !== null) {
+      if (dispatcherTransaction.resolved) {
         continue;
       }
 
@@ -563,6 +609,7 @@ export class Dispatcher {
       throw new Error("Couldn't find the related incomer");
     }
 
+    // Based on incomer transaction or dispatcher resolution ?
     tree[origin].lastActivity = Date.now();
 
     await this.incomerStore.setValue({
@@ -583,7 +630,7 @@ export class Dispatcher {
     }
 
     const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages["IncomerMessage"] = JSON.parse(message);
+      IncomerChannelMessages["IncomerMessages"] = JSON.parse(message);
 
     try {
       if (!formattedMessage.event || !formattedMessage.metadata) {
@@ -641,9 +688,6 @@ export class Dispatcher {
           await this.approveIncomer(message);
         }
       })
-      .with(P._, () => {
-        throw new Error("Unknown event on Dispatcher Channel");
-      })
       .exhaustive()
       .catch((error) => {
         this.logger.error({ channel: "dispatcher", error: error.message, message });
@@ -652,12 +696,13 @@ export class Dispatcher {
 
   private async handleIncomerMessages(
     channel: string,
-    message: IncomerChannelMessages["IncomerMessage"]
+    message: IncomerChannelMessages["IncomerMessages"]
   ) {
     const { event, metadata } = message;
     const { origin } = metadata;
 
     const logData = {
+      channel,
       ...message,
       uptime: process.uptime()
     };
@@ -699,24 +744,17 @@ export class Dispatcher {
         }
       };
 
-      // Create dispatcher transaction for the concerned incomer
-      const dispatcherTransactionId = await this.dispatcherTransactionStore.setTransaction({
-        ...formattedEvent,
-        mainTransaction: null,
-        relatedTransaction: metadata.transactionId,
-        resolved: false
+      await this.publishEvent({
+        concernedChannel: relatedChannel,
+        transactionMeta: {
+          mainTransaction: false,
+          relatedTransaction: metadata.transactionId,
+          resolved: false
+        },
+        formattedEvent
       });
 
-      // Send the event to the concerned incomer.
-      await relatedChannel.publish({
-        ...formattedEvent,
-        metadata: {
-          ...formattedEvent.metadata,
-          transactionId: dispatcherTransactionId
-        }
-      });
-
-      this.logger.info({ channel, logData }, "injected event");
+      this.logger.info({ ...logData }, "injected event");
     }
   }
 

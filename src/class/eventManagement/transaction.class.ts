@@ -46,7 +46,7 @@ export type Transaction<T extends Instance = Instance> = (
       (
         DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
       ) | (
-        Omit<IncomerChannelMessages["IncomerMessage"], "metadata"> &
+        Omit<IncomerChannelMessages["IncomerMessages"], "metadata"> &
         Pick<IncomerChannelMessages["DispatcherMessages"], "metadata">
       )
     ) & (
@@ -54,7 +54,7 @@ export type Transaction<T extends Instance = Instance> = (
     )
   ) : (
     (
-      DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessage"]
+      DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessages"]
     ) & (
       HandlerTransaction | MainTransaction
     )

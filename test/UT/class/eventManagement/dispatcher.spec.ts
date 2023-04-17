@@ -174,7 +174,7 @@ describe("Dispatcher", () => {
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           await channel.publish({
@@ -201,7 +201,7 @@ describe("Dispatcher", () => {
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: null
+            resolved: false
           });
 
           await channel.publish({
@@ -270,10 +270,9 @@ describe("Dispatcher", () => {
                 ...formattedMessage.metadata,
                 origin: formattedMessage.metadata.to
               },
-              createdAt: Date.now(),
               mainTransaction: false,
               relatedTransaction: formattedMessage.metadata.transactionId,
-              resolved: null
+              resolved: false
             });
 
             index++;
@@ -496,10 +495,9 @@ describe("Dispatcher", () => {
                 prefix,
                 origin: formattedMessage.metadata.to
               },
-              createdAt: Date.now(),
               mainTransaction: false,
               relatedTransaction: formattedMessage.metadata.transactionId,
-              resolved: null
+              resolved: false
             });
 
             index++;
@@ -690,6 +688,33 @@ describe("Dispatcher", () => {
     });
 
     describe("Publishing on the dispatcher channel", () => {
+      describe("Publishing an unknown event", () => {
+        test("it should", async() => {
+          const channel = new Channel({
+            name: "dispatcher"
+          });
+
+          const event = {
+            event: "foo",
+            data: {
+              foo: "bar"
+            },
+            metadata: {
+              origin: "foo",
+              transactionId: "foo"
+            }
+          };
+
+          await channel.publish(event);
+
+          await timers.setTimeout(1_000);
+
+          expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
+          expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
+          expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
+        });
+      });
+
       describe("Publishing well formed register event", () => {
         let incomerName = randomUUID();
         let approved = false;
@@ -934,10 +959,9 @@ describe("Dispatcher", () => {
                       ...formattedMessage.metadata,
                       origin: formattedMessage.metadata.to
                     },
-                    createdAt: Date.now(),
                     mainTransaction: false,
                     relatedTransaction: formattedMessage.metadata.transactionId,
-                    resolved: null
+                    resolved: false
                   });
                 }
               }
@@ -1096,14 +1120,19 @@ describe("Dispatcher", () => {
       describe("Publishing an injected event", () => {
         const firstIncomerName = randomUUID();
         const secondIncomerName = randomUUID();
+        const thirdIncomerName = randomUUID();
         let firstIncomerProvidedUuid;
         let secondIncomerProvidedUuid;
+        let thirdIncomerProvidedUuid;
         let subscriber: Redis;
-        let hasDistributedEvents = false;
+        let hasDistributedEvents: [boolean, boolean] = [false, false];
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
         let secondIncomerTransactionStore: TransactionStore<"incomer">;
+        let thirdIncomerTransactionStore: TransactionStore<"incomer">;
         let dispatcherTransactionStore: TransactionStore<"dispatcher">;
         let mainTransactionId;
+        let secondIncomerTransactionId;
+        let thirdIncomerTransactionId;
 
         beforeAll(async() => {
           subscriber = await initRedis({
@@ -1159,34 +1188,58 @@ describe("Dispatcher", () => {
                     }
                   });
                 }
-                else {
-                  if (formattedMessage.metadata.to === secondIncomerName) {
-                    secondIncomerProvidedUuid = uuid;
-                    secondIncomerTransactionStore = new TransactionStore({
-                      prefix: `${prefix}-${secondIncomerProvidedUuid}`,
-                      instance: "incomer"
-                    });
-                  }
+                else if (formattedMessage.metadata.to === secondIncomerName) {
+                  secondIncomerProvidedUuid = uuid;
+                  secondIncomerTransactionStore = new TransactionStore({
+                    prefix: `${prefix}-${secondIncomerProvidedUuid}`,
+                    instance: "incomer"
+                  });
+                }
+                else if (formattedMessage.metadata.to === thirdIncomerName) {
+                  thirdIncomerProvidedUuid = uuid;
+                  thirdIncomerTransactionStore = new TransactionStore({
+                    prefix: `${prefix}-${thirdIncomerProvidedUuid}`,
+                    instance: "incomer"
+                  });
                 }
 
-                await subscriber.subscribe(`${prefix}-${secondIncomerProvidedUuid}`);
+                await Promise.all([
+                  subscriber.subscribe(`${prefix}-${secondIncomerProvidedUuid}`),
+                  subscriber.subscribe(`${prefix}-${thirdIncomerProvidedUuid}`)
+                ]);
               }
             }
             else {
               if (channel === `${prefix}-${secondIncomerProvidedUuid}`) {
                 if (formattedMessage.event === "foo") {
-                  hasDistributedEvents = true;
-                  await secondIncomerTransactionStore.setTransaction({
+                  hasDistributedEvents[0] = true;
+                  secondIncomerTransactionId = await secondIncomerTransactionStore.setTransaction({
                     ...formattedMessage,
                     metadata: {
                       ...formattedMessage.metadata,
                       origin: formattedMessage.metadata.to
                     },
-                    createdAt: Date.now(),
                     mainTransaction: false,
                     relatedTransaction: formattedMessage.metadata.transactionId,
-                    resolved: null
+                    resolved: false
                   });
+                }
+              }
+              else if (channel === `${prefix}-${thirdIncomerProvidedUuid}`) {
+                if (formattedMessage.event === "foo") {
+                  setTimeout(async() => {
+                    hasDistributedEvents[1] = true;
+                    thirdIncomerTransactionId = await thirdIncomerTransactionStore.setTransaction({
+                      ...formattedMessage,
+                      metadata: {
+                        ...formattedMessage.metadata,
+                        origin: formattedMessage.metadata.to
+                      },
+                      mainTransaction: false,
+                      relatedTransaction: formattedMessage.metadata.transactionId,
+                      resolved: false
+                    });
+                  }, 1600);
                 }
               }
             }
@@ -1229,11 +1282,11 @@ describe("Dispatcher", () => {
           const thirdEvent = {
             event: "register",
             data: {
-              name: "foo",
-              subscribeTo: []
+              name: thirdIncomerName,
+              subscribeTo: [{ name: "foo" }]
             },
             metadata: {
-              origin: "foo",
+              origin: thirdIncomerName,
               prefix
             }
           };
@@ -1289,13 +1342,18 @@ describe("Dispatcher", () => {
         test("it should have distributed the event & resolve the main transaction", async() => {
           await timers.setTimeout(3_000);
 
-          const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId);
-
+          const [mainTransaction, secondIncomerTransaction, thirdIncomerTransaction] = await Promise.all([
+            firstIncomerTransactionStore.getTransactionById(mainTransactionId),
+            secondIncomerTransactionStore.getTransactionById(secondIncomerTransactionId),
+            thirdIncomerTransactionStore.getTransactionById(thirdIncomerTransactionId)
+          ]);
 
           expect(mockedLoggerInfo).toHaveBeenCalled();
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
-          expect(hasDistributedEvents).toBe(true);
-          expect(transaction).toBeNull();
+          expect(hasDistributedEvents).toStrictEqual([true, true]);
+          expect(mainTransaction).toBeNull();
+          expect(secondIncomerTransaction).toBeNull();
+          expect(thirdIncomerTransaction).toBeNull();
         });
       });
     });
