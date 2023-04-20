@@ -1,5 +1,5 @@
 // Import Node.js Dependencies
-import { EventEmitter } from "events";
+import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
@@ -14,7 +14,8 @@ import {
 import { TransactionStore } from "./transaction.class";
 import {
   Prefix,
-  SubscribeTo,
+  EventsCast,
+  EventsSubscribe,
   DispatcherChannelMessages,
   IncomerChannelMessages
 } from "../../types/eventManagement/index";
@@ -42,8 +43,8 @@ function isIncomerChannelMessage(value:
 export type IncomerOptions = {
   /* Service name */
   name: string;
-  /* Commonly used to distinguish envs */
-  subscribeTo: SubscribeTo[];
+  eventsCast: EventsCast;
+  eventsSubscribe: EventsSubscribe;
   eventCallback: (message: Omit<DistributedEventMessage, "metadata">) => Promise<void>;
   prefix?: Prefix;
 };
@@ -51,7 +52,8 @@ export type IncomerOptions = {
 export class Incomer extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
-  readonly subscribeTo: SubscribeTo[];
+  readonly eventsCast: EventsCast;
+  readonly eventsSubscribe: EventsSubscribe;
   readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
   readonly dispatcherTransactionStore: TransactionStore<"dispatcher">;
   readonly dispatcherChannelName: string;
@@ -60,7 +62,7 @@ export class Incomer extends EventEmitter {
 
   protected subscriber: Redis.Redis;
 
-  private privateUuid = randomUUID();
+  private privateUUID = randomUUID();
   private logger: logger.Logger;
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
@@ -106,10 +108,11 @@ export class Incomer extends EventEmitter {
       event: "register",
       data: {
         name: this.name,
-        subscribeTo: this.subscribeTo
+        eventsCast: this.eventsCast,
+        eventsSubscribe: this.eventsSubscribe
       },
       metadata: {
-        origin: this.privateUuid,
+        origin: this.privateUUID,
         prefix: this.prefix
       }
     });
@@ -118,7 +121,7 @@ export class Incomer extends EventEmitter {
       uptime: process.uptime()
     }, "Registering as a new incomer on dispatcher");
 
-    await new Promise((resolve) => this.once("registered", resolve));
+    await once(this, "registered");
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -129,7 +132,7 @@ export class Incomer extends EventEmitter {
     const formattedMessage: DispatcherChannelMessages["DispatcherMessages"] |
       IncomerChannelMessages["DispatcherMessages"] = JSON.parse(message);
 
-    if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUuid) {
+    if (formattedMessage.metadata && formattedMessage.metadata.origin === this.privateUUID) {
       return;
     }
 
@@ -150,7 +153,7 @@ export class Incomer extends EventEmitter {
     channel: string,
     message: DispatcherChannelMessages["DispatcherMessages"]
   ): Promise<void> {
-    if (message.metadata.to !== this.privateUuid) {
+    if (message.metadata.to !== this.privateUUID) {
       return;
     }
 
@@ -231,17 +234,17 @@ export class Incomer extends EventEmitter {
     const { data } = message;
 
     this.incomerChannelName = `${this.prefix ? `${this.prefix}-` : ""}${data.uuid}`;
-    this.privateUuid = data.uuid;
+    this.privateUUID = data.uuid;
 
     await this.subscriber.subscribe(this.incomerChannelName);
 
     this.incomerChannel = new Redis.Channel({
-      name: this.privateUuid,
+      name: this.privateUUID,
       prefix: this.prefix
     });
 
     this.incomerTransactionStore = new TransactionStore({
-      prefix: `${this.prefix ? `${this.prefix}-` : ""}${this.privateUuid}`,
+      prefix: `${this.prefix ? `${this.prefix}-` : ""}${this.privateUUID}`,
       instance: "incomer"
     });
 

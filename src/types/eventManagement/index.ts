@@ -1,10 +1,14 @@
+import { Events } from "../index";
+
 export type Prefix = "local" | "dev" | "preprod" | "prod";
 
-export interface SubscribeTo<T extends string = string> {
+export type EventsCast<T extends string | keyof Events = string> = T[];
+
+export type EventsSubscribe<T extends string | keyof Events = string> = {
   name: T;
   delay?: number;
   horizontalScale?: boolean;
-}
+}[];
 
 export interface DispatcherTransactionMetadata {
   origin: string;

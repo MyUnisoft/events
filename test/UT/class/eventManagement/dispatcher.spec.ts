@@ -77,7 +77,7 @@ describe("Dispatcher", () => {
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
       expect(dispatcher.prefix).toBe("");
-      expect(dispatcher.privateUuid).toBeDefined();
+      expect(dispatcher.privateUUID).toBeDefined();
     });
 
     test("Publishing a malformed message, it should log a new Error", async() => {
@@ -124,7 +124,8 @@ describe("Dispatcher", () => {
           event: "register",
           data: {
             name: incomerName,
-            subscribeTo: []
+            eventsCast: [],
+            eventsSubscribe: []
           },
           metadata: {
             origin: incomerName,
@@ -152,7 +153,8 @@ describe("Dispatcher", () => {
           event: "register",
           data: {
             name: incomerName,
-            subscribeTo: []
+            eventsCast: [],
+            eventsSubscribe: []
           },
           metadata: {
             origin: incomerName
@@ -253,12 +255,12 @@ describe("Dispatcher", () => {
           const formattedMessage = JSON.parse(message);
 
           if (formattedMessage.event === "approvement") {
-            const providedUuid = formattedMessage.data.uuid;
+            const providedUUID = formattedMessage.data.uuid;
 
-            await subscriber.subscribe(providedUuid);
+            await subscriber.subscribe(providedUUID);
 
             incomerTransactionStore = new TransactionStore({
-              prefix: providedUuid,
+              prefix: providedUUID,
               instance: "incomer"
             });
           }
@@ -291,7 +293,8 @@ describe("Dispatcher", () => {
           event: "register",
           data: {
             name: incomerName,
-            subscribeTo: []
+            eventsCast: [],
+            eventsSubscribe: []
           },
           metadata: {
             origin: incomerName
@@ -309,7 +312,8 @@ describe("Dispatcher", () => {
           event: "register",
           data: {
             name: incomerName,
-            subscribeTo: []
+            eventsCast: [],
+            eventsSubscribe: []
           },
           metadata: {
             origin: incomerName,
@@ -368,7 +372,7 @@ describe("Dispatcher", () => {
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
       expect(dispatcher.prefix).toBe("local-");
-      expect(dispatcher.privateUuid).toBeDefined();
+      expect(dispatcher.privateUUID).toBeDefined();
     });
 
     describe("Publishing on the dispatcher channel", () => {
@@ -409,7 +413,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: incomerName,
-              subscribeTo: []
+              eventsCast: [],
+              eventsSubscribe: []
             },
             metadata: {
               origin: incomerName,
@@ -424,7 +429,7 @@ describe("Dispatcher", () => {
             resolved: false
           });
 
-          const foo = await dispatcherTransactionStore.getTransactionById(transactionId);
+          await dispatcherTransactionStore.getTransactionById(transactionId);
 
           await channel.publish({
             ...event,
@@ -518,7 +523,8 @@ describe("Dispatcher", () => {
           event: "register",
           data: {
             name: incomerName,
-            subscribeTo: []
+            eventsCast: [],
+            eventsSubscribe: []
           },
           metadata: {
             origin: incomerName,
@@ -537,7 +543,8 @@ describe("Dispatcher", () => {
           event: "register",
           data: {
             name: incomerName,
-            subscribeTo: []
+            eventsCast: [],
+            eventsSubscribe: []
           },
           metadata: {
             origin: incomerName,
@@ -608,7 +615,7 @@ describe("Dispatcher", () => {
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
       expect(dispatcher.prefix).toBe("");
-      expect(dispatcher.privateUuid).toBeDefined();
+      expect(dispatcher.privateUUID).toBeDefined();
     });
 
     describe("On any channel", () => {
@@ -751,7 +758,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: incomerName,
-              subscribeTo: []
+              eventsCast: [],
+              eventsSubscribe: []
             },
             metadata: {
               origin: incomerName
@@ -877,8 +885,8 @@ describe("Dispatcher", () => {
       describe("Publishing an injected event", () => {
         const firstIncomerName = randomUUID();
         const secondIncomerName = randomUUID();
-        let firstIncomerProvidedUuid;
-        let secondIncomerProvidedUuid;
+        let firstIncomerProvidedUUID;
+        let secondIncomerProvidedUUID;
         let subscriber: Redis;
         let hasDistributedEvents = false;
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
@@ -902,7 +910,7 @@ describe("Dispatcher", () => {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.metadata.to === firstIncomerName) {
-                  firstIncomerProvidedUuid = uuid;
+                  firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
                     prefix: uuid,
@@ -910,7 +918,7 @@ describe("Dispatcher", () => {
                   });
 
                   const exclusiveChannel = new Channel({
-                    name: firstIncomerProvidedUuid
+                    name: firstIncomerProvidedUUID
                   });
 
                   const event = {
@@ -919,7 +927,7 @@ describe("Dispatcher", () => {
                       foo: "foo"
                     },
                     metadata: {
-                      origin: firstIncomerProvidedUuid
+                      origin: firstIncomerProvidedUUID
                     }
                   }
 
@@ -939,18 +947,18 @@ describe("Dispatcher", () => {
                   });
                 }
                 else {
-                  secondIncomerProvidedUuid = uuid;
+                  secondIncomerProvidedUUID = uuid;
                   secondIncomerTransactionStore = new TransactionStore({
-                    prefix: secondIncomerProvidedUuid,
+                    prefix: secondIncomerProvidedUUID,
                     instance: "incomer"
                   });
                 }
 
-                await subscriber.subscribe(secondIncomerProvidedUuid);
+                await subscriber.subscribe(secondIncomerProvidedUUID);
               }
             }
             else {
-              if (channel === secondIncomerProvidedUuid) {
+              if (channel === secondIncomerProvidedUUID) {
                 if (formattedMessage.event === "foo") {
                   hasDistributedEvents = true;
                   await secondIncomerTransactionStore.setTransaction({
@@ -980,7 +988,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: firstIncomerName,
-              subscribeTo: []
+              eventsCast: ["foo"],
+              eventsSubscribe: []
             },
             metadata: {
               origin: firstIncomerName
@@ -991,7 +1000,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: secondIncomerName,
-              subscribeTo: [{ name: "foo" }]
+              eventsCast: [],
+              eventsSubscribe: [{ name: "foo" }]
             },
             metadata: {
               origin: secondIncomerName
@@ -1081,7 +1091,7 @@ describe("Dispatcher", () => {
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
       expect(dispatcher.prefix).toBe("local-");
-      expect(dispatcher.privateUuid).toBeDefined();
+      expect(dispatcher.privateUUID).toBeDefined();
     });
 
     describe("Publishing on a dedicated channel", () => {
@@ -1121,9 +1131,9 @@ describe("Dispatcher", () => {
         const firstIncomerName = randomUUID();
         const secondIncomerName = randomUUID();
         const thirdIncomerName = randomUUID();
-        let firstIncomerProvidedUuid;
-        let secondIncomerProvidedUuid;
-        let thirdIncomerProvidedUuid;
+        let firstIncomerProvidedUUID;
+        let secondIncomerProvidedUUID;
+        let thirdIncomerProvidedUUID;
         let subscriber: Redis;
         let hasDistributedEvents: [boolean, boolean] = [false, false];
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
@@ -1150,7 +1160,7 @@ describe("Dispatcher", () => {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.metadata.to === firstIncomerName) {
-                  firstIncomerProvidedUuid = uuid;
+                  firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
                     prefix: `${prefix}-${uuid}`,
@@ -1158,7 +1168,7 @@ describe("Dispatcher", () => {
                   });
 
                   const exclusiveChannel = new Channel({
-                    name: firstIncomerProvidedUuid,
+                    name: firstIncomerProvidedUUID,
                     prefix
                   });
 
@@ -1168,7 +1178,7 @@ describe("Dispatcher", () => {
                       foo: "foo"
                     },
                     metadata: {
-                      origin: firstIncomerProvidedUuid,
+                      origin: firstIncomerProvidedUUID,
                       prefix
                     }
                   }
@@ -1189,28 +1199,28 @@ describe("Dispatcher", () => {
                   });
                 }
                 else if (formattedMessage.metadata.to === secondIncomerName) {
-                  secondIncomerProvidedUuid = uuid;
+                  secondIncomerProvidedUUID = uuid;
                   secondIncomerTransactionStore = new TransactionStore({
-                    prefix: `${prefix}-${secondIncomerProvidedUuid}`,
+                    prefix: `${prefix}-${secondIncomerProvidedUUID}`,
                     instance: "incomer"
                   });
                 }
                 else if (formattedMessage.metadata.to === thirdIncomerName) {
-                  thirdIncomerProvidedUuid = uuid;
+                  thirdIncomerProvidedUUID = uuid;
                   thirdIncomerTransactionStore = new TransactionStore({
-                    prefix: `${prefix}-${thirdIncomerProvidedUuid}`,
+                    prefix: `${prefix}-${thirdIncomerProvidedUUID}`,
                     instance: "incomer"
                   });
                 }
 
                 await Promise.all([
-                  subscriber.subscribe(`${prefix}-${secondIncomerProvidedUuid}`),
-                  subscriber.subscribe(`${prefix}-${thirdIncomerProvidedUuid}`)
+                  subscriber.subscribe(`${prefix}-${secondIncomerProvidedUUID}`),
+                  subscriber.subscribe(`${prefix}-${thirdIncomerProvidedUUID}`)
                 ]);
               }
             }
             else {
-              if (channel === `${prefix}-${secondIncomerProvidedUuid}`) {
+              if (channel === `${prefix}-${secondIncomerProvidedUUID}`) {
                 if (formattedMessage.event === "foo") {
                   hasDistributedEvents[0] = true;
                   secondIncomerTransactionId = await secondIncomerTransactionStore.setTransaction({
@@ -1225,7 +1235,7 @@ describe("Dispatcher", () => {
                   });
                 }
               }
-              else if (channel === `${prefix}-${thirdIncomerProvidedUuid}`) {
+              else if (channel === `${prefix}-${thirdIncomerProvidedUUID}`) {
                 if (formattedMessage.event === "foo") {
                   setTimeout(async() => {
                     hasDistributedEvents[1] = true;
@@ -1259,7 +1269,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: firstIncomerName,
-              subscribeTo: []
+              eventsCast: ["foo"],
+              eventsSubscribe: []
             },
             metadata: {
               origin: firstIncomerName,
@@ -1271,7 +1282,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: secondIncomerName,
-              subscribeTo: [{ name: "foo" }]
+              eventsCast: [],
+              eventsSubscribe: [{ name: "foo" }]
             },
             metadata: {
               origin: secondIncomerName,
@@ -1283,7 +1295,8 @@ describe("Dispatcher", () => {
             event: "register",
             data: {
               name: thirdIncomerName,
-              subscribeTo: [{ name: "foo" }]
+              eventsCast: [],
+              eventsSubscribe: [{ name: "foo" }]
             },
             metadata: {
               origin: thirdIncomerName,
@@ -1382,7 +1395,7 @@ describe("Dispatcher", () => {
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
       expect(dispatcher.prefix).toBe("");
-      expect(dispatcher.privateUuid).toBeDefined();
+      expect(dispatcher.privateUUID).toBeDefined();
     });
   });
 });

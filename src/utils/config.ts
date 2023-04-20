@@ -1,13 +1,13 @@
-export const redisPort = process.env.MYUNISOFT_REDIS_PORT ?? 6379;
+export const redisPort = process.env.MYUNISOFT_REDIS_PORT ?? 6379 as const;
 
-export const kIncomerStoreName = "incomer";
-export const kTransactionStoreName = "transaction";
+export const kIncomerStoreName = "incomer" as const;
+export const kTransactionStoreName = "transaction" as const;
 
 export const channels = {
   dispatcher: "dispatcher"
-};
+} as const;
 
-export const predefinedEvents = {
+export const predefinedEvents = Object.freeze({
   dispatcher: {
     /* Events relative to the registration of a new incomer */
     registration: {
@@ -26,4 +26,4 @@ export const predefinedEvents = {
     }
   },
   ack: "ack"
-};
+});

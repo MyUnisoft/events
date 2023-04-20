@@ -2,7 +2,8 @@
 import {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
-  SubscribeTo
+  EventsSubscribe,
+  EventsCast
 } from "./index";
 
 
@@ -26,8 +27,8 @@ type IncomerMessages = IncomerRegistrationMessage;
 interface IncomerRegistrationDataIn {
   /* Service name */
   name: string;
-  /* Commonly used to distinguish envs */
-  subscribeTo: SubscribeTo[];
+  eventsCast: EventsCast;
+  eventsSubscribe: EventsSubscribe;
 }
 
 export type IncomerRegistrationMessage = {

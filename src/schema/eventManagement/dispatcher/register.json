@@ -12,7 +12,13 @@
           "name": {
             "type": "string"
           },
-          "subscribeTo": {
+          "eventsCast": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "eventsSubscribe": {
             "type": "array",
             "items": {
               "type": "object",
@@ -32,7 +38,7 @@
             }
           }
         },
-        "required": ["name", "subscribeTo"],
+        "required": ["name", "eventsCast", "eventsSubscribe"],
         "additionalProperties": false
       },
       "metadata": {

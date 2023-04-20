@@ -84,19 +84,21 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
   }
 
   async getTransactions(): Promise<Transactions<T>> {
-    const transactionsKey = await this.redis.keys(`${this.key}-*`);
+    const transactionsKeys = await this.redis.keys(`${this.key}-*`);
 
-    const transactions: Transactions<T> = new Map();
+    const mappedTransactions: Transactions<T> = new Map();
 
-    for (const transactionKey of transactionsKey) {
-      const transaction = await super.getValue(transactionKey);
-      if (!transaction) {
-        continue;
+    const transactions = await Promise.all(transactionsKeys.map(
+      (transactionKey) => super.getValue(transactionKey)
+    ));
+
+    for (const transaction of transactions) {
+      if (transaction !== null) {
+        mappedTransactions.set(transaction.metadata.transactionId, transaction);
       }
-      transactions.set(transaction.metadata.transactionId, transaction);
     }
-
-    return transactions;
+    
+    return mappedTransactions;
   }
 
   async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
