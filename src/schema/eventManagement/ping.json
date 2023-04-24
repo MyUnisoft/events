@@ -2,14 +2,14 @@
   "ping": {
     "type": "object",
     "properties": {
-      "event": {
+      "name": {
         "type": "string",
         "pattern": "ping"
       },
       "data": {
         "type": "null"
       },
-      "metadata": {
+      "redisMetadata": {
         "type": "object",
         "properties": {
           "origin": {
@@ -23,7 +23,7 @@
         "additionalProperties": false
       }
     },
-    "required": ["event", "metadata"],
+    "required": ["name", "redisMetadata"],
     "additionalProperties": false
   }
 }

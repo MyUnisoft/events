@@ -9,7 +9,9 @@ const ajv = new Ajv();
 
 export type OperationFunctions = Record<string, any>;
 
-type MappedEventsValidationFunction = Map<string, Map<string, ValidateFunction<OperationFunctions>>>;
+export type CustomEventsValidationFunctions = Map<string, ValidateFunction<OperationFunctions>>;
+
+type MappedEventsValidationFunction = Map<string, CustomEventsValidationFunctions>;
 
 export const eventsValidationFunction: MappedEventsValidationFunction = new Map();
 

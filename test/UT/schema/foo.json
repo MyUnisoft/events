@@ -16,7 +16,7 @@
         "required": ["foo"],
         "additionalProperties": false
       },
-      "metadata": {
+      "redisMetadata": {
         "type": "object",
         "properties": {
           "origin": {
@@ -33,7 +33,7 @@
         "additionalProperties": false
       }
     },
-    "required": ["event", "data", "metadata"],
+    "required": ["event", "data", "redisMetadata"],
     "additionalProperties": false
   }
 }

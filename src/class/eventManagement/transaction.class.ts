@@ -46,8 +46,8 @@ export type Transaction<T extends Instance = Instance> = (
       (
         DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
       ) | (
-        Omit<IncomerChannelMessages["IncomerMessages"], "metadata"> &
-        Pick<IncomerChannelMessages["DispatcherMessages"], "metadata">
+        Omit<IncomerChannelMessages["IncomerMessages"], "redisMetadata"> &
+        Pick<IncomerChannelMessages["DispatcherMessages"], "redisMetadata">
       )
     ) & (
       SpreedTransaction | MainTransaction
@@ -63,8 +63,8 @@ export type Transaction<T extends Instance = Instance> = (
   aliveSince: number;
 }
 
-export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "metadata" | "aliveSince"> & {
-  metadata: MetadataWithoutTransactionId<T>
+export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "redisMetadata" | "aliveSince"> & {
+  redisMetadata: MetadataWithoutTransactionId<T>
 };
 
 export type Transactions<T extends Instance = Instance> = Map<string, Transaction<T>>;
@@ -94,10 +94,10 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
 
     for (const transaction of transactions) {
       if (transaction !== null) {
-        mappedTransactions.set(transaction.metadata.transactionId, transaction);
+        mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
       }
     }
-    
+
     return mappedTransactions;
   }
 
@@ -108,8 +108,8 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
 
     const formattedTransaction = {
       ...transaction,
-      metadata: {
-        ...transaction.metadata,
+      redisMetadata: {
+        ...transaction.redisMetadata,
         transactionId
       },
       aliveSince: Date.now()

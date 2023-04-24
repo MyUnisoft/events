@@ -2,7 +2,7 @@
   "register": {
     "type": "object",
     "properties": {
-      "event": {
+      "name": {
         "type": "string",
         "pattern": "register"
       },
@@ -41,7 +41,7 @@
         "required": ["name", "eventsCast", "eventsSubscribe"],
         "additionalProperties": false
       },
-      "metadata": {
+      "redisMetadata": {
         "type": "object",
         "properties": {
           "origin": {
@@ -58,7 +58,7 @@
         "additionalProperties": false
       }
     },
-    "required": ["event", "data", "metadata"],
+    "required": ["name", "data", "redisMetadata"],
     "additionalProperties": false
   }
 }

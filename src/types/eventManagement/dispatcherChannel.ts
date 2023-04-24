@@ -6,7 +6,6 @@ import {
   EventsCast
 } from "./index";
 
-
 // Send by the a Dispatcher
 type DispatcherMessages = DispatcherRegistrationMessage;
 
@@ -15,9 +14,9 @@ interface DispatcherRegistrationData {
 }
 
 export type DispatcherRegistrationMessage = {
-  event: "approvement";
+  name: "approvement";
   data: DispatcherRegistrationData;
-  metadata: DispatcherTransactionMetadata;
+  redisMetadata: DispatcherTransactionMetadata;
 }
 
 // Send by an Incomer
@@ -32,9 +31,9 @@ interface IncomerRegistrationDataIn {
 }
 
 export type IncomerRegistrationMessage = {
-  event: "register";
+  name: "register";
   data: IncomerRegistrationDataIn;
-  metadata: IncomerTransactionMetadata;
+  redisMetadata: IncomerTransactionMetadata;
 }
 
 export type DispatcherChannelMessages = {

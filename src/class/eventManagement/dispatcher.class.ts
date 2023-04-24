@@ -28,6 +28,7 @@ import {
 import * as ChannelsMessages from "../../schema/eventManagement/index";
 import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
 import { DispatcherPingMessage } from "../../types/eventManagement/incomerChannel";
+import { CustomEventsValidationFunctions } from "utils";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -53,39 +54,39 @@ type IncomerStore = Record<string, RegisteredIncomer>;
 export interface DispatcherOptions {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
-  eventsValidationFunction?: Map<string, ValidateFunction>;
+  eventsValidationFunction?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
   pingInterval?: number;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
   idleTime?: number;
 }
 
-type DispatcherChannelEvents = { event: "register" };
+type DispatcherChannelEvents = { name: "register" };
 
-interface IncomerCustomChannelMessage {
-  event: string;
+type IncomerCustomChannelMessage = Record<string, any> & {
+  name: string;
   data: Record<string, any>;
-  metadata: DispatcherTransactionMetadata;
+  redisMetadata: DispatcherTransactionMetadata;
 }
 
 function isDispatcherChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
   IncomerChannelMessages["IncomerMessages"]
 ): value is DispatcherChannelMessages["IncomerMessages"] {
-  return value.event === "register";
+  return value.name === "register";
 }
 
 function isIncomerChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
   IncomerChannelMessages["IncomerMessages"]
 ): value is IncomerChannelMessages["IncomerMessages"] {
-  return value.event !== "register";
+  return value.name !== "register";
 }
 
 function isIncomerRegistrationMessage(
   value: DispatcherChannelMessages["IncomerMessages"]
 ): value is IncomerRegistrationMessage {
-  return value.event === "register";
+  return value.name === "register";
 }
 
 export class Dispatcher {
@@ -111,7 +112,7 @@ export class Dispatcher {
   private checkRelatedTransactionInterval: NodeJS.Timer;
   private idleTime: number;
 
-  public eventsValidationFunction: Map<string, ValidateFunction>;
+  public eventsValidationFunction: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
 
   constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
     this.prefix = options.prefix ? `${options.prefix}-` : "";
@@ -222,9 +223,9 @@ export class Dispatcher {
 
       if (incomerChannel) {
         const event: DispatcherPingMessage = {
-          event: "ping",
+          name: "ping",
           data: null,
-          metadata: {
+          redisMetadata: {
             origin: this.privateUUID,
             to: uuid
           }
@@ -305,8 +306,8 @@ export class Dispatcher {
 
     await concernedChannel.publish({
       ...formattedEvent,
-      metadata: {
-        ...formattedEvent.metadata,
+      redisMetadata: {
+        ...formattedEvent.redisMetadata,
         transactionId
       }
     });
@@ -332,7 +333,7 @@ export class Dispatcher {
 
     for (const [incomerTransactionId, incomerTransaction] of incomerTransactions.entries()) {
       // Remove possible ping response
-      if (incomerTransaction.event === "ping") {
+      if (incomerTransaction.name === "ping") {
         toResolve.push(
           incomerTransactionStore.deleteTransaction(incomerTransactionId),
           this.dispatcherTransactionStore.deleteTransaction(incomerTransaction.relatedTransaction)
@@ -343,7 +344,7 @@ export class Dispatcher {
 
       const concernedIncomer = Object.values(incomers).find(
         (incomer) => incomer.eventsCast.find(
-          (castedEvent) => castedEvent === incomerTransaction.event
+          (castedEvent) => castedEvent === incomerTransaction.name
         )
       );
 
@@ -366,7 +367,7 @@ export class Dispatcher {
       });
 
       if (incomerTransaction.mainTransaction) {
-        if (incomerTransaction.event === "register") {
+        if (incomerTransaction.name === "register") {
           const relatedDispatcherTransactionId = Object.keys(dispatcherTransactions)
             .find(
               (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction ===
@@ -385,8 +386,8 @@ export class Dispatcher {
         toResolve.push(
           concernedIncomerStore.setTransaction({
             ...incomerTransaction,
-            metadata: {
-              ...incomerTransaction.metadata,
+            redisMetadata: {
+              ...incomerTransaction.redisMetadata,
               origin: concernedIncomer.providedUUID
             }
           }),
@@ -400,7 +401,7 @@ export class Dispatcher {
     await Promise.all(toResolve);
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of Object.entries(dispatcherTransactions)) {
-      if (dispatcherTransaction.metadata.to === incomerUUID && dispatcherTransaction.event === "ping") {
+      if (dispatcherTransaction.redisMetadata.to === incomerUUID && dispatcherTransaction.name === "ping") {
         await this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
       }
     }
@@ -454,7 +455,7 @@ export class Dispatcher {
 
       const concernedIncomer = Object.values(incomers).find(
         (incomer) => incomer.eventsCast.find(
-          (castedEvent) => castedEvent === backedUpTransaction.event
+          (castedEvent) => castedEvent === backedUpTransaction.name
         )
       );
 
@@ -470,8 +471,8 @@ export class Dispatcher {
       await Promise.all([
         concernedIncomerStore.setTransaction({
           ...backedUpTransaction,
-          metadata: {
-            ...backedUpTransaction.metadata,
+          redisMetadata: {
+            ...backedUpTransaction.redisMetadata,
             origin: concernedIncomer.providedUUID
           }
         }),
@@ -493,10 +494,10 @@ export class Dispatcher {
         continue;
       }
 
-      if (dispatcherTransaction.metadata.to) {
+      if (dispatcherTransaction.redisMetadata.to) {
         const tree = await this.getTree();
 
-        if (!tree[dispatcherTransaction.metadata.to]) {
+        if (!tree[dispatcherTransaction.redisMetadata.to]) {
           const relatedTransactionId = Object.keys(backedUpTransactions).find(
             (backedUpTransactionId) => backedUpTransactions[backedUpTransactionId].relatedTransaction ===
               dispatcherTransactionId
@@ -516,9 +517,9 @@ export class Dispatcher {
           continue;
         }
 
-        const prefix = tree[dispatcherTransaction.metadata.to].prefix ?? "";
+        const prefix = tree[dispatcherTransaction.redisMetadata.to].prefix ?? "";
         const relatedIncomerTransactionStore = new TransactionStore({
-          prefix: `${prefix ? `${prefix}-` : ""}${dispatcherTransaction.metadata.to}`,
+          prefix: `${prefix ? `${prefix}-` : ""}${dispatcherTransaction.redisMetadata.to}`,
           instance: "incomer"
         });
 
@@ -614,8 +615,8 @@ export class Dispatcher {
   }
 
   private async updateIncomerState(transaction: Transaction<"incomer">) {
-    const { aliveSince, metadata } = transaction;
-    const { origin } = metadata;
+    const { aliveSince, redisMetadata } = transaction;
+    const { origin } = redisMetadata;
     const tree = await this.getTree();
 
     if (!tree[origin]) {
@@ -646,22 +647,34 @@ export class Dispatcher {
       IncomerChannelMessages["IncomerMessages"] = JSON.parse(message);
 
     try {
-      if (!formattedMessage.event || !formattedMessage.metadata) {
+      if (!formattedMessage.name || !formattedMessage.redisMetadata) {
         throw new Error("Malformed message");
       }
 
       // Avoid reacting to his own message
-      if (formattedMessage.metadata.origin === this.privateUUID) {
+      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
         return;
       }
 
-      const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.event);
-      if (!eventValidationSchema) {
-        throw new Error("Unknown Event");
-      }
+      if (formattedMessage.name === "register") {
+        const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.name) as
+          ValidateFunction<Record<string, any>> | null;
 
-      if (!eventValidationSchema(formattedMessage)) {
-        throw new Error("Malformed message");
+        if (!eventValidationSchema) {
+          throw new Error("Unknown Event");
+        }
+
+        if (!eventValidationSchema(formattedMessage)) {
+          throw new Error("Malformed message");
+        }
+      }
+      else {
+        const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.name) as
+          CustomEventsValidationFunctions | null;
+
+        if (!eventValidationSchema) {
+          throw new Error("Unknown Event");
+        }
       }
 
       if (channel === this.dispatcherChannelName) {
@@ -685,7 +698,7 @@ export class Dispatcher {
     channel: string,
     message: DispatcherChannelMessages["IncomerMessages"]
   ) {
-    const { event } = message;
+    const { name } = message;
 
     const logData = {
       channel,
@@ -693,8 +706,8 @@ export class Dispatcher {
       uptime: process.uptime()
     };
 
-    match<DispatcherChannelEvents>({ event })
-      .with({ event: "register" }, async() => {
+    match<DispatcherChannelEvents>({ name })
+      .with({ name: "register" }, async() => {
         this.logger.info(logData, "New Registration on Dispatcher Channel");
 
         if (isIncomerRegistrationMessage(message)) {
@@ -711,8 +724,8 @@ export class Dispatcher {
     channel: string,
     message: IncomerChannelMessages["IncomerMessages"]
   ) {
-    const { event, metadata } = message;
-    const { origin } = metadata;
+    const { name, redisMetadata } = message;
+    const { origin } = redisMetadata;
 
     const logData = {
       channel,
@@ -726,11 +739,18 @@ export class Dispatcher {
     }
 
     const concernedIncomers = Object.values(incomerTree)
-      .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === event));
+      .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name));
+
+    if (concernedIncomers.length === 0) {
+      this.logger.warn(logData, "No concerned Incomer found");
+
+      // Store in recovery state
+      return;
+    }
 
     const filteredConcernedIncomers: RegisteredIncomer[] = [];
     for (const incomer of concernedIncomers) {
-      const relatedEvent = incomer.eventsSubscribe.find((value) => value.name === event);
+      const relatedEvent = incomer.eventsSubscribe.find((value) => value.name === name);
 
       // Prevent publishing an event to multiple instance of a same service if no horizontalScale of the event
       if (!relatedEvent.horizontalScale && filteredConcernedIncomers.find((value) => value.name === incomer.name)) {
@@ -751,7 +771,7 @@ export class Dispatcher {
 
       const formattedEvent = {
         ...message,
-        metadata: {
+        redisMetadata: {
           origin: this.privateUUID,
           to: incomer.providedUUID
         }
@@ -761,21 +781,26 @@ export class Dispatcher {
         concernedChannel: relatedChannel,
         transactionMeta: {
           mainTransaction: false,
-          relatedTransaction: metadata.transactionId,
+          relatedTransaction: redisMetadata.transactionId,
           resolved: false
         },
         formattedEvent
       });
 
-      this.logger.info({ ...logData }, "redistributed injected event");
+      this.logger.info(logData, "redistributed injected event");
     }
   }
 
   private async approveIncomer(message: IncomerRegistrationMessage) {
-    const { data, metadata } = message;
-    const { prefix, origin, transactionId } = metadata;
+    const { data, redisMetadata } = message;
+    const { prefix, origin, transactionId } = redisMetadata;
 
-    const relatedTransaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
+    const relatedTransactionStore = new TransactionStore<"incomer">({
+      prefix: `${prefix ? `${prefix}-` : ""}${origin}`,
+      instance: "incomer"
+    });
+
+    const relatedTransaction = await relatedTransactionStore.getTransactionById(transactionId);
     if (!relatedTransaction) {
       throw new Error("No related transaction found next to register event");
     }
@@ -822,19 +847,20 @@ export class Dispatcher {
     await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
 
     const event: DispatcherRegistrationMessage = {
-      event: "approvement",
+      name: "approvement",
       data: {
         uuid: providedUUID
       },
-      metadata: {
+      redisMetadata: {
         origin: this.privateUUID,
-        to: metadata.origin
+        to: redisMetadata.origin
       }
     };
 
     // Approve the service & send him info so he can use the dedicated channel
     await Promise.all([
       this.dispatcherChannel.publish(event),
+      relatedTransactionStore.deleteTransaction(transactionId),
       this.dispatcherTransactionStore.deleteTransaction(transactionId)
     ]);
 

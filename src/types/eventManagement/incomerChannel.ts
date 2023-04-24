@@ -3,10 +3,18 @@ import {
   DispatcherTransactionMetadata, IncomerTransactionMetadata
 } from "./index";
 
-export type DispatcherPingMessage = { event: "ping", data: null, metadata: DispatcherTransactionMetadata };
-export type DistributedEventMessage = { event: string, data: Record<string, any>, metadata: DispatcherTransactionMetadata };
+export type DispatcherPingMessage = { name: "ping", data: null, redisMetadata: DispatcherTransactionMetadata };
+export type DistributedEventMessage = Record<string, any> & {
+  name: string;
+  data: Record<string, any>;
+  redisMetadata: DispatcherTransactionMetadata;
+};
 
-export type EventMessage = { event: string, data: Record<string, any>, metadata: IncomerTransactionMetadata };
+export type EventMessage = Record<string, any> & {
+  name: string;
+  data: Record<string, any>;
+  redisMetadata: IncomerTransactionMetadata;
+};
 
 export type IncomerChannelMessages = {
   IncomerMessages: EventMessage;
