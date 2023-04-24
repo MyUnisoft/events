@@ -94,20 +94,6 @@ describe("Dispatcher", () => {
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
 
-    test("Publishing a malformed message, it should log a new Error", async() => {
-      const channel = new Channel({
-        name: "dispatcher"
-      });
-
-      await channel.publish({ event: "foo" });
-
-      await timers.setTimeout(1_000);
-
-      expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: { event: "foo" }, error: "Malformed message" });
-      expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
-      expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
-    });
-
     describe("Publishing a well formed register event", () => {
       let incomerName = randomUUID();
 
@@ -121,13 +107,13 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          event: "register",
+          name: "register",
           data: {
             name: incomerName,
             eventsCast: [],
             eventsSubscribe: []
           },
-          metadata: {
+          redisMetadata: {
             origin: incomerName,
             transactionId: "foo"
           }
@@ -147,16 +133,16 @@ describe("Dispatcher", () => {
 
       describe("Publishing a well formed register event but multiple times", () => {
         let channel;
-        let dispatcherTransactionStore;
+        let incomerTransactionStore: TransactionStore<"incomer">;
 
         const event = {
-          event: "register",
+          name: "register",
           data: {
             name: incomerName,
             eventsCast: [],
             eventsSubscribe: []
           },
-          metadata: {
+          redisMetadata: {
             origin: incomerName
           }
         };
@@ -166,13 +152,14 @@ describe("Dispatcher", () => {
             name: "dispatcher"
           });
 
-          dispatcherTransactionStore = new TransactionStore({
-            instance: "dispatcher"
+          // jest.clearAllMocks();
+
+          incomerTransactionStore = new TransactionStore({
+            prefix: incomerName,
+            instance: "incomer"
           });
 
-          jest.clearAllMocks();
-
-          const transactionId = await dispatcherTransactionStore.setTransaction({
+          const transactionId = await incomerTransactionStore.setTransaction({
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
@@ -181,8 +168,8 @@ describe("Dispatcher", () => {
 
           await channel.publish({
             ...event,
-            metadata: {
-              ...event.metadata,
+            redisMetadata: {
+              ...event.redisMetadata,
               transactionId
             }
           });
@@ -199,7 +186,7 @@ describe("Dispatcher", () => {
         });
 
         test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
-          const transactionId = await dispatcherTransactionStore.setTransaction({
+          const transactionId = await incomerTransactionStore.setTransaction({
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
@@ -208,8 +195,8 @@ describe("Dispatcher", () => {
 
           await channel.publish({
             ...event,
-            metadata: {
-              ...event.metadata,
+            redisMetadata: {
+              ...event.redisMetadata,
               transactionId
             }
           });
@@ -221,8 +208,8 @@ describe("Dispatcher", () => {
             channel: "dispatcher",
             message: {
               ...event,
-              metadata: {
-                ...event.metadata,
+              redisMetadata: {
+                ...event.redisMetadata,
                 transactionId
               }
             },
@@ -254,7 +241,7 @@ describe("Dispatcher", () => {
         subscriber.on("message", async(channel, message) => {
           const formattedMessage = JSON.parse(message);
 
-          if (formattedMessage.event === "approvement") {
+          if (formattedMessage.name === "approvement") {
             const providedUUID = formattedMessage.data.uuid;
 
             await subscriber.subscribe(providedUUID);
@@ -264,16 +251,16 @@ describe("Dispatcher", () => {
               instance: "incomer"
             });
           }
-          else if (formattedMessage.event === "ping" && index === 0) {
-            pingTransactionId = formattedMessage.metadata.transactionId;
+          else if (formattedMessage.name === "ping" && index === 0) {
+            pingTransactionId = formattedMessage.redisMetadata.transactionId;
             pongTransactionId = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
-              metadata: {
-                ...formattedMessage.metadata,
-                origin: formattedMessage.metadata.to
+              redisMetadata: {
+                ...formattedMessage.redisMetadata,
+                origin: formattedMessage.redisMetadata.to
               },
               mainTransaction: false,
-              relatedTransaction: formattedMessage.metadata.transactionId,
+              relatedTransaction: formattedMessage.redisMetadata.transactionId,
               resolved: false
             });
 
@@ -290,18 +277,23 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          event: "register",
+          name: "register",
           data: {
             name: incomerName,
             eventsCast: [],
             eventsSubscribe: []
           },
-          metadata: {
+          redisMetadata: {
             origin: incomerName
           }
         };
 
-        const transactionId = await dispatcherTransactionStore.setTransaction({
+        incomerTransactionStore = new TransactionStore({
+          prefix: incomerName,
+          instance: "incomer"
+        });
+
+        const transactionId = await incomerTransactionStore.setTransaction({
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
@@ -309,13 +301,13 @@ describe("Dispatcher", () => {
         });
 
         await channel.publish({
-          event: "register",
+          name: "register",
           data: {
             name: incomerName,
             eventsCast: [],
             eventsSubscribe: []
           },
-          metadata: {
+          redisMetadata: {
             origin: incomerName,
             transactionId
           }
@@ -330,7 +322,7 @@ describe("Dispatcher", () => {
       });
 
       test("It should have update the update the incomer last activity", async () => {
-        await timers.setTimeout(3_000);
+        await timers.setTimeout(4_000);
 
         const pongTransaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
@@ -352,7 +344,7 @@ describe("Dispatcher", () => {
 
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
-    let prefix = "local" as "local";
+    let prefix = "local" as const;
     beforeAll(async() => {
       dispatcher = new Dispatcher({
         pingInterval: 1_600,
@@ -394,7 +386,7 @@ describe("Dispatcher", () => {
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
 
-            if (formattedMessage.event && formattedMessage.event === "approvement") {
+            if (formattedMessage.name && formattedMessage.name === "approvement") {
               approved = true;
             }
           });
@@ -404,36 +396,35 @@ describe("Dispatcher", () => {
             prefix
           });
 
-          const dispatcherTransactionStore = new TransactionStore({
-            instance: "dispatcher",
-            prefix
-          });
-
           const event = {
-            event: "register",
+            name: "register",
             data: {
               name: incomerName,
               eventsCast: [],
               eventsSubscribe: []
             },
-            metadata: {
+            redisMetadata: {
               origin: incomerName,
               prefix
             }
           }
 
-          const transactionId = await dispatcherTransactionStore.setTransaction({
+          const incomerTransactionStore = new TransactionStore({
+            prefix: `${prefix}-${incomerName}`,
+            instance: "incomer"
+          });
+
+          const transactionId = await incomerTransactionStore.setTransaction({
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
             resolved: false
           });
 
-          await dispatcherTransactionStore.getTransactionById(transactionId);
 
           await channel.publish({
             ...event,
-            metadata: {
+            redisMetadata: {
               origin: incomerName,
               prefix,
               transactionId
@@ -464,7 +455,6 @@ describe("Dispatcher", () => {
       let incomerName = randomUUID();
       let pingResponseTransaction: string;
       let subscriber: Redis;
-      let dispatcherTransactionStore: TransactionStore<"dispatcher">;
       let incomerTransactionStore: TransactionStore<"incomer">;
 
       beforeAll(async() => {
@@ -482,7 +472,7 @@ describe("Dispatcher", () => {
         subscriber.on("message", async(channel, message) => {
           const formattedMessage = JSON.parse(message);
 
-          if (formattedMessage.event === "approvement") {
+          if (formattedMessage.name === "approvement") {
             const providedUUid = formattedMessage.data.uuid;
 
             incomerTransactionStore = new TransactionStore({
@@ -492,16 +482,16 @@ describe("Dispatcher", () => {
 
             await subscriber.subscribe(`${prefix}-${providedUUid}`);
           }
-          else if (formattedMessage.event === "ping" && index === 0) {
+          else if (formattedMessage.name === "ping" && index === 0) {
             pingResponseTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
-              metadata: {
-                ...formattedMessage.metadata,
+              redisMetadata: {
+                ...formattedMessage.redisMetadata,
                 prefix,
-                origin: formattedMessage.metadata.to
+                origin: formattedMessage.redisMetadata.to
               },
               mainTransaction: false,
-              relatedTransaction: formattedMessage.metadata.transactionId,
+              relatedTransaction: formattedMessage.redisMetadata.transactionId,
               resolved: false
             });
 
@@ -514,25 +504,25 @@ describe("Dispatcher", () => {
           prefix
         });
 
-        dispatcherTransactionStore = new TransactionStore({
-          instance: "dispatcher",
-          prefix
-        });
-
         const event = {
-          event: "register",
+          name: "register",
           data: {
             name: incomerName,
             eventsCast: [],
             eventsSubscribe: []
           },
-          metadata: {
+          redisMetadata: {
             origin: incomerName,
             prefix
           }
         };
 
-        const transactionId = await dispatcherTransactionStore.setTransaction({
+        incomerTransactionStore = new TransactionStore({
+          prefix: `${prefix}-${incomerName}`,
+          instance: "incomer"
+        });
+
+        const transactionId = await incomerTransactionStore.setTransaction({
           ...event,
           mainTransaction: true,
           relatedTransaction: null,
@@ -540,13 +530,13 @@ describe("Dispatcher", () => {
         });
 
         await channel.publish({
-          event: "register",
+          name: "register",
           data: {
             name: incomerName,
             eventsCast: [],
             eventsSubscribe: []
           },
-          metadata: {
+          redisMetadata: {
             origin: incomerName,
             prefix,
             transactionId
@@ -630,7 +620,7 @@ describe("Dispatcher", () => {
           data: {
             foo: "bar"
           },
-          metadata: {
+          redisMetadata: {
             origin: "foo",
             transactionId: "bar"
           }
@@ -645,7 +635,7 @@ describe("Dispatcher", () => {
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
 
-      test(`Publishing a message without metadata,
+      test(`Publishing a message without redisMetadata,
             it should log a new Error with the message "Malformed message"`,
       async() => {
         const channel = new Channel({
@@ -653,7 +643,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          event: "foo",
+          name: "foo",
           data: {
             foo: "bar"
           }
@@ -674,11 +664,11 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          event: "bar",
+          name: "bar",
           data: {
             foo: "bar"
           },
-          metadata: {
+          redisMetadata: {
             origin: "foo",
             transactionId: "bar"
           }
@@ -702,11 +692,11 @@ describe("Dispatcher", () => {
           });
 
           const event = {
-            event: "foo",
+            name: "foo",
             data: {
               foo: "bar"
             },
-            metadata: {
+            redisMetadata: {
               origin: "foo",
               transactionId: "foo"
             }
@@ -741,7 +731,7 @@ describe("Dispatcher", () => {
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
 
-            if (formattedMessage.event && formattedMessage.event === "approvement") {
+            if (formattedMessage.name && formattedMessage.name === "approvement") {
               approved = true;
             }
           });
@@ -750,23 +740,24 @@ describe("Dispatcher", () => {
             name: "dispatcher"
           });
 
-          const dispatcherTransactionStore = new TransactionStore({
-            instance: "dispatcher"
-          });
-
           const event = {
-            event: "register",
+            name: "register",
             data: {
               name: incomerName,
               eventsCast: [],
               eventsSubscribe: []
             },
-            metadata: {
+            redisMetadata: {
               origin: incomerName
             }
           }
 
-          const transactionId = await dispatcherTransactionStore.setTransaction({
+          const incomerTransactionStore = new TransactionStore({
+            prefix: incomerName,
+            instance: "incomer"
+          });
+
+          const transactionId = await incomerTransactionStore.setTransaction({
             ...event,
             mainTransaction: true,
             relatedTransaction: null,
@@ -775,7 +766,7 @@ describe("Dispatcher", () => {
 
           await channel.publish({
             ...event,
-            metadata: {
+            redisMetadata: {
               origin: incomerName,
               transactionId
             }
@@ -804,11 +795,11 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          event: "foo",
+          name: "foo",
           data: {
             foo: "bar"
           },
-          metadata: {
+          redisMetadata: {
             origin: "foo",
             transactionId: "bar"
           }
@@ -819,33 +810,6 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
 
         expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
-        expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
-        expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
-      });
-
-      test(`Publish a well known event with wrong data,
-            it should log a new Error with the message "Malformed message"`,
-      async() => {
-        const channel = new Channel({
-          name: "dispatcher"
-        });
-
-        const event = {
-          event: "foo",
-          data: {
-            bar: "foo"
-          },
-          metadata: {
-            origin: "foo",
-            transactionId: "bar"
-          }
-        };
-
-        await channel.publish(event);
-
-        await timers.setTimeout(1_000);
-
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -866,11 +830,11 @@ describe("Dispatcher", () => {
         await dispatcher["subscriber"].subscribe("foo");
 
         await channel.publish({
-          event: "foo",
+          name: "foo",
           data: {
             foo: "foo"
           },
-          metadata: {
+          redisMetadata: {
             origin: "bar",
             transactionId: "1"
           }
@@ -891,7 +855,6 @@ describe("Dispatcher", () => {
         let hasDistributedEvents = false;
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
         let secondIncomerTransactionStore: TransactionStore<"incomer">;
-        let dispatcherTransactionStore: TransactionStore<"dispatcher">;
         let mainTransactionId;
 
         beforeAll(async() => {
@@ -906,10 +869,10 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (channel === "dispatcher") {
-              if (formattedMessage.event === "approvement") {
+              if (formattedMessage.name === "approvement") {
                 const uuid = formattedMessage.data.uuid;
 
-                if (formattedMessage.metadata.to === firstIncomerName) {
+                if (formattedMessage.redisMetadata.to === firstIncomerName) {
                   firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
@@ -922,11 +885,11 @@ describe("Dispatcher", () => {
                   });
 
                   const event = {
-                    event: "foo",
+                    name: "foo",
                     data: {
                       foo: "foo"
                     },
-                    metadata: {
+                    redisMetadata: {
                       origin: firstIncomerProvidedUUID
                     }
                   }
@@ -940,8 +903,8 @@ describe("Dispatcher", () => {
 
                   await exclusiveChannel.publish({
                     ...event,
-                    metadata: {
-                      ...event.metadata,
+                    redisMetadata: {
+                      ...event.redisMetadata,
                       transactionId: mainTransactionId
                     }
                   });
@@ -959,16 +922,16 @@ describe("Dispatcher", () => {
             }
             else {
               if (channel === secondIncomerProvidedUUID) {
-                if (formattedMessage.event === "foo") {
+                if (formattedMessage.name === "foo") {
                   hasDistributedEvents = true;
                   await secondIncomerTransactionStore.setTransaction({
                     ...formattedMessage,
-                    metadata: {
-                      ...formattedMessage.metadata,
-                      origin: formattedMessage.metadata.to
+                    redisMetadata: {
+                      ...formattedMessage.redisMetadata,
+                      origin: formattedMessage.redisMetadata.to
                     },
                     mainTransaction: false,
-                    relatedTransaction: formattedMessage.metadata.transactionId,
+                    relatedTransaction: formattedMessage.redisMetadata.transactionId,
                     resolved: false
                   });
                 }
@@ -976,46 +939,52 @@ describe("Dispatcher", () => {
             }
           });
 
-          dispatcherTransactionStore = new TransactionStore({
-            instance: "dispatcher"
-          });
-
           const channel = new Channel({
             name: "dispatcher"
           });
 
           const firstEvent = {
-            event: "register",
+            name: "register",
             data: {
               name: firstIncomerName,
               eventsCast: ["foo"],
               eventsSubscribe: []
             },
-            metadata: {
+            redisMetadata: {
               origin: firstIncomerName
             }
           };
 
           const secondEvent = {
-            event: "register",
+            name: "register",
             data: {
               name: secondIncomerName,
               eventsCast: [],
               eventsSubscribe: [{ name: "foo" }]
             },
-            metadata: {
+            redisMetadata: {
               origin: secondIncomerName
             }
           };
 
-          const firstTransactionId = await dispatcherTransactionStore.setTransaction({
+          firstIncomerTransactionStore = new TransactionStore({
+            prefix: firstIncomerName,
+            instance: "incomer"
+          });
+
+          secondIncomerTransactionStore = new TransactionStore({
+            prefix: secondIncomerName,
+            instance: "incomer"
+          });
+
+          const firstTransactionId = await firstIncomerTransactionStore.setTransaction({
             ...firstEvent,
             mainTransaction: true,
             relatedTransaction: null,
             resolved: false
           });
 
-          const secondTransactionId = await dispatcherTransactionStore.setTransaction({
+          const secondTransactionId = await secondIncomerTransactionStore.setTransaction({
             ...secondEvent,
             mainTransaction: true,
             relatedTransaction: null,
@@ -1024,16 +993,16 @@ describe("Dispatcher", () => {
 
           await channel.publish({
             ...firstEvent,
-            metadata: {
-              ...firstEvent.metadata,
+            redisMetadata: {
+              ...firstEvent.redisMetadata,
               transactionId: firstTransactionId
             }
           });
 
           await channel.publish({
             ...secondEvent,
-            metadata: {
-              ...secondEvent.metadata,
+            redisMetadata: {
+              ...secondEvent.redisMetadata,
               transactionId: secondTransactionId
             }
           });
@@ -1110,11 +1079,11 @@ describe("Dispatcher", () => {
         await dispatcher["subscriber"].subscribe(`${prefix}-foo`);
 
         await channel.publish({
-          event: "foo",
+          name: "foo",
           data: {
             foo: "foo"
           },
-          metadata: {
+          redisMetadata: {
             origin: "bar",
             transactionId: "1",
             prefix
@@ -1139,7 +1108,6 @@ describe("Dispatcher", () => {
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
         let secondIncomerTransactionStore: TransactionStore<"incomer">;
         let thirdIncomerTransactionStore: TransactionStore<"incomer">;
-        let dispatcherTransactionStore: TransactionStore<"dispatcher">;
         let mainTransactionId;
         let secondIncomerTransactionId;
         let thirdIncomerTransactionId;
@@ -1156,10 +1124,10 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (channel === `${prefix}-dispatcher`) {
-              if (formattedMessage.event === "approvement") {
+              if (formattedMessage.name === "approvement") {
                 const uuid = formattedMessage.data.uuid;
 
-                if (formattedMessage.metadata.to === firstIncomerName) {
+                if (formattedMessage.redisMetadata.to === firstIncomerName) {
                   firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
@@ -1173,11 +1141,11 @@ describe("Dispatcher", () => {
                   });
 
                   const event = {
-                    event: "foo",
+                    name: "foo",
                     data: {
                       foo: "foo"
                     },
-                    metadata: {
+                    redisMetadata: {
                       origin: firstIncomerProvidedUUID,
                       prefix
                     }
@@ -1192,20 +1160,20 @@ describe("Dispatcher", () => {
 
                   await exclusiveChannel.publish({
                     ...event,
-                    metadata: {
-                      ...event.metadata,
+                    redisMetadata: {
+                      ...event.redisMetadata,
                       transactionId: mainTransactionId
                     }
                   });
                 }
-                else if (formattedMessage.metadata.to === secondIncomerName) {
+                else if (formattedMessage.redisMetadata.to === secondIncomerName) {
                   secondIncomerProvidedUUID = uuid;
                   secondIncomerTransactionStore = new TransactionStore({
                     prefix: `${prefix}-${secondIncomerProvidedUUID}`,
                     instance: "incomer"
                   });
                 }
-                else if (formattedMessage.metadata.to === thirdIncomerName) {
+                else if (formattedMessage.redisMetadata.to === thirdIncomerName) {
                   thirdIncomerProvidedUUID = uuid;
                   thirdIncomerTransactionStore = new TransactionStore({
                     prefix: `${prefix}-${thirdIncomerProvidedUUID}`,
@@ -1221,32 +1189,32 @@ describe("Dispatcher", () => {
             }
             else {
               if (channel === `${prefix}-${secondIncomerProvidedUUID}`) {
-                if (formattedMessage.event === "foo") {
+                if (formattedMessage.name === "foo") {
                   hasDistributedEvents[0] = true;
                   secondIncomerTransactionId = await secondIncomerTransactionStore.setTransaction({
                     ...formattedMessage,
-                    metadata: {
-                      ...formattedMessage.metadata,
-                      origin: formattedMessage.metadata.to
+                    redisMetadata: {
+                      ...formattedMessage.redisMetadata,
+                      origin: formattedMessage.redisMetadata.to
                     },
                     mainTransaction: false,
-                    relatedTransaction: formattedMessage.metadata.transactionId,
+                    relatedTransaction: formattedMessage.redisMetadata.transactionId,
                     resolved: false
                   });
                 }
               }
               else if (channel === `${prefix}-${thirdIncomerProvidedUUID}`) {
-                if (formattedMessage.event === "foo") {
+                if (formattedMessage.name === "foo") {
                   setTimeout(async() => {
                     hasDistributedEvents[1] = true;
                     thirdIncomerTransactionId = await thirdIncomerTransactionStore.setTransaction({
                       ...formattedMessage,
-                      metadata: {
-                        ...formattedMessage.metadata,
-                        origin: formattedMessage.metadata.to
+                      redisMetadata: {
+                        ...formattedMessage.redisMetadata,
+                        origin: formattedMessage.redisMetadata.to
                       },
                       mainTransaction: false,
-                      relatedTransaction: formattedMessage.metadata.transactionId,
+                      relatedTransaction: formattedMessage.redisMetadata.transactionId,
                       resolved: false
                     });
                   }, 1600);
@@ -1255,70 +1223,80 @@ describe("Dispatcher", () => {
             }
           });
 
-          dispatcherTransactionStore = new TransactionStore({
-            instance: "dispatcher",
-            prefix
-          });
-
           const channel = new Channel({
             name: "dispatcher",
             prefix
           });
 
           const firstEvent = {
-            event: "register",
+            name: "register",
             data: {
               name: firstIncomerName,
               eventsCast: ["foo"],
               eventsSubscribe: []
             },
-            metadata: {
+            redisMetadata: {
               origin: firstIncomerName,
               prefix
             }
           };
 
           const secondEvent = {
-            event: "register",
+            name: "register",
             data: {
               name: secondIncomerName,
               eventsCast: [],
               eventsSubscribe: [{ name: "foo" }]
             },
-            metadata: {
+            redisMetadata: {
               origin: secondIncomerName,
               prefix
             }
           };
 
           const thirdEvent = {
-            event: "register",
+            name: "register",
             data: {
               name: thirdIncomerName,
               eventsCast: [],
               eventsSubscribe: [{ name: "foo" }]
             },
-            metadata: {
+            redisMetadata: {
               origin: thirdIncomerName,
               prefix
             }
           };
 
-          const firstTransactionId = await dispatcherTransactionStore.setTransaction({
+          firstIncomerTransactionStore = new TransactionStore({
+            prefix: `${prefix}-${firstIncomerName}`,
+            instance: "incomer"
+          });
+
+          secondIncomerTransactionStore = new TransactionStore({
+            prefix: `${prefix}-${secondIncomerName}`,
+            instance: "incomer"
+          });
+
+          thirdIncomerTransactionStore = new TransactionStore({
+            prefix: `${prefix}-${thirdIncomerName}`,
+            instance: "incomer"
+          });
+
+          const firstTransactionId = await firstIncomerTransactionStore.setTransaction({
             ...firstEvent,
             mainTransaction: true,
             relatedTransaction: null,
             resolved: false
           });
 
-          const secondTransactionId = await dispatcherTransactionStore.setTransaction({
+          const secondTransactionId = await secondIncomerTransactionStore.setTransaction({
             ...secondEvent,
             mainTransaction: true,
             relatedTransaction: null,
             resolved: false
           });
 
-          const thirdTransactionId = await dispatcherTransactionStore.setTransaction({
+          const thirdTransactionId = await thirdIncomerTransactionStore.setTransaction({
             ...thirdEvent,
             mainTransaction: true,
             relatedTransaction: null,
@@ -1328,22 +1306,22 @@ describe("Dispatcher", () => {
           await Promise.all([
             channel.publish({
               ...firstEvent,
-              metadata: {
-                ...firstEvent.metadata,
+              redisMetadata: {
+                ...firstEvent.redisMetadata,
                 transactionId: firstTransactionId
               }
             }),
             channel.publish({
               ...secondEvent,
-              metadata: {
-                ...secondEvent.metadata,
+              redisMetadata: {
+                ...secondEvent.redisMetadata,
                 transactionId: secondTransactionId
               }
             }),
             channel.publish({
               ...thirdEvent,
-              metadata: {
-                ...thirdEvent.metadata,
+              redisMetadata: {
+                ...thirdEvent.redisMetadata,
                 transactionId: thirdTransactionId
               }
             })
