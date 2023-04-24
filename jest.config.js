@@ -12,5 +12,6 @@ module.exports = {
   testMatch: [
     "**/test/**/*.spec.ts"
   ],
+  maxWorkers: 1,
   globalSetup: "./start-container.js"
 };
