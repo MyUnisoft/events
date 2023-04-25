@@ -50,16 +50,16 @@ export type IncomerOptions = {
 };
 
 export class Incomer extends EventEmitter {
-  readonly name: string;
-  readonly prefix: Prefix | undefined;
-  readonly eventsCast: EventsCast;
-  readonly eventsSubscribe: EventsSubscribe;
-  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
-  readonly dispatcherChannelName: string;
   readonly eventCallback: (message: Omit<DistributedEventMessage, "redisMetadata">) => Promise<void>;
 
   protected subscriber: Redis.Redis;
 
+  private name: string;
+  private prefix: Prefix | undefined;
+  private eventsCast: EventsCast;
+  private eventsSubscribe: EventsSubscribe;
+  private dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
+  private dispatcherChannelName: string;
   private baseUUID = randomUUID();
   private providedUUID: string;
   private logger: logger.Logger;
@@ -226,7 +226,7 @@ export class Incomer extends EventEmitter {
       .with({ name: "approvement" }, async() => {
         this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-        await this.registerPrivateChannel(message);
+        await this.handleApprovement(message);
       })
       .exhaustive()
       .catch((error) => {
@@ -267,17 +267,18 @@ export class Incomer extends EventEmitter {
       })
       .with(P._, async(res: { name: string, message: DistributedEventMessage}) => {
         const { message } = res;
+        const { redisMetadata, ...event } = message;
 
-        await this.eventCallback({ ...message });
+        await this.eventCallback(event);
 
         await this.incomerTransactionStore.setTransaction({
           ...message,
           redisMetadata: {
-            ...message.redisMetadata,
-            origin: message.redisMetadata.to
+            ...redisMetadata,
+            origin: redisMetadata.to
           },
           mainTransaction: false,
-          relatedTransaction: message.redisMetadata.transactionId,
+          relatedTransaction: redisMetadata.transactionId,
           resolved: false
         });
 
@@ -291,7 +292,7 @@ export class Incomer extends EventEmitter {
       });
   }
 
-  private async registerPrivateChannel(message: DispatcherRegistrationMessage) {
+  private async handleApprovement(message: DispatcherRegistrationMessage) {
     const { data } = message;
 
     this.incomerChannelName = `${this.prefix ? `${this.prefix}-` : ""}${data.uuid}`;
