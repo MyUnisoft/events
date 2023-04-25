@@ -739,7 +739,10 @@ export class Dispatcher {
     }
 
     const concernedIncomers = Object.values(incomerTree)
-      .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name));
+      .filter(
+        (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name) &&
+        incomer.providedUUID !== redisMetadata.origin
+      );
 
     if (concernedIncomers.length === 0) {
       this.logger.warn(logData, "No concerned Incomer found");
