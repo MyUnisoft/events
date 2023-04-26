@@ -753,18 +753,23 @@ export class Dispatcher {
 
     const filteredConcernedIncomers: RegisteredIncomer[] = [];
     for (const incomer of concernedIncomers) {
-      const relatedEvent = incomer.eventsSubscribe.find((value) => value.name === name);
+      const relatedEvent = incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name);
 
       // Prevent publishing an event to multiple instance of a same service if no horizontalScale of the event
-      if (!relatedEvent.horizontalScale && filteredConcernedIncomers.find((value) => value.name === incomer.name)) {
+      if (!relatedEvent.horizontalScale &&
+        filteredConcernedIncomers.find(
+          (filteredConcernedIncomer) => filteredConcernedIncomer.eventsSubscribe.find(
+            (subscribedEvent) => subscribedEvent.name === relatedEvent.name
+          )
+        ) !== undefined
+      ) {
         continue;
       }
 
       filteredConcernedIncomers.push(incomer);
     }
 
-
-    // All or nothing ?
+    const toResolve: Promise<any>[] = [];
     for (const incomer of filteredConcernedIncomers) {
       const relatedChannel = this.incomerChannels.get(incomer.providedUUID);
 
@@ -780,7 +785,7 @@ export class Dispatcher {
         }
       };
 
-      await this.publishEvent({
+      toResolve.push(this.publishEvent({
         concernedChannel: relatedChannel,
         transactionMeta: {
           mainTransaction: false,
@@ -788,10 +793,11 @@ export class Dispatcher {
           resolved: false
         },
         formattedEvent
-      });
-
-      this.logger.info(logData, "redistributed injected event");
+      }));
     }
+
+    await Promise.all(toResolve);
+    this.logger.info(logData, "redistributed injected event");
   }
 
   private async approveIncomer(message: IncomerRegistrationMessage) {
