@@ -74,7 +74,7 @@ export class Incomer extends EventEmitter {
 
     this.dispatcherChannelName = `${this.prefix ? `${this.prefix}-` : ""}${channels.dispatcher}`;
 
-    this.logger = logger.pino().child({ service: `${this.prefix ? `${this.prefix}-` : ""}${this.name}` });
+    this.logger = logger.pino().child({ incomer: `${this.prefix ? `${this.prefix}-` : ""}${this.name}` });
 
     this.subscriber = subscriber;
 

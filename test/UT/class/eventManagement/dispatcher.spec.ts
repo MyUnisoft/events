@@ -1246,7 +1246,7 @@ describe("Dispatcher", () => {
             data: {
               name: secondIncomerName,
               eventsCast: [],
-              eventsSubscribe: [{ name: "foo" }]
+              eventsSubscribe: [{ name: "foo", horizontalScale: true }]
             },
             redisMetadata: {
               origin: secondIncomerName,
@@ -1259,7 +1259,7 @@ describe("Dispatcher", () => {
             data: {
               name: thirdIncomerName,
               eventsCast: [],
-              eventsSubscribe: [{ name: "foo" }]
+              eventsSubscribe: [{ name: "foo", horizontalScale: true }]
             },
             redisMetadata: {
               origin: thirdIncomerName,
