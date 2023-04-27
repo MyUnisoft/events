@@ -25,7 +25,6 @@ const dispatcherLogger = Logger.pino();
 const incomerLogger = Logger.pino();
 const mockedEventComeBackHandler = jest.fn();
 
-
 describe("Publishing/exploiting a custom event", () => {
   let dispatcher: Dispatcher;
 
@@ -38,7 +37,7 @@ describe("Publishing/exploiting a custom event", () => {
     dispatcher = new Dispatcher({
       pingInterval: 10_000,
       checkLastActivityInterval: 14_000,
-      checkTransactionInterval: 10_600,
+      checkTransactionInterval: 5_000,
       idleTime: 14_000,
       eventsValidationFunction: eventsValidationFunction
      });
@@ -181,8 +180,10 @@ describe("Publishing/exploiting a custom event", () => {
     let publisher: Incomer;
     let concernedIncomer: Incomer;
     let secondConcernedIncomer: Incomer;
+    let publisherTransactionStore: TransactionStore<"incomer">;
     let incomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
+    let mockedPublisherSetTransaction;
     let mockedSecondIncomerSetTransaction;
     let mockedIncomerSetTransaction;
 
@@ -200,7 +201,7 @@ describe("Publishing/exploiting a custom event", () => {
         agent: "jest",
         createdAt: Date.now()
       }
-    }
+    };
 
     beforeAll(async() => {
       publisher = new Incomer({
@@ -241,10 +242,14 @@ describe("Publishing/exploiting a custom event", () => {
               name: data.uuid
             }));
 
-            Reflect.set(publisher, "incomerTransactionStore", new TransactionStore({
+            publisherTransactionStore = new TransactionStore({
               prefix: data.uuid,
               instance: "incomer"
-            }));
+            });
+
+            mockedPublisherSetTransaction = jest.spyOn(publisherTransactionStore, "setTransaction");
+
+            Reflect.set(publisher, "incomerTransactionStore", publisherTransactionStore);
 
             publisher.emit("registered");
           }
@@ -306,16 +311,22 @@ describe("Publishing/exploiting a custom event", () => {
     test("callback function must have been call & one of the incomers should have create the relating transaction", async() => {
       await timers.setTimeout(1_600);
 
+      expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
+        ...event,
+        redisMetadata: expect.anything(),
+        mainTransaction: true,
+        resolved: false,
+        relatedTransaction: null
+      });
+
       if (mockedIncomerSetTransaction.mock.calls.length === 1) {
-        expect(mockedIncomerSetTransaction).toHaveBeenCalledWith(
-          {
+        expect(mockedIncomerSetTransaction).toHaveBeenCalledWith({
             ...event,
             redisMetadata: expect.anything(),
             mainTransaction: false,
             resolved: false,
             relatedTransaction: expect.anything()
-          }
-        );
+        });
         expect(mockedSecondIncomerSetTransaction).not.toHaveBeenCalledWith({
           ...event,
           redisMetadata: expect.anything(),
@@ -345,6 +356,17 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
         ...event
       });
+
+      await timers.setTimeout(2_400);
+
+      const publisherTransactions = await publisherTransactionStore.getTransactions();
+      expect(publisherTransactions).not.toContain({
+        ...event,
+        redisMetadata: expect.anything(),
+        relatedTransaction: null,
+        mainTransaction: true,
+        resolved: false
+      });
     });
   });
 
@@ -352,8 +374,10 @@ describe("Publishing/exploiting a custom event", () => {
     let publisher: Incomer;
     let concernedIncomer: Incomer;
     let secondConcernedIncomer: Incomer;
+    let publisherTransactionStore: TransactionStore<"incomer">;
     let incomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
+    let mockedPublisherSetTransaction;
     let mockedSecondIncomerSetTransaction;
     let mockedIncomerSetTransaction;
 
@@ -412,10 +436,14 @@ describe("Publishing/exploiting a custom event", () => {
               name: data.uuid
             }));
 
-            Reflect.set(publisher, "incomerTransactionStore", new TransactionStore({
+            publisherTransactionStore = new TransactionStore({
               prefix: data.uuid,
               instance: "incomer"
-            }));
+            });
+
+            mockedPublisherSetTransaction = jest.spyOn(publisherTransactionStore, "setTransaction");
+
+            Reflect.set(publisher, "incomerTransactionStore", publisherTransactionStore);
 
             publisher.emit("registered");
           }
@@ -477,6 +505,14 @@ describe("Publishing/exploiting a custom event", () => {
     test("callback function must have been call & one of the incomers should have create the relating transaction", async() => {
       await timers.setTimeout(1_600);
 
+      expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
+        ...event,
+        redisMetadata: expect.anything(),
+        mainTransaction: true,
+        resolved: false,
+        relatedTransaction: null
+      });
+
       expect(mockedIncomerSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: expect.anything(),
@@ -495,6 +531,17 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedEventComeBackHandler).toHaveBeenCalledTimes(2);
       expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
         ...event
+      });
+
+      await timers.setTimeout(2_400);
+
+      const publisherTransactions = await publisherTransactionStore.getTransactions();
+      expect(publisherTransactions).not.toContain({
+        ...event,
+        redisMetadata: expect.anything(),
+        relatedTransaction: null,
+        mainTransaction: true,
+        resolved: false
       });
     });
   });
