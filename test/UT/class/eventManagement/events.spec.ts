@@ -356,7 +356,9 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
         ...event
       });
+    });
 
+    test("Then the dispatcher should have delete the mainTransaction on the publisherTransactionStore", async() => {
       await timers.setTimeout(2_400);
 
       const publisherTransactions = await publisherTransactionStore.getTransactions();

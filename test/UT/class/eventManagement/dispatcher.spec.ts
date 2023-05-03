@@ -57,9 +57,9 @@ describe("Dispatcher", () => {
     beforeAll(async() => {
       dispatcher = new Dispatcher({
         pingInterval: 1_600,
-        checkLastActivityInterval: 4_000,
+        checkLastActivityInterval: 5_000,
         checkTransactionInterval: 2_400,
-        idleTime: 4_000
+        idleTime: 5_000
        });
 
       Reflect.set(dispatcher, "logger", logger);
