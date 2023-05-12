@@ -1,4 +1,4 @@
 const dotenv = require("dotenv");
 dotenv.config();
 
-jest.setTimeout(30000);
+jest.setTimeout(10_000);
