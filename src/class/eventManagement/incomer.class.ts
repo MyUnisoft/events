@@ -11,7 +11,11 @@ import { P, match } from "ts-pattern";
 import {
   channels
 } from "../../utils/config";
-import { TransactionStore } from "./transaction.class";
+import {
+  PartialTransaction,
+  Transaction,
+  TransactionStore
+} from "./transaction.class";
 import {
   Prefix,
   EventsCast,
@@ -56,6 +60,7 @@ export class Incomer extends EventEmitter {
 
   private name: string;
   private prefix: Prefix | undefined;
+  private registerTransactionId: string | null;
   private eventsCast: EventsCast;
   private eventsSubscribe: EventsSubscribe;
   private dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
@@ -120,7 +125,7 @@ export class Incomer extends EventEmitter {
       }
     };
 
-    const transactionId = await this.incomerTransactionStore.setTransaction({
+    this.registerTransactionId = await this.incomerTransactionStore.setTransaction({
       ...event,
       mainTransaction: true,
       relatedTransaction: null,
@@ -131,7 +136,7 @@ export class Incomer extends EventEmitter {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
-        transactionId
+        transactionId: this.registerTransactionId
       }
     });
 
@@ -258,7 +263,7 @@ export class Incomer extends EventEmitter {
           },
           mainTransaction: false,
           relatedTransaction: message.redisMetadata.transactionId,
-          resolved: false
+          resolved: true
         });
 
         this.logger.info({
@@ -269,9 +274,7 @@ export class Incomer extends EventEmitter {
         const { message } = res;
         const { redisMetadata, ...event } = message;
 
-        await this.eventCallback(event);
-
-        await this.incomerTransactionStore.setTransaction({
+        const transaction: PartialTransaction<"incomer"> = {
           ...message,
           redisMetadata: {
             ...redisMetadata,
@@ -280,7 +283,16 @@ export class Incomer extends EventEmitter {
           mainTransaction: false,
           relatedTransaction: redisMetadata.transactionId,
           resolved: false
-        });
+        };
+
+        const transactionId = await this.incomerTransactionStore.setTransaction(transaction);
+        const formattedTransaction = await this.incomerTransactionStore.getTransactionById(transactionId);
+
+        formattedTransaction.resolved = true;
+        await Promise.all([
+          this.eventCallback(event),
+          this.incomerTransactionStore.updateTransaction(transactionId, formattedTransaction as Transaction<"incomer">)
+        ]);
 
         this.logger.info({
           ...logData
@@ -304,6 +316,13 @@ export class Incomer extends EventEmitter {
       name: this.providedUUID,
       prefix: this.prefix
     });
+
+    const registerTransaction = await this.incomerTransactionStore.getTransactionById(this.registerTransactionId);
+
+    await this.incomerTransactionStore.updateTransaction(this.registerTransactionId, {
+      ...registerTransaction,
+      resolved: true
+    } as Transaction<"incomer">);
 
     this.incomerTransactionStore = new TransactionStore({
       prefix: `${this.prefix ? `${this.prefix}-` : ""}${this.providedUUID}`,

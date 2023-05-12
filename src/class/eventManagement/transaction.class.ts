@@ -37,7 +37,7 @@ type SpreedTransaction = {
 type HandlerTransaction = {
   mainTransaction: false;
   relatedTransaction: string;
-  resolved: false;
+  resolved: boolean;
 }
 
 export type Transaction<T extends Instance = Instance> = (
@@ -123,7 +123,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
   async updateTransaction(transactionId: string, transaction: Transaction<T>): Promise<void> {
     const key = `${this.key}-${transactionId}`;
 
-    super.setValue({ key, value: transaction });
+    super.setValue({ key, value: { ...transaction, aliveSince: Date.now() } });
   }
 
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
