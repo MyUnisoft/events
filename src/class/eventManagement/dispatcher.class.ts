@@ -14,7 +14,6 @@ import {
   kIncomerStoreName
 } from "../../utils/config";
 import {
-  Transaction,
   Transactions,
   TransactionStore
 } from "./transaction.class";

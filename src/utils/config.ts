@@ -5,7 +5,7 @@ export const kTransactionStoreName = "transaction" as const;
 
 export const channels = {
   dispatcher: "dispatcher"
-} as const;
+};
 
 export const predefinedEvents = Object.freeze({
   dispatcher: {

@@ -51,7 +51,7 @@ describe("Transaction options", () => {
     });
 
 
-    test("calling deleteTransaction, it should delete the transaction & return void", async() => {
+    test("calling deleteTransaction, it should delete the transaction & return null", async() => {
       await transactionStore.deleteTransaction(transactionId);
 
       const result = await transactionStore.getTransactionById(transactionId);

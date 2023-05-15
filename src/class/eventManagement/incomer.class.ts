@@ -60,6 +60,7 @@ export class Incomer extends EventEmitter {
 
   private name: string;
   private prefix: Prefix | undefined;
+  private prefixedName: string;
   private registerTransactionId: string | null;
   private eventsCast: EventsCast;
   private eventsSubscribe: EventsSubscribe;
@@ -77,9 +78,10 @@ export class Incomer extends EventEmitter {
 
     Object.assign(this, {}, options);
 
-    this.dispatcherChannelName = `${this.prefix ? `${this.prefix}-` : ""}${channels.dispatcher}`;
+    this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
+    this.dispatcherChannelName = this.prefixedName + channels.dispatcher;
 
-    this.logger = logger.pino().child({ incomer: `${this.prefix ? `${this.prefix}-` : ""}${this.name}` });
+    this.logger = logger.pino().child({ incomer: this.prefixedName + this.name });
 
     this.subscriber = subscriber;
 
@@ -89,7 +91,7 @@ export class Incomer extends EventEmitter {
     });
 
     this.incomerTransactionStore = new TransactionStore({
-      prefix: `${this.prefix ? `${this.prefix}-` : ""}${this.baseUUID}`,
+      prefix: this.prefixedName + this.baseUUID,
       instance: "incomer"
     });
   }
@@ -110,7 +112,7 @@ export class Incomer extends EventEmitter {
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
-    this.subscriber.on("message", async(channel: string, message: string) => await this.handleMessages(channel, message));
+    this.subscriber.on("message", (channel: string, message: string) => this.handleMessages(channel, message));
 
     const event = {
       name: "register" as const,
@@ -229,13 +231,20 @@ export class Incomer extends EventEmitter {
 
     match<DispatcherChannelEvents>({ name })
       .with({ name: "approvement" }, async() => {
-        this.logger.info(logData, "New approvement message on Dispatcher Channel");
+        this.logger.info(
+          logData,
+          "New approvement message on Dispatcher Channel"
+        );
 
         await this.handleApprovement(message);
       })
       .exhaustive()
       .catch((error) => {
-        this.logger.error({ channel: "dispatcher", error: error.message, message });
+        this.logger.error({
+          channel: "dispatcher",
+          error: error.message,
+          message
+        });
       });
   }
 
@@ -300,14 +309,18 @@ export class Incomer extends EventEmitter {
       })
       .exhaustive()
       .catch((error) => {
-        this.logger.error({ channel: "incomer", error: error.message, message });
+        this.logger.error({
+          channel: "incomer",
+          error: error.message,
+          message
+        });
       });
   }
 
   private async handleApprovement(message: DispatcherRegistrationMessage) {
     const { data } = message;
 
-    this.incomerChannelName = `${this.prefix ? `${this.prefix}-` : ""}${data.uuid}`;
+    this.incomerChannelName = this.prefixedName + data.uuid;
     this.providedUUID = data.uuid;
 
     await this.subscriber.subscribe(this.incomerChannelName);
@@ -325,7 +338,7 @@ export class Incomer extends EventEmitter {
     } as Transaction<"incomer">);
 
     this.incomerTransactionStore = new TransactionStore({
-      prefix: `${this.prefix ? `${this.prefix}-` : ""}${this.providedUUID}`,
+      prefix: this.prefixedName + this.providedUUID,
       instance: "incomer"
     });
 
