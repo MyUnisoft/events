@@ -9,6 +9,8 @@ import { P, match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
+  REDIS_HOST,
+  REDIS_PORT,
   channels
 } from "../../utils/config";
 import {
@@ -24,7 +26,11 @@ import {
   IncomerChannelMessages
 } from "../../types/eventManagement/index";
 import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
-import { DispatcherPingMessage, DistributedEventMessage, EventMessage } from "types/eventManagement/incomerChannel";
+import {
+  DispatcherPingMessage,
+  DistributedEventMessage,
+  EventMessage
+} from "../../types/eventManagement/incomerChannel";
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents = { name: "ping"; message: DispatcherPingMessage } |
@@ -83,7 +89,9 @@ export class Incomer extends EventEmitter {
 
     this.logger = logger.pino().child({ incomer: this.prefixedName + this.name });
 
-    this.subscriber = subscriber;
+    if (subscriber) {
+      this.subscriber = subscriber;
+    }
 
     this.dispatcherChannel = new Redis.Channel({
       name: channels.dispatcher,
@@ -101,12 +109,10 @@ export class Incomer extends EventEmitter {
       throw new Error("Cannot init multiple times.");
     }
 
-    // Every x ms, check transaction are dealed
-    // If not, emit the event so he can dealed locally ?
     if (!this.subscriber) {
       this.subscriber = await Redis.initRedis({
-        port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        port: REDIS_PORT,
+        host: REDIS_HOST
       } as any, true);
     }
 

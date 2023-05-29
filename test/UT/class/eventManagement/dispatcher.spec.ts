@@ -363,7 +363,7 @@ describe("Dispatcher", () => {
 
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.prefix).toBe("local-");
+      expect(dispatcher.formattedPrefix).toBe("local-");
       expect(dispatcher.privateUUID).toBeDefined();
     });
 
@@ -1059,7 +1059,7 @@ describe("Dispatcher", () => {
 
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.prefix).toBe("local-");
+      expect(dispatcher.formattedPrefix).toBe("local-");
       expect(dispatcher.privateUUID).toBeDefined();
     });
 

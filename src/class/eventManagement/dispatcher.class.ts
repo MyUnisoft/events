@@ -10,6 +10,8 @@ import { match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
+  REDIS_HOST,
+  REDIS_PORT,
   channels,
   kIncomerStoreName
 } from "../../utils/config";
@@ -28,7 +30,7 @@ import {
 import * as ChannelsMessages from "../../schema/eventManagement/index";
 import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
 import { DispatcherPingMessage } from "../../types/eventManagement/incomerChannel";
-import { CustomEventsValidationFunctions } from "utils";
+import { CustomEventsValidationFunctions } from "../../utils/index";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -91,18 +93,19 @@ function isIncomerRegistrationMessage(
 
 export class Dispatcher {
   readonly type = "dispatcher";
+  readonly formattedPrefix: string;
   readonly prefix: string;
   readonly treeName: string;
   readonly dispatcherChannelName: string;
-  readonly dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
   readonly privateUUID = randomUUID();
 
-  readonly incomerStore: Redis.KVPeer<IncomerStore>;
-  readonly dispatcherTransactionStore: TransactionStore<"dispatcher">;
-  readonly backupIncomerTransactionStore: TransactionStore<"incomer">;
-  readonly backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
-
   protected subscriber: Redis.Redis;
+
+  private dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
+  private incomerStore: Redis.KVPeer<IncomerStore>;
+  private dispatcherTransactionStore: TransactionStore<"dispatcher">;
+  private backupIncomerTransactionStore: TransactionStore<"incomer">;
+  private backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
 
   private logger: logger.Logger;
   private incomerChannels: Map<string,
@@ -116,9 +119,10 @@ export class Dispatcher {
   public eventsValidationFunction: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
 
   constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
-    this.prefix = options.prefix ? `${options.prefix}-` : "";
-    this.treeName = this.prefix + kIncomerStoreName;
-    this.dispatcherChannelName = this.prefix + channels.dispatcher;
+    this.prefix = options.prefix ?? "";
+    this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
+    this.treeName = this.formattedPrefix + kIncomerStoreName;
+    this.dispatcherChannelName = this.formattedPrefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
 
     this.eventsValidationFunction = options.eventsValidationFunction ?? new Map();
@@ -127,34 +131,36 @@ export class Dispatcher {
       this.eventsValidationFunction.set(name, ajv.compile(validationSchema));
     }
 
+    this.logger = logger.pino().child({ dispatcher: this.formattedPrefix + this.type });
+
+    if (subscriber) {
+      this.subscriber = subscriber;
+    }
+
     this.incomerStore = new Redis.KVPeer({
-      prefix: options.prefix,
+      prefix: this.prefix,
       type: "object"
     });
 
     this.backupIncomerTransactionStore = new TransactionStore({
-      prefix: this.prefix + kBackupTransactionStoreName,
+      prefix: this.formattedPrefix + kBackupTransactionStoreName,
       instance: "incomer"
     });
 
     this.backupDispatcherTransactionStore = new TransactionStore({
-      prefix: this.prefix + kBackupTransactionStoreName,
+      prefix: this.formattedPrefix + kBackupTransactionStoreName,
       instance: "dispatcher"
     });
 
     this.dispatcherTransactionStore = new TransactionStore({
-      prefix: options.prefix,
+      prefix: this.prefix,
       instance: "dispatcher"
     });
 
-    this.logger = logger.pino().child({ incomer: this.prefix + this.type });
-
     this.dispatcherChannel = new Redis.Channel({
-      prefix: options.prefix,
+      prefix: this.prefix,
       name: channels.dispatcher
     });
-
-    this.subscriber = subscriber;
 
     this.pingInterval = setInterval(async() => {
       try {
@@ -193,8 +199,8 @@ export class Dispatcher {
   public async initialize() {
     if (!this.subscriber) {
       this.subscriber = await Redis.initRedis({
-        port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        port: REDIS_PORT,
+        host: REDIS_HOST
       } as any, true);
     }
 
@@ -204,8 +210,9 @@ export class Dispatcher {
   }
 
   public async close() {
-    if (!this.subscriber) {
-      return;
+    if (this.subscriber) {
+      await Redis.closeRedis(this.subscriber);
+      this.subscriber = undefined;
     }
 
     clearInterval(this.pingInterval);
@@ -216,9 +223,6 @@ export class Dispatcher {
 
     clearInterval(this.checkLastActivityInterval);
     this.checkLastActivityInterval = undefined;
-
-    await this.subscriber.quit();
-    this.subscriber = undefined;
   }
 
   private async ping() {
@@ -911,7 +915,7 @@ export class Dispatcher {
     const concernedIncomers = Object.values(incomerTree)
       .filter(
         (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name) &&
-        incomer.providedUUID !== redisMetadata.origin
+        (incomer.providedUUID !== redisMetadata.origin || incomer.name !== "pulsar")
       );
 
     if (concernedIncomers.length === 0) {

@@ -77,8 +77,8 @@ export type TransactionStoreOptions<T extends Instance = Instance> = (Partial<KV
 export class TransactionStore<T extends Instance = Instance> extends KVPeer<Transaction<T>> {
   private key: string;
 
-  constructor(options: TransactionStoreOptions<T>, redis?: Redis) {
-    super({ ...options, prefix: undefined, type: "object" }, redis);
+  constructor(options: TransactionStoreOptions<T>) {
+    super({ ...options, prefix: undefined, type: "object" });
 
     this.key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }

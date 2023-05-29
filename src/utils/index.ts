@@ -13,7 +13,7 @@ export type CustomEventsValidationFunctions = Map<string, ValidateFunction<Opera
 
 type MappedEventsValidationFunction = Map<string, CustomEventsValidationFunctions>;
 
-export const eventsValidationFunction: MappedEventsValidationFunction = new Map();
+export const eventsValidationFunction: MappedEventsValidationFunction = new Map<string, CustomEventsValidationFunctions>();
 
 for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas)) {
   const operationsValidationFunctions: Map<string, ValidateFunction<OperationFunctions>> = new Map();
