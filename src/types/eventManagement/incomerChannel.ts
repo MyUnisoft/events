@@ -4,17 +4,19 @@ import {
 } from "./index";
 
 export type DispatcherPingMessage = { name: "ping", data: null, redisMetadata: DispatcherTransactionMetadata };
-export type DistributedEventMessage = Record<string, any> & {
+export type DistributedEventMessage<
+  T extends Record<string, any> = Record<string, any>
+> = {
   name: string;
-  data: Record<string, any>;
+  data: Record<string, any> | null;
   redisMetadata: DispatcherTransactionMetadata;
-};
+} & Omit<EventMessage<T>, "redisMetadata">;
 
-export type EventMessage = Record<string, any> & {
+export type EventMessage<T extends Record<string, any> = Record<string, any>> = {
   name: string;
-  data: Record<string, any>;
+  data: Record<string, any> | null;
   redisMetadata: IncomerTransactionMetadata;
-};
+} & T;
 
 export type IncomerChannelMessages = {
   IncomerMessages: EventMessage;

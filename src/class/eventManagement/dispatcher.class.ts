@@ -21,15 +21,14 @@ import {
 } from "./transaction.class";
 import {
   Prefix,
-  EventsCast,
-  EventsSubscribe,
+  EventCast,
+  EventSubscribe,
   DispatcherChannelMessages,
-  IncomerChannelMessages,
-  DispatcherTransactionMetadata
+  IncomerChannelMessages
 } from "../../types/eventManagement/index";
-import * as ChannelsMessages from "../../schema/eventManagement/index";
+import * as eventsSchema from "../../schema/eventManagement/index";
 import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
-import { DispatcherPingMessage } from "../../types/eventManagement/incomerChannel";
+import { DispatcherPingMessage, DistributedEventMessage, EventMessage } from "../../types/eventManagement/incomerChannel";
 import { CustomEventsValidationFunctions } from "../../utils/index";
 
 // CONSTANTS
@@ -46,17 +45,21 @@ interface RegisteredIncomer {
   name: string;
   lastActivity: number;
   aliveSince: number;
-  eventsCast: EventsCast;
-  eventsSubscribe: EventsSubscribe;
+  eventsCast: EventCast[];
+  eventsSubscribe: EventSubscribe[];
   prefix?: string;
 }
 
 type IncomerStore = Record<string, RegisteredIncomer>;
 
-export interface DispatcherOptions {
+export type DispatcherOptions<T extends Record<string, any> =
+Record<string, any>> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
-  eventsValidationFunction?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  eventsValidation?: {
+    eventsValidationFunction?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+    schemaValidationCallback?: (event: T) => void;
+  },
   pingInterval?: number;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
@@ -64,12 +67,6 @@ export interface DispatcherOptions {
 }
 
 type DispatcherChannelEvents = { name: "register" };
-
-type IncomerCustomChannelMessage = Record<string, any> & {
-  name: string;
-  data: Record<string, any>;
-  redisMetadata: DispatcherTransactionMetadata;
-}
 
 function isDispatcherChannelMessage(
   value: DispatcherChannelMessages["IncomerMessages"] |
@@ -91,7 +88,8 @@ function isIncomerRegistrationMessage(
   return value.name === "register";
 }
 
-export class Dispatcher {
+export class Dispatcher<T extends Record<string, any> =
+Record<string, any>> {
   readonly type = "dispatcher";
   readonly formattedPrefix: string;
   readonly prefix: string;
@@ -109,29 +107,36 @@ export class Dispatcher {
 
   private logger: logger.Logger;
   private incomerChannels: Map<string,
-    Redis.Channel<IncomerChannelMessages["DispatcherMessages"] | IncomerCustomChannelMessage>> = new Map();
+    Redis.Channel<IncomerChannelMessages["DispatcherMessages"] | DistributedEventMessage>> = new Map();
 
   private pingInterval: NodeJS.Timer;
   private checkLastActivityInterval: NodeJS.Timer;
   private checkRelatedTransactionInterval: NodeJS.Timer;
   private idleTime: number;
 
-  public eventsValidationFunction: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  private eventsValidationFunction: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  private customSchemaValidationCallback: (event: T) => void = null;
 
-  constructor(options: DispatcherOptions = {}, subscriber?: Redis.Redis) {
+  constructor(options: DispatcherOptions<T> = {}, subscriber?: Redis.Redis) {
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = this.formattedPrefix + kIncomerStoreName;
     this.dispatcherChannelName = this.formattedPrefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
 
-    this.eventsValidationFunction = options.eventsValidationFunction ?? new Map();
+    this.eventsValidationFunction = options?.eventsValidation?.eventsValidationFunction ?? new Map();
+    this.customSchemaValidationCallback = options?.eventsValidation?.schemaValidationCallback;
 
-    for (const [name, validationSchema] of Object.entries(ChannelsMessages)) {
+    for (const [name, validationSchema] of Object.entries(eventsSchema)) {
       this.eventsValidationFunction.set(name, ajv.compile(validationSchema));
     }
 
-    this.logger = logger.pino().child({ dispatcher: this.formattedPrefix + this.type });
+    this.logger = logger.pino({
+      level: "debug",
+      transport: {
+        target: "pino-pretty"
+      }
+    }).child({ dispatcher: this.formattedPrefix + this.type });
 
     if (subscriber) {
       this.subscriber = subscriber;
@@ -206,7 +211,7 @@ export class Dispatcher {
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
-    this.subscriber.on("message", async(channel, message) => await this.handleMessages(channel, message));
+    this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
   }
 
   public async close() {
@@ -228,34 +233,36 @@ export class Dispatcher {
   private async ping() {
     const tree = await this.getTree();
 
-    for (const uuid of Object.keys(tree)) {
-      const incomerChannel = this.incomerChannels.get(uuid);
-
-      if (incomerChannel) {
-        const event: DispatcherPingMessage = {
-          name: "ping",
-          data: null,
-          redisMetadata: {
-            origin: this.privateUUID,
-            to: uuid
-          }
-        };
-
-        await this.publishEvent({
-          concernedChannel: incomerChannel,
-          transactionMeta: {
-            mainTransaction: true,
-            relatedTransaction: null,
-            resolved: false
-          },
-          formattedEvent: event
+    for (const [uuid, incomer] of Object.entries(tree)) {
+      const incomerChannel = this.incomerChannels.get(uuid) ??
+        new Redis.Channel({
+          name: uuid,
+          prefix: incomer.prefix
         });
 
-        this.logger.info({
-          ...event,
-          uptime: process.uptime()
-        }, "New Ping event");
-      }
+      const event: DispatcherPingMessage = {
+        name: "ping",
+        data: null,
+        redisMetadata: {
+          origin: this.privateUUID,
+          to: uuid
+        }
+      };
+
+      await this.publishEvent({
+        concernedChannel: incomerChannel,
+        transactionMeta: {
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
+        },
+        formattedEvent: event
+      });
+
+      this.logger.info({
+        ...event,
+        uptime: process.uptime()
+      }, "New Ping event");
     }
   }
 
@@ -284,7 +291,7 @@ export class Dispatcher {
     concernedStore?: TransactionStore<"incomer">;
     concernedChannel: Redis.Channel<
       DispatcherChannelMessages["DispatcherMessages"] |
-      (IncomerChannelMessages["DispatcherMessages"] | IncomerCustomChannelMessage)
+      (IncomerChannelMessages["DispatcherMessages"] | DistributedEventMessage)
     >;
     transactionMeta: {
       mainTransaction: boolean;
@@ -613,16 +620,10 @@ export class Dispatcher {
     await Promise.all(toResolve);
   }
 
-  private async resolveDispatcherTransactions(
-    dispatcherTransactions: Transactions<"dispatcher">
+  private async checkForDistributableDispatcherTransactions(
+    backedUpDispatcherTransactions: Transactions<"dispatcher">,
+    incomers: IncomerStore
   ) {
-    const backedUpIncomerTransactions = await this.backupIncomerTransactionStore.getTransactions();
-    const backedUpDispatcherTransactions = await this.backupDispatcherTransactionStore.getTransactions();
-
-    const incomers = await this.getTree();
-
-    await this.checkForDistributableIncomerTransactions(backedUpIncomerTransactions);
-
     for (const [backedUpDispatcherTransactionId, backedUpDispatcherTransaction] of backedUpDispatcherTransactions.entries()) {
       const concernedIncomer = Object.values(incomers).find(
         (incomer) => incomer.eventsSubscribe.find(
@@ -655,30 +656,22 @@ export class Dispatcher {
         this.backupDispatcherTransactionStore.deleteTransaction(backedUpDispatcherTransactionId)
       ]);
     }
+  }
+
+  private async resolveDispatcherTransactions(
+    dispatcherTransactions: Transactions<"dispatcher">
+  ) {
+    const backedUpIncomerTransactions = await this.backupIncomerTransactionStore.getTransactions();
+    const backedUpDispatcherTransactions = await this.backupDispatcherTransactionStore.getTransactions();
+
+    const incomers = await this.getTree();
+
+    await this.checkForDistributableIncomerTransactions(backedUpIncomerTransactions);
+    await this.checkForDistributableDispatcherTransactions(backedUpDispatcherTransactions, incomers);
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
       // If Transaction is already resolved, skip
       if (dispatcherTransaction.resolved) {
-        continue;
-      }
-
-      if (!incomers[dispatcherTransaction.redisMetadata.to]) {
-        const relatedResolvedTransactionId = Object.keys(backedUpIncomerTransactions).find(
-          (backedUpTransactionId) => backedUpIncomerTransactions[backedUpTransactionId].relatedTransaction ===
-            dispatcherTransactionId && backedUpIncomerTransactions[backedUpTransactionId].resolved === true
-        );
-
-        if (!relatedResolvedTransactionId) {
-          continue;
-        }
-
-        dispatcherTransaction.resolved = true;
-        await Promise.all([
-          this.updateIncomerState(backedUpIncomerTransactions[relatedResolvedTransactionId]),
-          this.backupIncomerTransactionStore.deleteTransaction(relatedResolvedTransactionId),
-          this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
-        ]);
-
         continue;
       }
 
@@ -690,20 +683,12 @@ export class Dispatcher {
 
       const relatedIncomerTransactions = await relatedIncomerTransactionStore.getTransactions();
 
-      let relatedIncomerTransactionId: string | undefined;
-      for (const incomerTransactionId of relatedIncomerTransactions.keys()) {
-        const relatedIncomerTransaction = relatedIncomerTransactions.get(incomerTransactionId);
+      const relatedIncomerTransactionId = [...relatedIncomerTransactions.keys()].find(((relatedIncomerTransactionId) => {
+        const incomerTransaction = relatedIncomerTransactions.get(relatedIncomerTransactionId);
+        const { relatedTransaction, resolved } = incomerTransaction;
 
-        const { relatedTransaction, resolved } = relatedIncomerTransaction;
-
-        if (relatedTransaction === dispatcherTransactionId && (
-          resolved
-        )) {
-          relatedIncomerTransactionId = incomerTransactionId;
-
-          break;
-        }
-      }
+        return relatedTransaction === dispatcherTransactionId && resolved;
+      }));
 
       // Event not resolved yet
       if (!relatedIncomerTransactionId) {
@@ -735,7 +720,6 @@ export class Dispatcher {
   ) {
     const incomerTree = await this.getTree();
 
-    // If Each related transaction resolved => cast internal event to call resolve on Main transaction with according transaction tree ?
     for (const incomer of Object.values(incomerTree)) {
       const incomerStore = new TransactionStore({
         prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomer.providedUUID}`,
@@ -759,12 +743,9 @@ export class Dispatcher {
           continue;
         }
 
-        const unResolvedRelatedTransactions = [];
-        for (const relatedTransaction of unResolvedRelatedTransactions) {
-          if (!dispatcherTransactions.get(relatedTransaction).resolved) {
-            unResolvedRelatedTransactions.push(relatedTransaction);
-          }
-        }
+        const unResolvedRelatedTransactions = relatedDispatcherTransactionsId.filter(
+          (transactionId) => !dispatcherTransactions.get(transactionId).resolved
+        );
 
         // Event not resolved yet by the different incomers
         if (unResolvedRelatedTransactions.length > 0) {
@@ -797,7 +778,6 @@ export class Dispatcher {
       throw new Error("Couldn't find the related incomer");
     }
 
-    // Based on incomer transaction or dispatcher resolution ?
     tree[origin].lastActivity = Date.now();
 
     await this.incomerStore.setValue({
@@ -810,6 +790,39 @@ export class Dispatcher {
     const tree = await this.incomerStore.getValue(this.treeName);
 
     return tree ?? {};
+  }
+
+  private schemaValidation(message: IncomerRegistrationMessage | EventMessage<T>) {
+    const { redisMetadata, ...event } = message;
+
+    const eventValidations = this.eventsValidationFunction.get(event.name) as ValidateFunction<Record<string, any>>;
+    const redisMetadataValidationFn = this.eventsValidationFunction.get("redisMetadata") as ValidateFunction<Record<string, any>>;
+
+    if (!eventValidations) {
+      throw new Error("Unknown Event");
+    }
+
+    if (!redisMetadataValidationFn(redisMetadata)) {
+      throw new Error("Malformed message");
+    }
+
+    if (event.name === "register") {
+      if (!eventValidations(event)) {
+        throw new Error("Malformed message");
+      }
+
+      return;
+    }
+
+    if (this.customSchemaValidationCallback && isIncomerChannelMessage(message)) {
+      this.customSchemaValidationCallback({ ...message, redisMetadata: null } as T);
+
+      return;
+    }
+
+    if (!eventValidations(event)) {
+      throw new Error("Malformed message");
+    }
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -830,26 +843,7 @@ export class Dispatcher {
         return;
       }
 
-      if (formattedMessage.name === "register") {
-        const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.name) as
-          ValidateFunction<Record<string, any>> | null;
-
-        if (!eventValidationSchema) {
-          throw new Error("Unknown Event");
-        }
-
-        if (!eventValidationSchema(formattedMessage)) {
-          throw new Error("Malformed message");
-        }
-      }
-      else {
-        const eventValidationSchema = this.eventsValidationFunction.get(formattedMessage.name) as
-          CustomEventsValidationFunctions | null;
-
-        if (!eventValidationSchema) {
-          throw new Error("Unknown Event");
-        }
-      }
+      this.schemaValidation(formattedMessage);
 
       if (channel === this.dispatcherChannelName) {
         if (isDispatcherChannelMessage(formattedMessage)) {

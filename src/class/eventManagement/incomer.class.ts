@@ -20,8 +20,8 @@ import {
 } from "./transaction.class";
 import {
   Prefix,
-  EventsCast,
-  EventsSubscribe,
+  EventCast,
+  EventSubscribe,
   DispatcherChannelMessages,
   IncomerChannelMessages
 } from "../../types/eventManagement/index";
@@ -53,8 +53,8 @@ function isIncomerChannelMessage(value:
 export type IncomerOptions = {
   /* Service name */
   name: string;
-  eventsCast: EventsCast;
-  eventsSubscribe: EventsSubscribe;
+  eventsCast: EventCast[];
+  eventsSubscribe: EventSubscribe[];
   eventCallback: (message: Omit<DistributedEventMessage, "redisMetadata">) => Promise<void>;
   prefix?: Prefix;
 };
@@ -68,8 +68,8 @@ export class Incomer extends EventEmitter {
   private prefix: Prefix | undefined;
   private prefixedName: string;
   private registerTransactionId: string | null;
-  private eventsCast: EventsCast;
-  private eventsSubscribe: EventsSubscribe;
+  private eventsCast: EventCast[];
+  private eventsSubscribe: EventSubscribe[];
   private dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
   private baseUUID = randomUUID();
@@ -87,7 +87,12 @@ export class Incomer extends EventEmitter {
     this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
     this.dispatcherChannelName = this.prefixedName + channels.dispatcher;
 
-    this.logger = logger.pino().child({ incomer: this.prefixedName + this.name });
+    this.logger = logger.pino({
+      level: "debug",
+      transport: {
+        target: "pino-pretty"
+      }
+    }).child({ incomer: this.prefixedName + this.name });
 
     if (subscriber) {
       this.subscriber = subscriber;
@@ -285,7 +290,7 @@ export class Incomer extends EventEmitter {
           ...logData
         }, "Resolved Ping event");
       })
-      .with(P._, async(res: { name: string, message: DistributedEventMessage}) => {
+      .with(P._, async(res: { name: string, message: DistributedEventMessage }) => {
         const { message } = res;
         const { redisMetadata, ...event } = message;
 

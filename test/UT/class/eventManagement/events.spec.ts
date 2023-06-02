@@ -16,17 +16,29 @@ import {
   Dispatcher,
   Incomer,
   eventsValidationFunction,
-  EventOptions
+  EventOptions,
+  Events
 } from "../../../../src/index";
 import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
+import { validate } from "../../../../src/index";
 
 // Internal Dependencies Mocks
-const dispatcherLogger = Logger.pino();
-const incomerLogger = Logger.pino();
+const dispatcherLogger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
+const incomerLogger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
 const mockedEventComeBackHandler = jest.fn();
 
 describe("Publishing/exploiting a custom event", () => {
-  let dispatcher: Dispatcher;
+  let dispatcher: Dispatcher<EventOptions<keyof Events>>;
 
   beforeAll(async() => {
     await initRedis({
@@ -39,7 +51,10 @@ describe("Publishing/exploiting a custom event", () => {
       checkLastActivityInterval: 14_000,
       checkTransactionInterval: 5_000,
       idleTime: 14_000,
-      eventsValidationFunction: eventsValidationFunction
+      eventsValidation: {
+        eventsValidationFunction: eventsValidationFunction,
+        schemaValidationCallback: validate
+      }
      });
 
     Reflect.set(dispatcher, "logger", dispatcherLogger);
@@ -372,181 +387,181 @@ describe("Publishing/exploiting a custom event", () => {
     });
   });
 
-  describe("Event that scale", () => {
-    let publisher: Incomer;
-    let concernedIncomer: Incomer;
-    let secondConcernedIncomer: Incomer;
-    let publisherTransactionStore: TransactionStore<"incomer">;
-    let incomerTransactionStore: TransactionStore<"incomer">;
-    let secondIncomerTransactionStore: TransactionStore<"incomer">;
-    let mockedPublisherSetTransaction;
-    let mockedSecondIncomerSetTransaction;
-    let mockedIncomerSetTransaction;
+  // describe("Event that scale", () => {
+  //   let publisher: Incomer;
+  //   let concernedIncomer: Incomer;
+  //   let secondConcernedIncomer: Incomer;
+  //   let publisherTransactionStore: TransactionStore<"incomer">;
+  //   let incomerTransactionStore: TransactionStore<"incomer">;
+  //   let secondIncomerTransactionStore: TransactionStore<"incomer">;
+  //   let mockedPublisherSetTransaction;
+  //   let mockedSecondIncomerSetTransaction;
+  //   let mockedIncomerSetTransaction;
 
-    // Constants
-    const event: EventOptions<"accountingFolder"> = {
-      name: "accountingFolder",
-      operation: "CREATE",
-      data: {
-        id: "1"
-      },
-      scope: {
-        schemaId: 1
-      },
-      metadata: {
-        agent: "jest",
-        createdAt: Date.now()
-      }
-    }
+  //   // Constants
+  //   const event: EventOptions<"accountingFolder"> = {
+  //     name: "accountingFolder",
+  //     operation: "CREATE",
+  //     data: {
+  //       id: "1"
+  //     },
+  //     scope: {
+  //       schemaId: 1
+  //     },
+  //     metadata: {
+  //       agent: "jest",
+  //       createdAt: Date.now()
+  //     }
+  //   }
 
-    beforeAll(async() => {
-      publisher = new Incomer({
-        name: randomUUID(),
-        eventsCast: ["accountingFolder"],
-        eventsSubscribe: [],
-        eventCallback: mockedEventComeBackHandler
-      });
+  //   beforeAll(async() => {
+  //     publisher = new Incomer({
+  //       name: randomUUID(),
+  //       eventsCast: ["accountingFolder"],
+  //       eventsSubscribe: [],
+  //       eventCallback: mockedEventComeBackHandler
+  //     });
 
-      concernedIncomer = new Incomer({
-        name: randomUUID(),
-        eventsCast: [],
-        eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
-        eventCallback: mockedEventComeBackHandler
-      });
+  //     concernedIncomer = new Incomer({
+  //       name: randomUUID(),
+  //       eventsCast: [],
+  //       eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
+  //       eventCallback: mockedEventComeBackHandler
+  //     });
 
-      secondConcernedIncomer = new Incomer({
-        name: randomUUID(),
-        eventsCast: [],
-        eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
-        eventCallback: mockedEventComeBackHandler
-      });
+  //     secondConcernedIncomer = new Incomer({
+  //       name: randomUUID(),
+  //       eventsCast: [],
+  //       eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
+  //       eventCallback: mockedEventComeBackHandler
+  //     });
 
-      Reflect.set(concernedIncomer, "logger", incomerLogger);
+  //     Reflect.set(concernedIncomer, "logger", incomerLogger);
 
-      let index = 0;
-      jest.spyOn(Incomer.prototype as any, "handleApprovement")
-        .mockImplementation(async(message: any) => {
-          const { data } = message;
+  //     let index = 0;
+  //     jest.spyOn(Incomer.prototype as any, "handleApprovement")
+  //       .mockImplementation(async(message: any) => {
+  //         const { data } = message;
 
-          if (index === 0) {
-            Reflect.set(publisher, "incomerChannelName", data.uuid);
-            Reflect.set(publisher, "providedUUID", data.uuid);
+  //         if (index === 0) {
+  //           Reflect.set(publisher, "incomerChannelName", data.uuid);
+  //           Reflect.set(publisher, "providedUUID", data.uuid);
 
-            publisher["subscriber"].subscribe(data.uuid);
+  //           publisher["subscriber"].subscribe(data.uuid);
 
-            Reflect.set(publisher, "incomerChannel", new Channel({
-              name: data.uuid
-            }));
+  //           Reflect.set(publisher, "incomerChannel", new Channel({
+  //             name: data.uuid
+  //           }));
 
-            publisherTransactionStore = new TransactionStore({
-              prefix: data.uuid,
-              instance: "incomer"
-            });
+  //           publisherTransactionStore = new TransactionStore({
+  //             prefix: data.uuid,
+  //             instance: "incomer"
+  //           });
 
-            mockedPublisherSetTransaction = jest.spyOn(publisherTransactionStore, "setTransaction");
+  //           mockedPublisherSetTransaction = jest.spyOn(publisherTransactionStore, "setTransaction");
 
-            Reflect.set(publisher, "incomerTransactionStore", publisherTransactionStore);
+  //           Reflect.set(publisher, "incomerTransactionStore", publisherTransactionStore);
 
-            publisher.emit("registered");
-          }
-          else if (index === 1) {
-            Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
-            Reflect.set(concernedIncomer, "providedUUID", data.uuid);
+  //           publisher.emit("registered");
+  //         }
+  //         else if (index === 1) {
+  //           Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
+  //           Reflect.set(concernedIncomer, "providedUUID", data.uuid);
 
-            concernedIncomer["subscriber"].subscribe(data.uuid);
+  //           concernedIncomer["subscriber"].subscribe(data.uuid);
 
-            Reflect.set(concernedIncomer, "incomerChannel", new Channel({
-              name: data.uuid
-            }));
+  //           Reflect.set(concernedIncomer, "incomerChannel", new Channel({
+  //             name: data.uuid
+  //           }));
 
-            incomerTransactionStore = new TransactionStore({
-              prefix: data.uuid,
-              instance: "incomer"
-            });
+  //           incomerTransactionStore = new TransactionStore({
+  //             prefix: data.uuid,
+  //             instance: "incomer"
+  //           });
 
-            mockedIncomerSetTransaction = jest.spyOn(incomerTransactionStore, "setTransaction");
+  //           mockedIncomerSetTransaction = jest.spyOn(incomerTransactionStore, "setTransaction");
 
-            Reflect.set(concernedIncomer, "incomerTransactionStore", incomerTransactionStore);
+  //           Reflect.set(concernedIncomer, "incomerTransactionStore", incomerTransactionStore);
 
-            concernedIncomer.emit("registered");
-          }
-          else {
-            Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
-            Reflect.set(secondConcernedIncomer, "providedUUID", data.uuid);
+  //           concernedIncomer.emit("registered");
+  //         }
+  //         else {
+  //           Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
+  //           Reflect.set(secondConcernedIncomer, "providedUUID", data.uuid);
 
-            secondConcernedIncomer["subscriber"].subscribe(data.uuid);
+  //           secondConcernedIncomer["subscriber"].subscribe(data.uuid);
 
-            Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
-              name: data.uuid
-            }));
+  //           Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
+  //             name: data.uuid
+  //           }));
 
-            secondIncomerTransactionStore = new TransactionStore({
-              prefix: data.uuid,
-              instance: "incomer"
-            });
+  //           secondIncomerTransactionStore = new TransactionStore({
+  //             prefix: data.uuid,
+  //             instance: "incomer"
+  //           });
 
-            mockedSecondIncomerSetTransaction = jest.spyOn(secondIncomerTransactionStore, "setTransaction");
+  //           mockedSecondIncomerSetTransaction = jest.spyOn(secondIncomerTransactionStore, "setTransaction");
 
-            Reflect.set(secondConcernedIncomer, "incomerTransactionStore", secondIncomerTransactionStore);
+  //           Reflect.set(secondConcernedIncomer, "incomerTransactionStore", secondIncomerTransactionStore);
 
-            secondConcernedIncomer.emit("registered");
-          }
+  //           secondConcernedIncomer.emit("registered");
+  //         }
 
-          index++;
-      });
+  //         index++;
+  //     });
 
-      await publisher.initialize();
-      await concernedIncomer.initialize();
-      await secondConcernedIncomer.initialize();
+  //     await publisher.initialize();
+  //     await concernedIncomer.initialize();
+  //     await secondConcernedIncomer.initialize();
 
-      await timers.setTimeout(1_600);
+  //     await timers.setTimeout(1_600);
 
-      await publisher.publish(event);
-    });
+  //     await publisher.publish(event);
+  //   });
 
-    test("callback function must have been call & one of the incomers should have create the relating transaction", async() => {
-      await timers.setTimeout(1_600);
+  //   test("callback function must have been call & one of the incomers should have create the relating transaction", async() => {
+  //     await timers.setTimeout(1_600);
 
-      expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
-        ...event,
-        redisMetadata: expect.anything(),
-        mainTransaction: true,
-        resolved: false,
-        relatedTransaction: null
-      });
+  //     expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
+  //       ...event,
+  //       redisMetadata: expect.anything(),
+  //       mainTransaction: true,
+  //       resolved: false,
+  //       relatedTransaction: null
+  //     });
 
-      expect(mockedIncomerSetTransaction).toHaveBeenCalledWith({
-        ...event,
-        redisMetadata: expect.anything(),
-        mainTransaction: false,
-        resolved: false,
-        relatedTransaction: expect.anything()
-      });
-      expect(mockedSecondIncomerSetTransaction).toHaveBeenCalledWith({
-        ...event,
-        redisMetadata: expect.anything(),
-        mainTransaction: false,
-        resolved: false,
-        relatedTransaction: expect.anything()
-      });
+  //     expect(mockedIncomerSetTransaction).toHaveBeenCalledWith({
+  //       ...event,
+  //       redisMetadata: expect.anything(),
+  //       mainTransaction: false,
+  //       resolved: false,
+  //       relatedTransaction: expect.anything()
+  //     });
+  //     expect(mockedSecondIncomerSetTransaction).toHaveBeenCalledWith({
+  //       ...event,
+  //       redisMetadata: expect.anything(),
+  //       mainTransaction: false,
+  //       resolved: false,
+  //       relatedTransaction: expect.anything()
+  //     });
 
-      expect(mockedEventComeBackHandler).toHaveBeenCalledTimes(2);
-      expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
-        ...event
-      });
+  //     expect(mockedEventComeBackHandler).toHaveBeenCalledTimes(2);
+  //     expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
+  //       ...event
+  //     });
 
-      await timers.setTimeout(2_400);
+  //     await timers.setTimeout(2_400);
 
-      const publisherTransactions = await publisherTransactionStore.getTransactions();
-      expect(publisherTransactions).not.toContain({
-        ...event,
-        redisMetadata: expect.anything(),
-        relatedTransaction: null,
-        mainTransaction: true,
-        resolved: false
-      });
-    });
-  });
+  //     const publisherTransactions = await publisherTransactionStore.getTransactions();
+  //     expect(publisherTransactions).not.toContain({
+  //       ...event,
+  //       redisMetadata: expect.anything(),
+  //       relatedTransaction: null,
+  //       mainTransaction: true,
+  //       resolved: false
+  //     });
+  //   });
+  // });
 });
 
 

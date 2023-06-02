@@ -13,11 +13,18 @@ import * as Logger from "pino";
 // Import Internal Dependencies
 import { Dispatcher, Incomer } from "../../../../src/index";
 
-// Internal Dependencies Mocks
-const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
-
-const dispatcherLogger = Logger.pino();
-const incomerLogger = Logger.pino();
+const dispatcherLogger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
+const incomerLogger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 const mockedDispatcherLoggerInfo = jest.spyOn(dispatcherLogger, "info");
 

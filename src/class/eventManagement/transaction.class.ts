@@ -4,8 +4,7 @@ import { randomUUID } from "crypto";
 // Import Third-party Dependencies
 import {
   KVOptions,
-  KVPeer,
-  Redis
+  KVPeer
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
@@ -40,25 +39,23 @@ type HandlerTransaction = {
   resolved: boolean;
 }
 
-export type Transaction<T extends Instance = Instance> = (
-  T extends "dispatcher" ? (
-    (
-      (
-        DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
-      ) | (
-        Omit<IncomerChannelMessages["IncomerMessages"], "redisMetadata"> &
-        Pick<IncomerChannelMessages["DispatcherMessages"], "redisMetadata">
-      )
-    ) & (
-      SpreedTransaction | MainTransaction
-    )
-  ) : (
-    (
-      DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessages"]
-    ) & (
-      HandlerTransaction | MainTransaction
-    )
+type DispatcherTransaction = (SpreedTransaction | MainTransaction) & (
+  (
+    DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
+  ) | (
+    Omit<IncomerChannelMessages["IncomerMessages"], "redisMetadata"> &
+    Pick<IncomerChannelMessages["DispatcherMessages"], "redisMetadata">
   )
+)
+
+type IncomerTransaction = (
+  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessages"]
+) & (
+  HandlerTransaction | MainTransaction
+)
+
+export type Transaction<T extends Instance = Instance> = (
+  T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction
 ) & {
   aliveSince: number;
 }
@@ -89,7 +86,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     const mappedTransactions: Transactions<T> = new Map();
 
     const transactions = await Promise.all(transactionsKeys.map(
-      (transactionKey) => super.getValue(transactionKey)
+      (transactionKey) => this.getValue(transactionKey)
     ));
 
     for (const transaction of transactions) {
@@ -115,7 +112,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
       aliveSince: Date.now()
     } as Transaction<T>;
 
-    super.setValue({ key: transactionKey, value: formattedTransaction });
+    this.setValue({ key: transactionKey, value: formattedTransaction });
 
     return transactionId;
   }
@@ -123,14 +120,14 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
   async updateTransaction(transactionId: string, transaction: Transaction<T>): Promise<void> {
     const key = `${this.key}-${transactionId}`;
 
-    super.setValue({ key, value: { ...transaction, aliveSince: Date.now() } });
+    this.setValue({ key, value: { ...transaction, aliveSince: Date.now() } });
   }
 
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
-    return await super.getValue(`${this.key}-${transactionId}`);
+    return await this.getValue(`${this.key}-${transactionId}`);
   }
 
   async deleteTransaction(transactionId: string) {
-    await super.deleteValue(`${this.key}-${transactionId}`);
+    await this.deleteValue(`${this.key}-${transactionId}`);
   }
 }

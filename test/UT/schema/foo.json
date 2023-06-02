@@ -2,7 +2,7 @@
   "foo": {
     "type": "object",
     "properties": {
-      "event": {
+      "name": {
         "type": "string",
         "pattern": "foo"
       },
@@ -15,25 +15,9 @@
         },
         "required": ["foo"],
         "additionalProperties": false
-      },
-      "redisMetadata": {
-        "type": "object",
-        "properties": {
-          "origin": {
-            "type": "string"
-          },
-          "prefix": {
-            "type": "string"
-          },
-          "transactionId": {
-            "type": "string"
-          }
-        },
-        "required": ["origin", "transactionId"],
-        "additionalProperties": false
       }
     },
-    "required": ["event", "data", "redisMetadata"],
+    "required": ["name", "data"],
     "additionalProperties": false
   }
 }

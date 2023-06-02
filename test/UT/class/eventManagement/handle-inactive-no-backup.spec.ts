@@ -16,17 +16,29 @@ import {
   Dispatcher,
   Incomer,
   eventsValidationFunction,
-  EventOptions
+  EventOptions,
+  Events,
+  validate
 } from "../../../../src/index";
 import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
 
 // Internal Dependencies Mocks
-const dispatcherLogger = Logger.pino();
-const incomerLogger = Logger.pino();
+const dispatcherLogger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
+const incomerLogger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
 const mockedEventComeBackHandler = jest.fn();
 
 describe("Publishing/exploiting a custom event & inactive incomer", () => {
-  let dispatcher: Dispatcher;
+  let dispatcher: Dispatcher<EventOptions<keyof Events>>;
   let backupIncomerTransactionStore;
   let mockedBackedUpSetTransaction;
 
@@ -41,7 +53,10 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       checkLastActivityInterval: 2_600,
       checkTransactionInterval: 6_500,
       idleTime: 3_000,
-      eventsValidationFunction: eventsValidationFunction
+      eventsValidation: {
+        eventsValidationFunction,
+        schemaValidationCallback: validate
+      }
      });
 
     backupIncomerTransactionStore = new TransactionStore({

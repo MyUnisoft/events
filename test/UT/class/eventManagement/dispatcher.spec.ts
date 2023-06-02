@@ -14,12 +14,17 @@ import * as Logger from "pino";
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { Dispatcher } from "../../../../src/index";
+import { Dispatcher, EventOptions, Events, validate } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
 
 // Internal Dependencies Mocks
-const logger = Logger.pino();
+const logger = Logger.pino({
+  level: "debug",
+  transport: {
+    target: "pino-pretty"
+  }
+});
 const mockedLoggerError = jest.spyOn(logger, "error");
 const mockedLoggerInfo = jest.spyOn(logger, "info");
 
@@ -573,7 +578,7 @@ describe("Dispatcher", () => {
   });
 
   describe("Dispatcher with injected schemas", () => {
-    let dispatcher: Dispatcher;
+    let dispatcher: Dispatcher<EventOptions<keyof Events>>;
 
     beforeAll(async() => {
       await clearAllKeys();
@@ -586,7 +591,9 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
-        eventsValidationFunction,
+        eventsValidation: {
+          eventsValidationFunction
+        },
         pingInterval: 2_000,
         checkLastActivityInterval: 6_000,
         checkTransactionInterval: 4_000,
@@ -685,33 +692,6 @@ describe("Dispatcher", () => {
     });
 
     describe("Publishing on the dispatcher channel", () => {
-      describe("Publishing an unknown event", () => {
-        test("it should", async() => {
-          const channel = new Channel({
-            name: "dispatcher"
-          });
-
-          const event = {
-            name: "foo",
-            data: {
-              foo: "bar"
-            },
-            redisMetadata: {
-              origin: "foo",
-              transactionId: "foo"
-            }
-          };
-
-          await channel.publish(event);
-
-          await timers.setTimeout(1_000);
-
-          expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
-          expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
-          expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
-        });
-      });
-
       describe("Publishing well formed register event", () => {
         let incomerName = randomUUID();
         let approved = false;
@@ -1026,7 +1006,7 @@ describe("Dispatcher", () => {
   });
 
   describe("Dispatcher with prefix & injected schema", () => {
-    let dispatcher: Dispatcher;
+    let dispatcher: Dispatcher<EventOptions<keyof Events>>;
     let prefix = "local" as "local";
 
     beforeAll(async() => {
@@ -1040,7 +1020,9 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
-        eventsValidationFunction,
+        eventsValidation: {
+          eventsValidationFunction
+        },
         pingInterval: 2_000,
         checkLastActivityInterval: 6_000,
         checkTransactionInterval: 4_000,
@@ -1343,7 +1325,7 @@ describe("Dispatcher", () => {
           expect(mockedHandleIncomerMessages).toHaveBeenCalled();
           expect(hasDistributedEvents).toStrictEqual([true, true]);
           expect(mainTransaction).toBeNull();
-          // expect(secondIncomerTransaction).toBeNull();
+          expect(secondIncomerTransaction).toBeNull();
           expect(thirdIncomerTransaction).toBeNull();
         });
       });

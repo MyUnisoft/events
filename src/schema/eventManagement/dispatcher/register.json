@@ -40,25 +40,9 @@
         },
         "required": ["name", "eventsCast", "eventsSubscribe"],
         "additionalProperties": false
-      },
-      "redisMetadata": {
-        "type": "object",
-        "properties": {
-          "origin": {
-            "type": "string"
-          },
-          "prefix": {
-            "type": "string"
-          },
-          "transactionId": {
-            "type": "string"
-          }
-        },
-        "required": ["origin", "transactionId"],
-        "additionalProperties": false
       }
     },
-    "required": ["name", "data", "redisMetadata"],
+    "required": ["name", "data"],
     "additionalProperties": false
   }
 }

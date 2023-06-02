@@ -2,8 +2,8 @@
 import {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
-  EventsSubscribe,
-  EventsCast
+  EventSubscribe,
+  EventCast
 } from "./index";
 
 // Send by the a Dispatcher
@@ -26,8 +26,8 @@ type IncomerMessages = IncomerRegistrationMessage;
 interface IncomerRegistrationDataIn {
   /* Service name */
   name: string;
-  eventsCast: EventsCast;
-  eventsSubscribe: EventsSubscribe;
+  eventsCast: EventCast[];
+  eventsSubscribe: EventSubscribe[];
 }
 
 export type IncomerRegistrationMessage = {
