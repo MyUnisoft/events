@@ -1,2 +1,2 @@
-export * from "./dispatcher/index";
+export { register } from "./register.json";
 export { redisMetadata } from "./redisMetadata.json";
