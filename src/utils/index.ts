@@ -9,9 +9,11 @@ const ajv = new Ajv();
 
 export type OperationFunctions = Record<string, any>;
 
-type MappedEventsValidationFonction = Map<string, Map<string, ValidateFunction<OperationFunctions>>>;
+export type CustomEventsValidationFunctions = Map<string, ValidateFunction<OperationFunctions>>;
 
-export const eventsValidationFonction: MappedEventsValidationFonction = new Map();
+type MappedEventsValidationFn = Map<string, CustomEventsValidationFunctions>;
+
+export const eventsValidationFn: MappedEventsValidationFn = new Map<string, CustomEventsValidationFunctions>();
 
 for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas)) {
   const operationsValidationFunctions: Map<string, ValidateFunction<OperationFunctions>> = new Map();
@@ -20,5 +22,5 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
     operationsValidationFunctions.set(operation, ajv.compile(validationSchema));
   }
 
-  eventsValidationFonction.set(name, operationsValidationFunctions);
+  eventsValidationFn.set(name, operationsValidationFunctions);
 }

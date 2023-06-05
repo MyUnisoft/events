@@ -1,6 +1,6 @@
 <p align="center"><h1 align="center">
   Events
-</h1>
+</h1></p>
 
 <p align="center">
   MyUnisoft Events validator, schemas and types (useful to work with Webhooks).

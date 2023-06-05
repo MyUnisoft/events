@@ -2,7 +2,7 @@
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { eventsValidationFonction } from "./utils/index";
+import { eventsValidationFn } from "./utils/index";
 import { metadata as metadataSchema, scope as scopeSchema } from "./schema";
 
 // Import Types
@@ -16,11 +16,11 @@ const scopeValidationFunction = ajv.compile(scopeSchema);
 export function validate<T extends keyof Events = keyof Events>(options: EventOptions<T>) {
   const { name, operation, data, scope, metadata } = options;
 
-  if (!eventsValidationFonction.has(name)) {
+  if (!eventsValidationFn.has(name)) {
     throw new Error(`Unknown "event": ${name}`);
   }
 
-  const event = eventsValidationFonction.get(name);
+  const event = eventsValidationFn.get(name);
   if (!event.has(operation.toLocaleLowerCase())) {
     throw new Error(`Unknown "operation": ${operation} for the "event": ${name}`);
   }
@@ -59,4 +59,6 @@ export function isDeleteOperation<T extends keyof Events>(
 
 export * as EventSchemas from "./schema/events/index";
 export * from "./types/index";
-export { eventsValidationFonction } from "./utils/index";
+export { eventsValidationFn } from "./utils/index";
+export * from "./class/eventManagement/dispatcher.class";
+export * from "./class/eventManagement/incomer.class";

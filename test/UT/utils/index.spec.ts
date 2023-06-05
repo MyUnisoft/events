@@ -1,18 +1,18 @@
 // Import Internal Dependencies
-import { eventsValidationFonction } from "../../../src/index";
+import { eventsValidationFn } from "../../../src/index";
 
-describe("eventsValidationFonction", () => {
+describe("eventsValidationFn", () => {
   test("events should be defined", () => {
-    expect(eventsValidationFonction).toBeDefined();
+    expect(eventsValidationFn).toBeDefined();
   });
 
   describe("connector", () => {
     let connector;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("connector")).toBe(true);
+      expect(eventsValidationFn.has("connector")).toBe(true);
 
-      connector = eventsValidationFonction.get("connector");
+      connector = eventsValidationFn.get("connector");
     });
 
     test("connector should have a validation function for \"create\", \"update\", \"delete\"", () => {
@@ -26,9 +26,9 @@ describe("eventsValidationFonction", () => {
     let accountingFolder;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("accountingFolder")).toBe(true);
+      expect(eventsValidationFn.has("accountingFolder")).toBe(true);
 
-      accountingFolder = eventsValidationFonction.get("accountingFolder");
+      accountingFolder = eventsValidationFn.get("accountingFolder");
     });
 
     test("connector should have a validation function for \"create\"", () => {
@@ -40,9 +40,9 @@ describe("eventsValidationFonction", () => {
     let document;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("document")).toBe(true);
+      expect(eventsValidationFn.has("document")).toBe(true);
 
-      document = eventsValidationFonction.get("document");
+      document = eventsValidationFn.get("document");
     });
 
     test("document should have a validation function for \"create\"", () => {
@@ -54,9 +54,9 @@ describe("eventsValidationFonction", () => {
     let portfolio;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("portfolio")).toBe(true);
+      expect(eventsValidationFn.has("portfolio")).toBe(true);
 
-      portfolio = eventsValidationFonction.get("portfolio");
+      portfolio = eventsValidationFn.get("portfolio");
     });
 
     test("portfolio should have a validation function for \"create\"", () => {
@@ -72,9 +72,9 @@ describe("eventsValidationFonction", () => {
     let accountingLineEntry;
 
     beforeAll(() => {
-      expect(eventsValidationFonction.has("accountingLineEntry")).toBe(true);
+      expect(eventsValidationFn.has("accountingLineEntry")).toBe(true);
 
-      accountingLineEntry = eventsValidationFonction.get("accountingLineEntry");
+      accountingLineEntry = eventsValidationFn.get("accountingLineEntry");
     });
 
     test("accountingLineEntry should have a validation function for \"create\"", () => {

@@ -39,4 +39,5 @@ export type WebhooksResponse<T extends (keyof Events)[] = (keyof Events)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
 
+export * from "./eventManagement/index";
 export * from "./events";
