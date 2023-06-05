@@ -57,8 +57,8 @@ Record<string, any>> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
   eventsValidation?: {
-    eventsValidationFunction?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
-    schemaValidationCallback?: (event: T) => void;
+    eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+    validationCbFn?: (event: T) => void;
   },
   pingInterval?: number;
   checkLastActivityInterval?: number;
@@ -114,8 +114,8 @@ Record<string, any>> {
   private checkRelatedTransactionInterval: NodeJS.Timer;
   private idleTime: number;
 
-  private eventsValidationFunction: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
-  private customSchemaValidationCallback: (event: T) => void = null;
+  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  private validationCbFn: (event: T) => void = null;
 
   constructor(options: DispatcherOptions<T> = {}, subscriber?: Redis.Redis) {
     this.prefix = options.prefix ?? "";
@@ -124,11 +124,11 @@ Record<string, any>> {
     this.dispatcherChannelName = this.formattedPrefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
 
-    this.eventsValidationFunction = options?.eventsValidation?.eventsValidationFunction ?? new Map();
-    this.customSchemaValidationCallback = options?.eventsValidation?.schemaValidationCallback;
+    this.eventsValidationFn = options?.eventsValidation?.eventsValidationFn ?? new Map();
+    this.validationCbFn = options?.eventsValidation?.validationCbFn;
 
     for (const [name, validationSchema] of Object.entries(eventsSchema)) {
-      this.eventsValidationFunction.set(name, ajv.compile(validationSchema));
+      this.eventsValidationFn.set(name, ajv.compile(validationSchema));
     }
 
     this.logger = logger.pino({
@@ -795,8 +795,8 @@ Record<string, any>> {
   private schemaValidation(message: IncomerRegistrationMessage | EventMessage<T>) {
     const { redisMetadata, ...event } = message;
 
-    const eventValidations = this.eventsValidationFunction.get(event.name) as ValidateFunction<Record<string, any>>;
-    const redisMetadataValidationFn = this.eventsValidationFunction.get("redisMetadata") as ValidateFunction<Record<string, any>>;
+    const eventValidations = this.eventsValidationFn.get(event.name) as ValidateFunction<Record<string, any>>;
+    const redisMetadataValidationFn = this.eventsValidationFn.get("redisMetadata") as ValidateFunction<Record<string, any>>;
 
     if (!eventValidations) {
       throw new Error("Unknown Event");
@@ -814,8 +814,8 @@ Record<string, any>> {
       return;
     }
 
-    if (this.customSchemaValidationCallback && isIncomerChannelMessage(message)) {
-      this.customSchemaValidationCallback({ ...message, redisMetadata: null } as T);
+    if (this.validationCbFn && isIncomerChannelMessage(message)) {
+      this.validationCbFn({ ...message, redisMetadata: null } as T);
 
       return;
     }

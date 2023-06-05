@@ -584,15 +584,15 @@ describe("Dispatcher", () => {
       await clearAllKeys();
       jest.clearAllMocks();
 
-      const eventsValidationFunction = new Map();
+      const eventsValidationFn = new Map();
 
       for (const [name, validationSchema] of Object.entries(EventsSchemas)) {
-        eventsValidationFunction.set(name, ajv.compile(validationSchema));
+        eventsValidationFn.set(name, ajv.compile(validationSchema));
       }
 
       dispatcher = new Dispatcher({
         eventsValidation: {
-          eventsValidationFunction
+          eventsValidationFn
         },
         pingInterval: 2_000,
         checkLastActivityInterval: 6_000,
@@ -1013,15 +1013,15 @@ describe("Dispatcher", () => {
       await clearAllKeys();
       jest.clearAllMocks();
 
-      const eventsValidationFunction = new Map();
+      const eventsValidationFn = new Map();
 
       for (const [name, validationSchema] of Object.entries(EventsSchemas)) {
-        eventsValidationFunction.set(name, ajv.compile(validationSchema));
+        eventsValidationFn.set(name, ajv.compile(validationSchema));
       }
 
       dispatcher = new Dispatcher({
         eventsValidation: {
-          eventsValidationFunction
+          eventsValidationFn
         },
         pingInterval: 2_000,
         checkLastActivityInterval: 6_000,

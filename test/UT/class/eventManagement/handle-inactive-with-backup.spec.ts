@@ -15,7 +15,7 @@ import * as Logger from "pino";
 import {
   Dispatcher,
   Incomer,
-  eventsValidationFunction,
+  eventsValidationFn,
   EventOptions,
   Events,
   validate
@@ -52,8 +52,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       checkTransactionInterval: 10_000,
       idleTime: 3_000,
       eventsValidation: {
-        eventsValidationFunction,
-        schemaValidationCallback: validate
+        eventsValidationFn,
+        validationCbFn: validate
       }
      });
 
