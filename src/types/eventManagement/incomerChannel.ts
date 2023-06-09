@@ -18,7 +18,7 @@ export type EventMessage<T extends Record<string, any> = Record<string, any>> = 
   redisMetadata: IncomerTransactionMetadata;
 } & T;
 
-export type IncomerChannelMessages = {
+export type IncomerChannelMessages<T extends Record<string, any> = Record<string, any>> = {
   IncomerMessages: EventMessage;
-  DispatcherMessages: DispatcherPingMessage | DistributedEventMessage;
+  DispatcherMessages: DispatcherPingMessage | DistributedEventMessage<T>;
 };

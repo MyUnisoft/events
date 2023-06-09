@@ -33,34 +33,34 @@ import {
 } from "../../types/eventManagement/incomerChannel";
 
 type DispatcherChannelEvents = { name: "approvement" };
-type IncomerChannelEvents = { name: "ping"; message: DispatcherPingMessage } |
-  { name: string; message: DistributedEventMessage };
+type IncomerChannelEvents<T extends Record<string, any>> = { name: "ping"; message: DispatcherPingMessage } |
+  { name: string; message: DistributedEventMessage<T> };
 
-function isDispatcherChannelMessage(value:
+function isDispatcherChannelMessage<T extends Record<string, any>>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
-  IncomerChannelMessages["DispatcherMessages"]
+  IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is DispatcherChannelMessages["DispatcherMessages"] {
   return value.name === "approvement";
 }
 
-function isIncomerChannelMessage(value:
+function isIncomerChannelMessage<T extends Record<string, any>>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
-  IncomerChannelMessages["DispatcherMessages"]
-): value is IncomerChannelMessages["DispatcherMessages"] {
+  IncomerChannelMessages<T>["DispatcherMessages"]
+): value is IncomerChannelMessages<T>["DispatcherMessages"] {
   return value.name !== "approvement";
 }
 
-export type IncomerOptions = {
+export type IncomerOptions<T extends Record<string, any>> = {
   /* Service name */
   name: string;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
-  eventCallback: (message: Omit<DistributedEventMessage, "redisMetadata">) => Promise<void>;
+  eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => Promise<void>;
   prefix?: Prefix;
 };
 
-export class Incomer extends EventEmitter {
-  readonly eventCallback: (message: Omit<DistributedEventMessage, "redisMetadata">) => Promise<void>;
+export class Incomer <T extends Record<string, any> = Record<string, any>> extends EventEmitter {
+  readonly eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => Promise<void>;
 
   protected subscriber: Redis.Redis;
 
@@ -77,9 +77,9 @@ export class Incomer extends EventEmitter {
   private logger: logger.Logger;
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
-  private incomerChannel: Redis.Channel<IncomerChannelMessages["IncomerMessages"]>;
+  private incomerChannel: Redis.Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
 
-  constructor(options: IncomerOptions, subscriber?: Redis.Redis) {
+  constructor(options: IncomerOptions<T>, subscriber?: Redis.Redis) {
     super();
 
     Object.assign(this, {}, options);
@@ -164,21 +164,26 @@ export class Incomer extends EventEmitter {
     }, "Incomer registered");
   }
 
-  public async publish(event: Omit<EventMessage, "redisMetadata">) {
+  public async publish<
+    K extends Record<string, any> | null = null
+  >(
+    event: K extends null ? Omit<EventMessage<T>, "redisMetadata"> :
+    Omit<EventMessage<K>, "redisMetadata">
+  ) {
     const formattedEvent = {
       ...event,
       redisMetadata: {
         origin: this.providedUUID,
         prefix: this.prefix
       }
-    } as EventMessage;
+    } as (K extends null ? EventMessage<T> : EventMessage<K>);
 
     const transactionId = await this.incomerTransactionStore.setTransaction({
       ...formattedEvent,
       mainTransaction: true,
       relatedTransaction: null,
       resolved: false
-    });
+    } as (K extends null ? Transaction<"incomer", T> : Transaction<"incomer", K>));
 
     await this.incomerChannel.publish({
       ...formattedEvent,
@@ -202,7 +207,7 @@ export class Incomer extends EventEmitter {
     }
 
     const formattedMessage: DispatcherChannelMessages["DispatcherMessages"] |
-      IncomerChannelMessages["DispatcherMessages"] = JSON.parse(message);
+      IncomerChannelMessages<T>["DispatcherMessages"] = JSON.parse(message);
 
     if (
       (formattedMessage.redisMetadata && formattedMessage.redisMetadata.origin === this.providedUUID) ||
@@ -261,7 +266,7 @@ export class Incomer extends EventEmitter {
 
   private async handleIncomerMessages(
     channel: string,
-    message: IncomerChannelMessages["DispatcherMessages"]
+    message: IncomerChannelMessages<T>["DispatcherMessages"]
   ): Promise<void> {
     const { name } = message;
 
@@ -271,7 +276,7 @@ export class Incomer extends EventEmitter {
       uptime: process.uptime()
     };
 
-    match<IncomerChannelEvents>({ name, message })
+    match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
       .with({ name: "ping" }, async(res: { name: "ping", message: DispatcherPingMessage }) => {
         const { message } = res;
 
@@ -290,7 +295,7 @@ export class Incomer extends EventEmitter {
           ...logData
         }, "Resolved Ping event");
       })
-      .with(P._, async(res: { name: string, message: DistributedEventMessage }) => {
+      .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => {
         const { message } = res;
         const { redisMetadata, ...event } = message;
 
