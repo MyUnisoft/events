@@ -48,19 +48,25 @@ type DispatcherTransaction = (SpreedTransaction | MainTransaction) & (
   )
 )
 
-type IncomerTransaction = (
-  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessages"]
+type IncomerTransaction<T extends Record<string, any> = Record<string, any>> = (
+  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages<T>["IncomerMessages"]
 ) & (
   HandlerTransaction | MainTransaction
 )
 
-export type Transaction<T extends Instance = Instance> = (
-  T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction
+export type Transaction<
+  T extends Instance = Instance,
+  K extends Record<string, any> = Record<string, any>
+> = (
+  T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction<K>
 ) & {
   aliveSince: number;
 }
 
-export type PartialTransaction<T extends Instance = Instance> = Omit<Transaction<T>, "redisMetadata" | "aliveSince"> & {
+export type PartialTransaction<
+  T extends Instance = Instance,
+  K extends Record<string, any> = Record<string, any>
+> = Omit<Transaction<T, K>, "redisMetadata" | "aliveSince"> & {
   redisMetadata: MetadataWithoutTransactionId<T>
 };
 
@@ -71,7 +77,8 @@ export type TransactionStoreOptions<T extends Instance = Instance> = (Partial<KV
     instance: T;
 };
 
-export class TransactionStore<T extends Instance = Instance> extends KVPeer<Transaction<T>> {
+export class TransactionStore<T extends Instance = Instance, K extends Record<string, any> = Record<string, any>>
+  extends KVPeer<Transaction<T>> {
   private key: string;
 
   constructor(options: TransactionStoreOptions<T>) {
@@ -98,7 +105,7 @@ export class TransactionStore<T extends Instance = Instance> extends KVPeer<Tran
     return mappedTransactions;
   }
 
-  async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
+  async setTransaction(transaction: PartialTransaction<T, K>): Promise<string> {
     const transactionId = randomUUID();
 
     const transactionKey = `${this.key}-${transactionId}`;
