@@ -42,9 +42,9 @@ An Event fully constituted is composed by a `name`, an `operation` and multiple 
 ```ts
 export interface Scope {
   schemaId: number;
-  firmId?: number;
-  accountingFolderId?: number;
-  persPhysiqueId?: number;
+  firmId?: number | null;
+  accountingFolderId?: number | null;
+  persPhysiqueId?: number | null;
 }
 
 export type Method = "POST" | "PATCH" | "PUT" | "DELETE";

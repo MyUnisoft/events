@@ -27,15 +27,16 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
 
   const operationValidationFunction = event.get(operation.toLocaleLowerCase());
   if (!operationValidationFunction(data)) {
-    throw new Error(`Wrong data for the "operation": ${operation} on "event": ${name}`);
+    throw new Error(`"event": ${name} | "operation": ${operation}: ${[...operationValidationFunction.errors]
+      .map((error) => error.message)}`);
   }
 
   if (!metadataValidationFunction(metadata)) {
-    throw new Error("Wrong data for metadata");
+    throw new Error(`metadata: ${[...metadataValidationFunction.errors].map((error) => error.message)}`);
   }
 
   if (!scopeValidationFunction(scope)) {
-    throw new Error("Wrong data for scope");
+    throw new Error(`scope: ${[...scopeValidationFunction.errors].map((error) => error.message)}`);
   }
 }
 

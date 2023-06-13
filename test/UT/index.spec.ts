@@ -17,7 +17,8 @@ describe("validate", () => {
       scope: {
         schemaId: 1,
         firmId: 1,
-        accountingFolderId: 1
+        accountingFolderId: 1,
+        persPhysiqueId: null
       },
       data: {
         id: "1",
@@ -79,13 +80,13 @@ describe("validate", () => {
 
   test("Given a wrong data according to the operation and the event name, it should throw", () => {
     const event = {
-      name: "accountingFolder",
+      name: "connector",
       operation: "CREATE",
       data: {}
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow(`Wrong data for the "operation": ${event.operation} on "event": ${event.name}`);
+      .toThrow(`"event": ${event.name} | "operation": ${event.operation}: must have required property 'id'`);
   });
 
   test("Given a wrong metadata, it should throw", () => {
@@ -109,7 +110,7 @@ describe("validate", () => {
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow("Wrong data for metadata");
+      .toThrow("metadata: must have required property 'agent'");
   });
 
   test("Given a wrong scope, it should throw", () => {
@@ -134,7 +135,7 @@ describe("validate", () => {
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow("Wrong data for scope");
+      .toThrow("scope: must have required property 'schemaId'");
   });
 });
 
