@@ -8,13 +8,16 @@
       "type": "number"
     },
     "firmId": {
-      "type": "number"
+      "type": "number",
+      "nullable": true
     },
     "accountingFolderId": {
-      "type": "number"
+      "type": "number",
+      "nullable": true
     },
     "persPhysiqueId": {
-      "type": "number"
+      "type": "number",
+      "nullable": true
     }
   },
   "required": ["schemaId"],
