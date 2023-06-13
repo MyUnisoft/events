@@ -3,9 +3,9 @@ import { Events } from "./events";
 
 export interface Scope {
   schemaId: number;
-  firmId?: number;
-  accountingFolderId?: number;
-  persPhysiqueId?: number;
+  firmId?: number | null;
+  accountingFolderId?: number | null;
+  persPhysiqueId?: number | null;
 }
 
 export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
