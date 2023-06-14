@@ -89,3 +89,24 @@ export interface AccountingLineEntry {
   }
 }
 ```
+
+# AdminMessage
+
+- **Operations**: VOID 
+- [JSON Schema](./json-schema/events/adminMessage.md)
+
+```ts
+export interface AdminMessage {
+  name: "adminMessage";
+  operation: AdminMessageOperation;
+  data: {
+    event: "admin_message";
+    socketMessage: {
+      id: number;
+      title: string;
+      message: string;
+    };
+    receivers: string[];
+  }
+}
+```

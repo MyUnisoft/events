@@ -6,7 +6,12 @@ import { eventsValidationFn } from "./utils/index";
 import { metadata as metadataSchema, scope as scopeSchema } from "./schema";
 
 // Import Types
-import { EventOptions, Events, Operation } from "./types/index";
+import {
+  EventOptions,
+  EventSubscribe,
+  Events,
+  Operation
+} from "./types/index";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -57,6 +62,16 @@ export function isDeleteOperation<T extends keyof Events>(
 ): operation is Operation["delete"] {
   return operation === "DELETE";
 }
+
+export const AVAILABLE_EVENTS = Object.freeze<EventSubscribe>(
+  ([...eventsValidationFn.keys()].map((name) => {
+    return {
+      name,
+      delay: undefined,
+      horizontalScale: undefined
+    };
+  })).reduce((prev, curr) => Object.assign(prev, { [curr.name]: curr }), {}) as EventSubscribe
+);
 
 export * as EventSchemas from "./schema/events/index";
 export * from "./types/index";
