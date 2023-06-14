@@ -63,14 +63,14 @@ export function isDeleteOperation<T extends keyof Events>(
   return operation === "DELETE";
 }
 
-export const AVAILABLE_EVENTS = Object.freeze<EventSubscribe>(
+export const AVAILABLE_EVENTS = Object.freeze<Record<keyof Events, EventSubscribe>>(
   ([...eventsValidationFn.keys()].map((name) => {
     return {
       name,
       delay: undefined,
       horizontalScale: undefined
     };
-  })).reduce((prev, curr) => Object.assign(prev, { [curr.name]: curr }), {}) as EventSubscribe
+  })).reduce((prev, curr) => Object.assign(prev, { [curr.name]: curr }), {}) as Record<keyof Events, EventSubscribe>
 );
 
 export * as EventSchemas from "./schema/events/index";
