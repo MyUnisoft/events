@@ -81,4 +81,18 @@ describe("eventsValidationFn", () => {
       expect(accountingLineEntry.has("create")).toBe(true);
     });
   });
+
+  describe("AdminMessage", () => {
+    let adminMessage;
+
+    beforeAll(() => {
+      expect(eventsValidationFn.has("adminMessage")).toBe(true);
+
+      adminMessage = eventsValidationFn.get("adminMessage");
+    });
+
+    test("adminMessage should have a validation function for \"void\"", () => {
+      expect(adminMessage.has("void")).toBe(true);
+    });
+  });
 });

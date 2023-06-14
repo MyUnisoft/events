@@ -55,12 +55,12 @@ export type IncomerOptions<T extends Record<string, any>> = {
   name: string;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
-  eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => Promise<void>;
+  eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => void;
   prefix?: Prefix;
 };
 
 export class Incomer <T extends Record<string, any> = Record<string, any>> extends EventEmitter {
-  readonly eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => Promise<void>;
+  readonly eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => void;
 
   protected subscriber: Redis.Redis;
 

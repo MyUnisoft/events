@@ -5,7 +5,9 @@ export interface Operation {
   void: "VOID";
 }
 
-export type ConnectorOperation = Operation[keyof Omit<Operation, "void">];
+export type ConnectorOperation = Operation[
+  keyof Omit<Operation, "void">
+];
 
 export interface Connector {
   name: "connector";
@@ -17,7 +19,7 @@ export interface Connector {
 }
 
 export type AccountingFolderOperation = Operation[
-  keyof Omit<Operation, "update" | "delete" | "void">
+  keyof Pick<Operation, "create">
 ];
 
 export interface AccountingFolder {
@@ -29,7 +31,7 @@ export interface AccountingFolder {
 }
 
 export type DocumentOperation = Operation[
-  keyof Omit<Operation, "update" | "delete" | "void">
+  keyof Pick<Operation, "create">
 ];
 
 export enum DocumentKind {
@@ -61,7 +63,7 @@ export interface Portfolio {
 }
 
 export type AccountingLineEntryOperation = Operation[
-  keyof Omit<Operation, "update" | "delete" | "void">
+  keyof Pick<Operation, "create">
 ];
 
 export interface AccountingLineEntry {
@@ -72,10 +74,29 @@ export interface AccountingLineEntry {
   }
 }
 
+export type AdminMessageOperation = Operation[
+  keyof Pick<Operation, "void">
+]
+
+export interface AdminMessage {
+  name: "adminMessage";
+  operation: AdminMessageOperation;
+  data: {
+    event: "admin_message";
+    socketMessage: {
+      id: number;
+      title: string;
+      message: string;
+    };
+    receivers: string[];
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
   document: Document;
   portfolio: Portfolio;
   accountingLineEntry: AccountingLineEntry;
+  adminMessage: AdminMessage;
 }

@@ -3,3 +3,4 @@ export { accountingFolder } from "./accountingFolder.json";
 export { document } from "./document.json";
 export { portfolio } from "./portfolio.json";
 export { accountingLineEntry } from "./accountingLineEntry.json";
+export { adminMessage } from "./adminMessage.json";
