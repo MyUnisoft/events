@@ -5,20 +5,28 @@ import {
 
 export type DispatcherPingMessage = { name: "ping", data: null, redisMetadata: DispatcherTransactionMetadata };
 export type DistributedEventMessage<
-  T extends Record<string, any> = Record<string, any>
+  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
 > = {
   name: string;
-  data: Record<string, any> | null;
   redisMetadata: DispatcherTransactionMetadata;
-} & Omit<EventMessage<T>, "redisMetadata">;
+} & T;
 
-export type EventMessage<T extends Record<string, any> = Record<string, any>> = {
+export type CallBackEventMessage<
+  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+> = {
   name: string;
-  data: Record<string, any> | null;
+} & T;
+
+export type EventMessage<
+  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+> = {
+  name: string;
   redisMetadata: IncomerTransactionMetadata;
 } & T;
 
-export type IncomerChannelMessages<T extends Record<string, any> = Record<string, any>> = {
+export type IncomerChannelMessages<
+  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+> = {
   IncomerMessages: EventMessage;
   DispatcherMessages: DispatcherPingMessage | DistributedEventMessage<T>;
 };

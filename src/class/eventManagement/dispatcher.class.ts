@@ -88,8 +88,8 @@ function isIncomerRegistrationMessage(
   return value.name === "register";
 }
 
-export class Dispatcher<T extends Record<string, any> =
-Record<string, any>> {
+export class Dispatcher<T extends Record<string, any> & { data: Record<string, any> } =
+Record<string, any> & { data: Record<string, any> }> {
   readonly type = "dispatcher";
   readonly formattedPrefix: string;
   readonly prefix: string;
