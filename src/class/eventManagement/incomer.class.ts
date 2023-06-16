@@ -27,40 +27,44 @@ import {
 } from "../../types/eventManagement/index";
 import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
 import {
+  CallBackEventMessage,
   DispatcherPingMessage,
   DistributedEventMessage,
   EventMessage
 } from "../../types/eventManagement/incomerChannel";
 
 type DispatcherChannelEvents = { name: "approvement" };
-type IncomerChannelEvents<T extends Record<string, any>> = { name: "ping"; message: DispatcherPingMessage } |
-  { name: string; message: DistributedEventMessage<T> };
+type IncomerChannelEvents<
+  T extends Record<string, any> & { data: Record<string, any> }
+> = { name: "ping"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
 
-function isDispatcherChannelMessage<T extends Record<string, any>>(value:
+function isDispatcherChannelMessage<T extends Record<string, any> & { data: Record<string, any> }>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is DispatcherChannelMessages["DispatcherMessages"] {
   return value.name === "approvement";
 }
 
-function isIncomerChannelMessage<T extends Record<string, any>>(value:
+function isIncomerChannelMessage<T extends Record<string, any> & { data: Record<string, any> }>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is IncomerChannelMessages<T>["DispatcherMessages"] {
   return value.name !== "approvement";
 }
 
-export type IncomerOptions<T extends Record<string, any>> = {
+export type IncomerOptions<T extends Record<string, any> & { data: Record<string, any> }> = {
   /* Service name */
   name: string;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
-  eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => void;
+  eventCallback: (message: CallBackEventMessage<T>) => void;
   prefix?: Prefix;
 };
 
-export class Incomer <T extends Record<string, any> = Record<string, any>> extends EventEmitter {
-  readonly eventCallback: (message: Omit<DistributedEventMessage<T>, "redisMetadata">) => void;
+export class Incomer <
+  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+> extends EventEmitter {
+  readonly eventCallback: (message: CallBackEventMessage<T>) => void;
 
   protected subscriber: Redis.Redis;
 
@@ -165,7 +169,7 @@ export class Incomer <T extends Record<string, any> = Record<string, any>> exten
   }
 
   public async publish<
-    K extends Record<string, any> | null = null
+    K extends Record<string, any> & { data: Record<string, any> } | null = null
   >(
     event: K extends null ? Omit<EventMessage<T>, "redisMetadata"> :
     Omit<EventMessage<K>, "redisMetadata">
@@ -315,7 +319,7 @@ export class Incomer <T extends Record<string, any> = Record<string, any>> exten
 
         formattedTransaction.resolved = true;
         await Promise.all([
-          this.eventCallback(event),
+          this.eventCallback(event as unknown as CallBackEventMessage<T>),
           this.incomerTransactionStore.updateTransaction(transactionId, formattedTransaction as Transaction<"incomer">)
         ]);
 

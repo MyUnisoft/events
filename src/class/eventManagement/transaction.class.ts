@@ -48,7 +48,9 @@ type DispatcherTransaction = (SpreedTransaction | MainTransaction) & (
   )
 )
 
-type IncomerTransaction<T extends Record<string, any> = Record<string, any>> = (
+type IncomerTransaction<
+  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+> = (
   DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages<T>["IncomerMessages"]
 ) & (
   HandlerTransaction | MainTransaction
@@ -56,7 +58,7 @@ type IncomerTransaction<T extends Record<string, any> = Record<string, any>> = (
 
 export type Transaction<
   T extends Instance = Instance,
-  K extends Record<string, any> = Record<string, any>
+  K extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
 > = (
   T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction<K>
 ) & {
@@ -65,7 +67,7 @@ export type Transaction<
 
 export type PartialTransaction<
   T extends Instance = Instance,
-  K extends Record<string, any> = Record<string, any>
+  K extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
 > = Omit<Transaction<T, K>, "redisMetadata" | "aliveSince"> & {
   redisMetadata: MetadataWithoutTransactionId<T>
 };
@@ -77,7 +79,10 @@ export type TransactionStoreOptions<T extends Instance = Instance> = (Partial<KV
     instance: T;
 };
 
-export class TransactionStore<T extends Instance = Instance, K extends Record<string, any> = Record<string, any>>
+export class TransactionStore<
+  T extends Instance = Instance, K extends Record<string, any> & { data: Record<string, any> } =
+  Record<string, any> & { data: Record<string, any> }
+>
   extends KVPeer<Transaction<T>> {
   private key: string;
 
