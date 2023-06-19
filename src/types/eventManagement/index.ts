@@ -1,6 +1,6 @@
 import { Events } from "../index";
 
-export type Prefix = "local" | "dev" | "preprod" | "prod";
+export type Prefix = "test" | "development" | "staging" | "production";
 
 export type EventCast<T extends string | keyof Events = string> = T;
 
