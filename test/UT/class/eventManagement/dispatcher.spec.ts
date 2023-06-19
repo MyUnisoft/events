@@ -349,7 +349,7 @@ describe("Dispatcher", () => {
 
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
-    let prefix = "local" as const;
+    let prefix = "test" as const;
     beforeAll(async() => {
       dispatcher = new Dispatcher({
         pingInterval: 1_600,
@@ -368,7 +368,7 @@ describe("Dispatcher", () => {
 
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.formattedPrefix).toBe("local-");
+      expect(dispatcher.formattedPrefix).toBe("test-");
       expect(dispatcher.privateUUID).toBeDefined();
     });
 
@@ -1007,7 +1007,7 @@ describe("Dispatcher", () => {
 
   describe("Dispatcher with prefix & injected schema", () => {
     let dispatcher: Dispatcher<EventOptions<keyof Events>>;
-    let prefix = "local" as "local";
+    let prefix = "test" as "test";
 
     beforeAll(async() => {
       await clearAllKeys();
@@ -1041,7 +1041,7 @@ describe("Dispatcher", () => {
 
     test("Dispatcher should be defined", () => {
       expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.formattedPrefix).toBe("local-");
+      expect(dispatcher.formattedPrefix).toBe("test-");
       expect(dispatcher.privateUUID).toBeDefined();
     });
 
