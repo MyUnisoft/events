@@ -319,6 +319,10 @@ describe("Dispatcher", () => {
         });
       });
 
+      afterAll(async() => {
+        await closeRedis(subscriber);
+      });
+
       test("It should have ping and a new transaction should have been create", async() => {
         await timers.setTimeout(2_000);
 
@@ -551,6 +555,10 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
       });
 
+      afterAll(async() => {
+        await closeRedis(subscriber);
+      });
+
       test("It should have ping and a new transaction should have been create", async() => {
         await timers.setTimeout(3_000);
 
@@ -751,6 +759,10 @@ describe("Dispatcher", () => {
               transactionId
             }
           });
+        });
+
+        afterAll(async() => {
+          await closeRedis(subscriber);
         });
 
         test("it should delete the main transaction in Incomer store", async() => {
@@ -988,6 +1000,10 @@ describe("Dispatcher", () => {
           });
 
           await timers.setTimeout(2_000);
+        });
+
+        afterAll(async() => {
+          await closeRedis(subscriber);
         });
 
         test("it should have distributed the event & resolve the main transaction", async() => {
@@ -1310,6 +1326,10 @@ describe("Dispatcher", () => {
           ]);
 
           await timers.setTimeout(2_000);
+        });
+
+        afterAll(async() => {
+          await closeRedis(subscriber);
         });
 
         test("it should have distributed the event & resolve the main transaction", async() => {
