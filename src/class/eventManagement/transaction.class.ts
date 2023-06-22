@@ -1,5 +1,5 @@
 // Import Node.js Dependencies
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
 import {

@@ -5,6 +5,9 @@ module.exports = {
   collectCoverageFrom: [
     "**/src/**/**/*.ts"
   ],
+  setupFilesAfterEnv: [
+    "./jest.setup.js"
+  ],
   testPathIgnorePatterns: [
     "/node_modules/",
     "/test/fixtures/"

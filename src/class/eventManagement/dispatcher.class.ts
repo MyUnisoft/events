@@ -429,9 +429,13 @@ Record<string, any> & { data: Record<string, any> }> {
           continue;
         }
 
-        const { providedUUID } = concernedRelatedTransactionIncomer;
+        const { providedUUID, prefix } = concernedRelatedTransactionIncomer;
 
-        const concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+        const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
+          new Redis.Channel({
+            name: providedUUID,
+            prefix
+          });
 
         await Promise.all([
           this.publishEvent({
@@ -484,7 +488,13 @@ Record<string, any> & { data: Record<string, any> }> {
             continue;
           }
 
-          const concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID);
+          const { providedUUID, prefix } = concernedIncomer;
+
+          const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
+            new Redis.Channel({
+              name: providedUUID,
+              prefix
+            });
 
           await Promise.all([
             this.publishEvent({
@@ -594,7 +604,13 @@ Record<string, any> & { data: Record<string, any> }> {
           continue;
         }
 
-        const concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID);
+        const { providedUUID, prefix } = concernedIncomer;
+
+        const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
+          new Redis.Channel({
+            name: providedUUID,
+            prefix
+          });
 
         toResolve.push([
           this.publishEvent({
@@ -635,7 +651,13 @@ Record<string, any> & { data: Record<string, any> }> {
         continue;
       }
 
-      const concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID);
+      const { providedUUID, prefix } = concernedIncomer;
+
+      const concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID) ??
+        new Redis.Channel({
+          name: providedUUID,
+          prefix
+        });
 
       await Promise.all([
         this.publishEvent({
@@ -939,7 +961,13 @@ Record<string, any> & { data: Record<string, any> }> {
 
     const toResolve: Promise<any>[] = [];
     for (const incomer of filteredConcernedIncomers) {
-      const relatedChannel = this.incomerChannels.get(incomer.providedUUID);
+      const { providedUUID, prefix } = incomer;
+
+      const relatedChannel = this.incomerChannels.get(providedUUID) ??
+        new Redis.Channel({
+          name: providedUUID,
+          prefix
+        });
 
       if (!relatedChannel) {
         throw new Error("Channel not found");
@@ -949,7 +977,7 @@ Record<string, any> & { data: Record<string, any> }> {
         ...message,
         redisMetadata: {
           origin: this.privateUUID,
-          to: incomer.providedUUID
+          to: providedUUID
         }
       };
 

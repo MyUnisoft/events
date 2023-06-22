@@ -59,17 +59,18 @@ export type IncomerOptions<T extends Record<string, any> & { data: Record<string
   eventsSubscribe: EventSubscribe[];
   eventCallback: (message: CallBackEventMessage<T>) => void;
   prefix?: Prefix;
+  abortTime?: number;
 };
 
 export class Incomer <
   T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
 > extends EventEmitter {
+  readonly name: string;
+  readonly prefix: Prefix | undefined;
   readonly eventCallback: (message: CallBackEventMessage<T>) => void;
 
   protected subscriber: Redis.Redis;
 
-  private name: string;
-  private prefix: Prefix | undefined;
   private prefixedName: string;
   private registerTransactionId: string | null;
   private eventsCast: EventCast[];
@@ -82,6 +83,7 @@ export class Incomer <
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
   private incomerChannel: Redis.Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
+  private abortTime = 60_000;
 
   constructor(options: IncomerOptions<T>, subscriber?: Redis.Redis) {
     super();
@@ -161,7 +163,7 @@ export class Incomer <
       uptime: process.uptime()
     }, "Registering as a new incomer on dispatcher");
 
-    await once(this, "registered");
+    await once(this, "registered", { signal: AbortSignal.timeout(this.abortTime) });
 
     this.logger.info({
       uptime: process.uptime()
