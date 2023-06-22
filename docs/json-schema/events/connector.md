@@ -23,6 +23,10 @@
         },
         "code": {
           "type": "string"
+        },
+        "userId": {
+          "type": "string",
+          "nullable": true
         }
       },
       "required": ["id", "code"],
