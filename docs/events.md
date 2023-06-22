@@ -12,6 +12,7 @@ export interface Connector {
   data: {
     id: string;
     code: string;
+    userId?: string | null;
   };
 }
 ```
