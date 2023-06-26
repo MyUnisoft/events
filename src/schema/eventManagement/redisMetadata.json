@@ -8,6 +8,9 @@
       "prefix": {
         "type": "string"
       },
+      "to": {
+        "type": "string"
+      },
       "transactionId": {
         "type": "string"
       }

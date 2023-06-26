@@ -10,8 +10,6 @@ import { match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
-  REDIS_HOST,
-  REDIS_PORT,
   channels,
   kIncomerStoreName
 } from "../../utils/config";
@@ -117,7 +115,7 @@ Record<string, any> & { data: Record<string, any> }> {
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
   private validationCbFn: (event: T) => void = null;
 
-  constructor(options: DispatcherOptions<T> = {}, subscriber?: Redis.Redis) {
+  constructor(options: DispatcherOptions<T> = {}, subscriber: Redis.Redis) {
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = this.formattedPrefix + kIncomerStoreName;
@@ -138,9 +136,7 @@ Record<string, any> & { data: Record<string, any> }> {
       }
     }).child({ dispatcher: this.formattedPrefix + this.type });
 
-    if (subscriber) {
-      this.subscriber = subscriber;
-    }
+    this.subscriber = subscriber;
 
     this.incomerStore = new Redis.KVPeer({
       prefix: this.prefix,
@@ -202,24 +198,12 @@ Record<string, any> & { data: Record<string, any> }> {
   }
 
   public async initialize() {
-    if (!this.subscriber) {
-      this.subscriber = await Redis.initRedis({
-        port: REDIS_PORT,
-        host: REDIS_HOST
-      } as any, true);
-    }
-
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
     this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
   }
 
   public async close() {
-    if (this.subscriber) {
-      await Redis.closeRedis(this.subscriber);
-      this.subscriber = undefined;
-    }
-
     clearInterval(this.pingInterval);
     this.pingInterval = undefined;
 
@@ -828,14 +812,6 @@ Record<string, any> & { data: Record<string, any> }> {
       throw new Error("Malformed message");
     }
 
-    if (event.name === "register") {
-      if (!eventValidations(event)) {
-        throw new Error("Malformed message");
-      }
-
-      return;
-    }
-
     if (this.validationCbFn && isIncomerChannelMessage(message)) {
       this.validationCbFn({ ...message, redisMetadata: null } as T);
 
@@ -914,19 +890,17 @@ Record<string, any> & { data: Record<string, any> }> {
     channel: string,
     message: IncomerChannelMessages["IncomerMessages"]
   ) {
-    const { name, redisMetadata } = message;
-    const { origin } = redisMetadata;
+    const { redisMetadata, ...event } = message;
+    const { name } = event;
 
     const logData = {
       channel,
+      eventName: name,
       ...message,
       uptime: process.uptime()
     };
 
     const incomerTree = await this.getTree();
-    if (!incomerTree[origin]) {
-      throw new Error("Couldn't find the related incomer");
-    }
 
     const concernedIncomers = Object.values(incomerTree)
       .filter(
@@ -935,9 +909,24 @@ Record<string, any> & { data: Record<string, any> }> {
       );
 
     if (concernedIncomers.length === 0) {
-      this.logger.warn(logData, "No concerned Incomer found");
+      if (name === "ping") {
+        this.logger.warn(logData, "No concerned Incomer found");
+      }
+      else {
+        const transactionId = await this.backupDispatcherTransactionStore.setTransaction({
+          ...event,
+          redisMetadata: {
+            origin: this.privateUUID,
+            to: "foo"
+          },
+          mainTransaction: false,
+          relatedTransaction: redisMetadata.transactionId,
+          resolved: false
+        });
 
-      // Store in recovery state
+        this.logger.warn({ ...logData, transactionId }, "Backed-up event");
+      }
+
       return;
     }
 

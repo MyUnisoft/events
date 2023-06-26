@@ -1,6 +1,3 @@
-export const REDIS_PORT = process.env.REDIS_PORT;
-export const REDIS_HOST = process.env.REDIS_HOST;
-
 export const kIncomerStoreName = "incomer" as const;
 export const kTransactionStoreName = "transaction" as const;
 

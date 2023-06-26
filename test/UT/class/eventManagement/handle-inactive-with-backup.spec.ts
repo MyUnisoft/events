@@ -39,12 +39,18 @@ const mockedEventComeBackHandler = jest.fn();
 
 describe("Publishing/exploiting a custom event & inactive incomer", () => {
   let dispatcher: Dispatcher<EventOptions<keyof Events>>;
+  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any);
+
+    subscriber = await initRedis({
+      port: process.env.REDIS_PORT,
+      host: process.env.REDIS_HOST
+    } as any, true);
 
     dispatcher = new Dispatcher({
       pingInterval: 10_000,
@@ -55,7 +61,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsValidationFn,
         validationCbFn: validate
       }
-     });
+     }, subscriber);
 
     Reflect.set(dispatcher, "logger", dispatcherLogger);
 
@@ -65,6 +71,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   afterAll(async() => {
     await dispatcher.close();
     await closeRedis();
+    await closeRedis(subscriber);
   });
 
   afterEach(async() => {
@@ -191,21 +198,21 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       concernedIncomer = new Incomer({
         name: randomUUID(),
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       secondConcernedIncomer = new Incomer({
         name: randomUUID(),
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       Reflect.set(concernedIncomer, "logger", incomerLogger);
 
