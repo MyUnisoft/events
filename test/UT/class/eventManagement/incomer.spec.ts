@@ -5,8 +5,7 @@ import timers from "node:timers/promises";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeRedis,
-  clearAllKeys
+  closeAllRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -14,10 +13,7 @@ import * as Logger from "pino";
 import { Incomer } from "../../../../src/index";
 
 const incomerLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 
 describe("Init Incomer without Dispatcher alive", () => {
@@ -37,17 +33,16 @@ describe("Init Incomer without Dispatcher alive", () => {
     subscriber = await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
-    } as any, true);
+    } as any, "subscriber");
 
     incomer = new Incomer({
       name: randomUUID(),
+      logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
       abortTime: 5_000
-    }, subscriber);
-
-    Reflect.set(incomer, "logger", incomerLogger);
+    });
   });
 
   test("Incomer should not init", async() => {
@@ -62,7 +57,6 @@ describe("Init Incomer without Dispatcher alive", () => {
   })
 
   afterAll(async() => {
-    await closeRedis();
-    await closeRedis(subscriber);
+    await closeAllRedis();
   });
 });

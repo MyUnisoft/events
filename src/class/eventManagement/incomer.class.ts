@@ -3,8 +3,11 @@ import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
-import * as Redis from "@myunisoft/redis";
-import * as logger from "pino";
+import {
+  getRedis,
+  Channel
+} from "@myunisoft/redis";
+import { Logger, pino } from "pino";
 import { P, match } from "ts-pattern";
 
 // Import Internal Dependencies
@@ -21,38 +24,42 @@ import {
   EventCast,
   EventSubscribe,
   DispatcherChannelMessages,
-  IncomerChannelMessages
-} from "../../types/eventManagement/index";
-import { DispatcherRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
-import {
+  IncomerChannelMessages,
+  DispatcherRegistrationMessage,
   CallBackEventMessage,
   DispatcherPingMessage,
   DistributedEventMessage,
-  EventMessage
-} from "../../types/eventManagement/incomerChannel";
+  EventMessage,
+  GenericEvent
+} from "../../types/eventManagement/index";
+import { EventOptions, Events } from "../../types";
+import { defaultStandardLog } from "../../utils/index";
+import { StandardLog } from "./dispatcher.class";
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
-  T extends Record<string, any> & { data: Record<string, any> }
+  T extends GenericEvent = GenericEvent
 > = { name: "ping"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
 
-function isDispatcherChannelMessage<T extends Record<string, any> & { data: Record<string, any> }>(value:
+function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is DispatcherChannelMessages["DispatcherMessages"] {
   return value.name === "approvement";
 }
 
-function isIncomerChannelMessage<T extends Record<string, any> & { data: Record<string, any> }>(value:
+function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is IncomerChannelMessages<T>["DispatcherMessages"] {
   return value.name !== "approvement";
 }
 
-export type IncomerOptions<T extends Record<string, any> & { data: Record<string, any> }> = {
+export type IncomerOptions<T extends GenericEvent = EventOptions<keyof Events>> = {
   /* Service name */
   name: string;
+  logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  standardLog?: StandardLog;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   eventCallback: (message: CallBackEventMessage<T>) => void;
@@ -61,46 +68,44 @@ export type IncomerOptions<T extends Record<string, any> & { data: Record<string
 };
 
 export class Incomer <
-  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+  T extends GenericEvent = EventOptions<keyof Events>
 > extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
   readonly eventCallback: (message: CallBackEventMessage<T>) => void;
 
-  protected subscriber: Redis.Redis;
-
   private prefixedName: string;
   private registerTransactionId: string | null;
   private eventsCast: EventCast[];
   private eventsSubscribe: EventSubscribe[];
-  private dispatcherChannel: Redis.Channel<DispatcherChannelMessages["IncomerMessages"]>;
+  private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
   private baseUUID = randomUUID();
   private providedUUID: string;
-  private logger: logger.Logger;
+  private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
-  private incomerChannel: Redis.Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
+  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
   private abortTime = 60_000;
+  private standardLogFn: StandardLog<T>;
 
-  constructor(options: IncomerOptions<T>, subscriber: Redis.Redis) {
+  constructor(options: IncomerOptions<T>) {
     super();
 
     Object.assign(this, {}, options);
 
     this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
     this.dispatcherChannelName = this.prefixedName + channels.dispatcher;
+    this.standardLogFn = options.standardLog ?? defaultStandardLog;
 
-    this.logger = logger.pino({
-      level: "debug",
+    this.logger = options.logger ?? pino({
+      level: "info",
       transport: {
         target: "pino-pretty"
       }
     }).child({ incomer: this.prefixedName + this.name });
 
-    this.subscriber = subscriber;
-
-    this.dispatcherChannel = new Redis.Channel({
+    this.dispatcherChannel = new Channel({
       name: channels.dispatcher,
       prefix: this.prefix
     });
@@ -109,6 +114,10 @@ export class Incomer <
       prefix: this.prefixedName + this.baseUUID,
       instance: "incomer"
     });
+  }
+
+  get subscriber() {
+    return getRedis("subscriber");
   }
 
   public async initialize() {
@@ -148,19 +157,15 @@ export class Incomer <
       }
     });
 
-    this.logger.info({
-      uptime: process.uptime()
-    }, "Registering as a new incomer on dispatcher");
+    this.logger.info("Registering as a new incomer on dispatcher");
 
     await once(this, "registered", { signal: AbortSignal.timeout(this.abortTime) });
 
-    this.logger.info({
-      uptime: process.uptime()
-    }, "Incomer registered");
+    this.logger.info("Incomer registered");
   }
 
   public async publish<
-    K extends Record<string, any> & { data: Record<string, any> } | null = null
+    K extends GenericEvent | null = null
   >(
     event: K extends null ? Omit<EventMessage<T>, "redisMetadata"> :
     Omit<EventMessage<K>, "redisMetadata">
@@ -178,7 +183,7 @@ export class Incomer <
       mainTransaction: true,
       relatedTransaction: null,
       resolved: false
-    } as (K extends null ? Transaction<"incomer", T> : Transaction<"incomer", K>));
+    });
 
     await this.incomerChannel.publish({
       ...formattedEvent,
@@ -186,14 +191,9 @@ export class Incomer <
         ...formattedEvent.redisMetadata,
         transactionId
       }
-    });
+    } as IncomerChannelMessages<T>["IncomerMessages"]);
 
-    const logData = {
-      ...formattedEvent,
-      uptime: process.uptime()
-    };
-
-    this.logger.info(logData, "Published event");
+    this.logger.info(this.standardLogFn(event as T, "Published event"));
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -234,18 +234,14 @@ export class Incomer <
 
     const logData = {
       channel,
-      ...message,
-      uptime: process.uptime()
+      ...message
     };
 
     const { name } = message;
 
     match<DispatcherChannelEvents>({ name })
       .with({ name: "approvement" }, async() => {
-        this.logger.info(
-          logData,
-          "New approvement message on Dispatcher Channel"
-        );
+        this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
         await this.handleApprovement(message);
       })
@@ -265,15 +261,14 @@ export class Incomer <
   ): Promise<void> {
     const { name } = message;
 
-    const logData = {
-      channel,
-      ...message,
-      uptime: process.uptime()
-    };
-
     match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
       .with({ name: "ping" }, async(res: { name: "ping", message: DispatcherPingMessage }) => {
         const { message } = res;
+
+        const logData = {
+          channel,
+          ...message
+        };
 
         await this.incomerTransactionStore.setTransaction({
           ...message,
@@ -286,13 +281,16 @@ export class Incomer <
           resolved: true
         });
 
-        this.logger.info({
-          ...logData
-        }, "Resolved Ping event");
+        this.logger.info(logData, "Resolved Ping event");
       })
       .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => {
         const { message } = res;
         const { redisMetadata, ...event } = message;
+
+        const logData = {
+          channel,
+          ...message
+        };
 
         const transaction: PartialTransaction<"incomer"> = {
           ...message,
@@ -314,9 +312,7 @@ export class Incomer <
           this.incomerTransactionStore.updateTransaction(transactionId, formattedTransaction as Transaction<"incomer">)
         ]);
 
-        this.logger.info({
-          ...logData
-        }, "Resolved Custom event");
+        this.logger.info(this.standardLogFn(logData, "Resolved Custom event"));
       })
       .exhaustive()
       .catch((error) => {
@@ -336,7 +332,7 @@ export class Incomer <
 
     await this.subscriber.subscribe(this.incomerChannelName);
 
-    this.incomerChannel = new Redis.Channel({
+    this.incomerChannel = new Channel({
       name: this.providedUUID,
       prefix: this.prefix
     });

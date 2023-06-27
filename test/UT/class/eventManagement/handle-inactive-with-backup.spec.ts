@@ -5,9 +5,9 @@ import timers from "timers/promises";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeRedis,
   clearAllKeys,
-  Channel
+  Channel,
+  closeAllRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -24,16 +24,10 @@ import { TransactionStore } from "../../../../src/class/eventManagement/transact
 
 // Internal Dependencies Mocks
 const dispatcherLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const incomerLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const mockedEventComeBackHandler = jest.fn();
 
@@ -50,9 +44,10 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     subscriber = await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
-    } as any, true);
+    } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      logger: dispatcherLogger,
       pingInterval: 10_000,
       checkLastActivityInterval: 2_600,
       checkTransactionInterval: 10_000,
@@ -61,7 +56,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsValidationFn,
         validationCbFn: validate
       }
-     }, subscriber);
+     });
 
     Reflect.set(dispatcher, "logger", dispatcherLogger);
 
@@ -70,8 +65,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
   afterAll(async() => {
     await dispatcher.close();
-    await closeRedis();
-    await closeRedis(subscriber);
+    await closeAllRedis();
   });
 
   afterEach(async() => {
@@ -198,23 +192,22 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       concernedIncomer = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       secondConcernedIncomer = new Incomer({
         name: randomUUID(),
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
-
-      Reflect.set(concernedIncomer, "logger", incomerLogger);
+      });
 
       await publisher.initialize();
       await concernedIncomer.initialize();

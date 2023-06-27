@@ -1,32 +1,34 @@
 // Import Internal Dependencies
 import {
-  DispatcherTransactionMetadata, IncomerTransactionMetadata
+  DispatcherTransactionMetadata,
+  GenericEvent,
+  IncomerTransactionMetadata
 } from "./index";
 
 export type DispatcherPingMessage = { name: "ping", data: null, redisMetadata: DispatcherTransactionMetadata };
 export type DistributedEventMessage<
-  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
-> = {
+  T extends GenericEvent = GenericEvent
+> = T & {
   name: string;
   redisMetadata: DispatcherTransactionMetadata;
-} & T;
+};
 
 export type CallBackEventMessage<
-  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
-> = {
+  T extends GenericEvent = GenericEvent
+> = T & {
   name: string;
-} & T;
+};
 
 export type EventMessage<
-  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
-> = {
+  T extends GenericEvent = GenericEvent
+> = T & {
   name: string;
   redisMetadata: IncomerTransactionMetadata;
-} & T;
+};
 
 export type IncomerChannelMessages<
-  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+  T extends GenericEvent = GenericEvent
 > = {
-  IncomerMessages: EventMessage;
+  IncomerMessages: EventMessage<T>;
   DispatcherMessages: DispatcherPingMessage | DistributedEventMessage<T>;
 };

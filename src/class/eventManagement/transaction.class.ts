@@ -12,7 +12,8 @@ import {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   DispatcherChannelMessages,
-  IncomerChannelMessages
+  IncomerChannelMessages,
+  DispatcherPingMessage
 } from "../../types/eventManagement/index";
 
 export type Instance = "dispatcher" | "incomer";
@@ -25,63 +26,63 @@ type MainTransaction = {
   mainTransaction: true;
   relatedTransaction: null;
   resolved: false;
-}
+};
 
 type SpreedTransaction = {
   mainTransaction: false;
   relatedTransaction: string;
   resolved: boolean;
-}
+};
 
 type HandlerTransaction = {
   mainTransaction: false;
   relatedTransaction: string;
   resolved: boolean;
-}
+};
 
 type DispatcherTransaction = (SpreedTransaction | MainTransaction) & (
   (
     DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
   ) | (
-    Omit<IncomerChannelMessages["IncomerMessages"], "redisMetadata"> &
-    Pick<IncomerChannelMessages["DispatcherMessages"], "redisMetadata">
+    IncomerChannelMessages["IncomerMessages"] & {
+      redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
+    }
   )
-)
+);
 
-type IncomerTransaction<
-  T extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
-> = (
-  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages<T>["IncomerMessages"]
-) & (
+type IncomerTransaction = (
   HandlerTransaction | MainTransaction
-)
+) & (
+  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessages"] | DispatcherPingMessage
+);
 
 export type Transaction<
-  T extends Instance = Instance,
-  K extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
+  T extends Instance = Instance
 > = (
-  T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction<K>
+  T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction
 ) & {
   aliveSince: number;
-}
+};
 
 export type PartialTransaction<
-  T extends Instance = Instance,
-  K extends Record<string, any> & { data: Record<string, any> } = Record<string, any> & { data: Record<string, any> }
-> = Omit<Transaction<T, K>, "redisMetadata" | "aliveSince"> & {
+  T extends Instance = Instance
+> = Omit<Transaction<T>, "redisMetadata" | "aliveSince"> & {
   redisMetadata: MetadataWithoutTransactionId<T>
 };
 
-export type Transactions<T extends Instance = Instance> = Map<string, Transaction<T>>;
+export type Transactions<
+  T extends Instance = Instance,
+> = Map<string, Transaction<T>>;
 
-export type TransactionStoreOptions<T extends Instance = Instance> = (Partial<KVOptions<Transactions<T>>> &
+export type TransactionStoreOptions<
+  T extends Instance = Instance
+> = (Partial<KVOptions<Transactions<T>>> &
   T extends "incomer" ? { prefix: string; } : { prefix?: string; }) & {
     instance: T;
 };
 
 export class TransactionStore<
-  T extends Instance = Instance, K extends Record<string, any> & { data: Record<string, any> } =
-  Record<string, any> & { data: Record<string, any> }
+  T extends Instance = Instance
 >
   extends KVPeer<Transaction<T>> {
   private key: string;
@@ -102,7 +103,7 @@ export class TransactionStore<
     ));
 
     for (const transaction of transactions) {
-      if (transaction !== null) {
+      if (transaction !== null && "transactionId" in transaction.redisMetadata) {
         mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
       }
     }
@@ -110,7 +111,7 @@ export class TransactionStore<
     return mappedTransactions;
   }
 
-  async setTransaction(transaction: PartialTransaction<T, K>): Promise<string> {
+  async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
     const transactionId = randomUUID();
 
     const transactionKey = `${this.key}-${transactionId}`;
@@ -135,7 +136,7 @@ export class TransactionStore<
     this.setValue({ key, value: { ...transaction, aliveSince: Date.now() } });
   }
 
-  async getTransactionById(transactionId: string): Promise<Transaction | null> {
+  async getTransactionById(transactionId: string): Promise<Transaction<T> | null> {
     return await this.getValue(`${this.key}-${transactionId}`);
   }
 

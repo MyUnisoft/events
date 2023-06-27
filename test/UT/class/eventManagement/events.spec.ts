@@ -5,7 +5,7 @@ import timers from "timers/promises";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeRedis,
+  closeAllRedis,
   clearAllKeys,
   Channel
 } from "@myunisoft/redis";
@@ -24,16 +24,10 @@ import { validate } from "../../../../src/index";
 
 // Internal Dependencies Mocks
 const dispatcherLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const incomerLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const mockedEventComeBackHandler = jest.fn();
 
@@ -50,9 +44,10 @@ describe("Publishing/exploiting a custom event", () => {
     subscriber = await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
-    } as any, true);
+    } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      logger: dispatcherLogger,
       pingInterval: 10_000,
       checkLastActivityInterval: 14_000,
       checkTransactionInterval: 5_000,
@@ -61,17 +56,14 @@ describe("Publishing/exploiting a custom event", () => {
         eventsValidationFn,
         validationCbFn: validate
       }
-     }, subscriber);
-
-    Reflect.set(dispatcher, "logger", dispatcherLogger);
+     });
 
     await dispatcher.initialize();
   });
 
   afterAll(async() => {
     await dispatcher.close();
-    await closeRedis();
-    await closeRedis(subscriber);
+    await closeAllRedis();
   });
 
   afterEach(async() => {
@@ -106,19 +98,19 @@ describe("Publishing/exploiting a custom event", () => {
     beforeAll(async() => {
       publisher = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       unConcernedIncomer = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
-
-      Reflect.set(publisher, "logger", incomerLogger);
+      });
 
       let index = 0;
       jest.spyOn(Incomer.prototype as any, "handleApprovement")
@@ -228,26 +220,27 @@ describe("Publishing/exploiting a custom event", () => {
     beforeAll(async() => {
       publisher = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       concernedIncomer = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       secondConcernedIncomer = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
-
-      Reflect.set(concernedIncomer, "logger", incomerLogger);
+      });
 
       let index = 0;
       jest.spyOn(Incomer.prototype as any, "handleApprovement")
@@ -424,26 +417,27 @@ describe("Publishing/exploiting a custom event", () => {
     beforeAll(async() => {
       publisher = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       concernedIncomer = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
+      });
 
       secondConcernedIncomer = new Incomer({
         name: randomUUID(),
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
         eventCallback: mockedEventComeBackHandler
-      }, subscriber);
-
-      Reflect.set(concernedIncomer, "logger", incomerLogger);
+      });
 
       let index = 0;
       jest.spyOn(Incomer.prototype as any, "handleApprovement")
