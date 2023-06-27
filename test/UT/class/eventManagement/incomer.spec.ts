@@ -26,6 +26,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   }
 
   let incomer: Incomer;
+  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
@@ -33,13 +34,18 @@ describe("Init Incomer without Dispatcher alive", () => {
       host: process.env.REDIS_HOST
     } as any);
 
+    subscriber = await initRedis({
+      port: process.env.REDIS_PORT,
+      host: process.env.REDIS_HOST
+    } as any, true);
+
     incomer = new Incomer({
       name: randomUUID(),
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
       abortTime: 5_000
-    });
+    }, subscriber);
 
     Reflect.set(incomer, "logger", incomerLogger);
   });
@@ -57,5 +63,6 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   afterAll(async() => {
     await closeRedis();
+    await closeRedis(subscriber);
   });
 });

@@ -9,8 +9,6 @@ import { P, match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
-  REDIS_HOST,
-  REDIS_PORT,
   channels
 } from "../../utils/config";
 import {
@@ -85,7 +83,7 @@ export class Incomer <
   private incomerChannel: Redis.Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
   private abortTime = 60_000;
 
-  constructor(options: IncomerOptions<T>, subscriber?: Redis.Redis) {
+  constructor(options: IncomerOptions<T>, subscriber: Redis.Redis) {
     super();
 
     Object.assign(this, {}, options);
@@ -100,9 +98,7 @@ export class Incomer <
       }
     }).child({ incomer: this.prefixedName + this.name });
 
-    if (subscriber) {
-      this.subscriber = subscriber;
-    }
+    this.subscriber = subscriber;
 
     this.dispatcherChannel = new Redis.Channel({
       name: channels.dispatcher,
@@ -118,13 +114,6 @@ export class Incomer <
   public async initialize() {
     if (this.providedUUID) {
       throw new Error("Cannot init multiple times.");
-    }
-
-    if (!this.subscriber) {
-      this.subscriber = await Redis.initRedis({
-        port: REDIS_PORT,
-        host: REDIS_HOST
-      } as any, true);
     }
 
     await this.subscriber.subscribe(this.dispatcherChannelName);

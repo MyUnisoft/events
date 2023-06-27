@@ -1,0 +1,18 @@
+{
+  "ping": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "pattern": "ping"
+      },
+      "data": {
+        "type": "object",
+        "nullable": true,
+        "additionalProperties": false
+      }
+    },
+    "required": ["name", "data"],
+    "additionalProperties": false
+  }
+}

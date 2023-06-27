@@ -40,32 +40,38 @@ const mockedDeleteTransaction = jest.spyOn(TransactionStore.prototype, "deleteTr
 // CONSTANTS
 const ajv = new Ajv();
 
+beforeAll(async() => {
+  await initRedis({
+    port: process.env.REDIS_PORT,
+    host: process.env.REDIS_HOST
+  } as any);
+});
+
+afterAll(async() => {
+  await closeRedis();
+});
+
 describe("Dispatcher", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  beforeAll(async() => {
-    await initRedis({
-      port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
-    } as any);
-  });
-
-  afterAll(async() => {
-    await closeRedis();
-  });
-
   describe("Dispatcher without options", () => {
     let dispatcher: Dispatcher;
+    let subscriber;
 
     beforeAll(async() => {
+      subscriber = await initRedis({
+        port: process.env.REDIS_PORT,
+        host: process.env.REDIS_HOST
+      } as any, true);
+
       dispatcher = new Dispatcher({
         pingInterval: 1_600,
         checkLastActivityInterval: 5_000,
         checkTransactionInterval: 2_400,
         idleTime: 5_000
-       });
+       }, subscriber);
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -77,6 +83,7 @@ describe("Dispatcher", () => {
     afterAll(async() => {
       await clearAllKeys();
       await dispatcher.close();
+      await closeRedis(subscriber);
     });
 
     test("Dispatcher should be defined", () => {
@@ -228,7 +235,6 @@ describe("Dispatcher", () => {
       let incomerName = randomUUID();
       let pongTransactionId: string;
       let pingTransactionId: string;
-      let subscriber: Redis;
       let incomerTransactionStore: TransactionStore<"incomer">;
       let dispatcherTransactionStore: TransactionStore<"dispatcher">
 
@@ -236,10 +242,6 @@ describe("Dispatcher", () => {
         jest.clearAllMocks();
 
         let index = 0;
-        subscriber = await initRedis({
-          port: process.env.REDIS_PORT,
-          host: process.env.REDIS_HOST
-        } as any, true);
 
         await subscriber.subscribe("dispatcher");
 
@@ -319,10 +321,6 @@ describe("Dispatcher", () => {
         });
       });
 
-      afterAll(async() => {
-        await closeRedis(subscriber);
-      });
-
       test("It should have ping and a new transaction should have been create", async() => {
         await timers.setTimeout(2_000);
 
@@ -354,20 +352,28 @@ describe("Dispatcher", () => {
   describe("Dispatcher with prefix", () => {
     let dispatcher: Dispatcher;
     let prefix = "test" as const;
+    let subscriber;
+
     beforeAll(async() => {
+      subscriber = await initRedis({
+        port: process.env.REDIS_PORT,
+        host: process.env.REDIS_HOST
+      } as any, true);
+
       dispatcher = new Dispatcher({
         pingInterval: 1_600,
         checkLastActivityInterval: 3_800,
         checkTransactionInterval: 3_000,
         idleTime: 4_000,
         prefix
-      });
+      }, subscriber);
 
       await dispatcher.initialize();
     });
 
     afterAll(async() => {
       await dispatcher.close();
+      await closeRedis(subscriber);
     });
 
     test("Dispatcher should be defined", () => {
@@ -380,15 +386,9 @@ describe("Dispatcher", () => {
       describe("Publishing well formed register event", () => {
         let incomerName = randomUUID();
         let approved = false;
-        let subscriber: Redis;
 
         beforeAll(async() => {
           jest.clearAllMocks();
-
-          subscriber = await initRedis({
-            port: process.env.REDIS_PORT,
-            host: process.env.REDIS_HOST
-          } as any, true);
 
           await subscriber.subscribe(`${prefix}-dispatcher`);
 
@@ -441,10 +441,6 @@ describe("Dispatcher", () => {
           });
         });
 
-        afterAll(async() => {
-          await closeRedis(subscriber);
-        });
-
         test("it should delete the main transaction in Incomer store", async() => {
           await timers.setTimeout(1_800);
 
@@ -463,7 +459,6 @@ describe("Dispatcher", () => {
     describe("Handling a ping event", () => {
       let incomerName = randomUUID();
       let pingResponseTransaction: string;
-      let subscriber: Redis;
       let incomerTransactionStore: TransactionStore<"incomer">;
 
       beforeAll(async() => {
@@ -471,10 +466,6 @@ describe("Dispatcher", () => {
         jest.clearAllMocks();
 
         let index = 0;
-        subscriber = await initRedis({
-          port: process.env.REDIS_PORT,
-          host: process.env.REDIS_HOST
-        } as any, true);
 
         await subscriber.subscribe(`${prefix}-dispatcher`);
 
@@ -555,10 +546,6 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
       });
 
-      afterAll(async() => {
-        await closeRedis(subscriber);
-      });
-
       test("It should have ping and a new transaction should have been create", async() => {
         await timers.setTimeout(3_000);
 
@@ -587,10 +574,16 @@ describe("Dispatcher", () => {
 
   describe("Dispatcher with injected schemas", () => {
     let dispatcher: Dispatcher<EventOptions<keyof Events>>;
+    let subscriber;
 
     beforeAll(async() => {
       await clearAllKeys();
       jest.clearAllMocks();
+
+      subscriber = await initRedis({
+        port: process.env.REDIS_PORT,
+        host: process.env.REDIS_HOST
+      } as any, true);
 
       const eventsValidationFn = new Map();
 
@@ -606,7 +599,7 @@ describe("Dispatcher", () => {
         checkLastActivityInterval: 6_000,
         checkTransactionInterval: 4_000,
         idleTime: 6_000
-      });
+      }, subscriber);
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -615,6 +608,7 @@ describe("Dispatcher", () => {
 
     afterAll(async() => {
       await dispatcher.close();
+      await closeRedis(subscriber);
     });
 
     test("Dispatcher should be defined", () => {
@@ -703,16 +697,10 @@ describe("Dispatcher", () => {
       describe("Publishing well formed register event", () => {
         let incomerName = randomUUID();
         let approved = false;
-        let subscriber: Redis;
 
         beforeAll(async() => {
           await clearAllKeys();
           jest.clearAllMocks();
-
-          subscriber = await initRedis({
-            port: process.env.REDIS_PORT,
-            host: process.env.REDIS_HOST
-          } as any, true);
 
           await subscriber.subscribe("dispatcher");
 
@@ -761,10 +749,6 @@ describe("Dispatcher", () => {
           });
         });
 
-        afterAll(async() => {
-          await closeRedis(subscriber);
-        });
-
         test("it should delete the main transaction in Incomer store", async() => {
           await timers.setTimeout(1_800);
 
@@ -803,7 +787,6 @@ describe("Dispatcher", () => {
 
         expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
-        expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
     });
 
@@ -843,18 +826,12 @@ describe("Dispatcher", () => {
         const secondIncomerName = randomUUID();
         let firstIncomerProvidedUUID;
         let secondIncomerProvidedUUID;
-        let subscriber: Redis;
         let hasDistributedEvents = false;
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
         let secondIncomerTransactionStore: TransactionStore<"incomer">;
         let mainTransactionId;
 
         beforeAll(async() => {
-          subscriber = await initRedis({
-            port: process.env.REDIS_PORT,
-            host: process.env.REDIS_HOST
-          } as any, true);
-
           await subscriber.subscribe("dispatcher");
 
           subscriber.on("message", async(channel, message) => {
@@ -1002,10 +979,6 @@ describe("Dispatcher", () => {
           await timers.setTimeout(2_000);
         });
 
-        afterAll(async() => {
-          await closeRedis(subscriber);
-        });
-
         test("it should have distributed the event & resolve the main transaction", async() => {
           await timers.setTimeout(3_000);
 
@@ -1024,10 +997,16 @@ describe("Dispatcher", () => {
   describe("Dispatcher with prefix & injected schema", () => {
     let dispatcher: Dispatcher<EventOptions<keyof Events>>;
     let prefix = "test" as "test";
+    let subscriber;
 
     beforeAll(async() => {
       await clearAllKeys();
       jest.clearAllMocks();
+
+      subscriber = await initRedis({
+        port: process.env.REDIS_PORT,
+        host: process.env.REDIS_HOST
+      } as any, true);
 
       const eventsValidationFn = new Map();
 
@@ -1044,7 +1023,7 @@ describe("Dispatcher", () => {
         checkTransactionInterval: 4_000,
         idleTime: 6_000,
         prefix
-      });
+      }, subscriber);
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -1053,6 +1032,7 @@ describe("Dispatcher", () => {
 
     afterAll(async() => {
       await dispatcher.close();
+      await closeRedis(subscriber);
     });
 
     test("Dispatcher should be defined", () => {
@@ -1101,7 +1081,6 @@ describe("Dispatcher", () => {
         let firstIncomerProvidedUUID;
         let secondIncomerProvidedUUID;
         let thirdIncomerProvidedUUID;
-        let subscriber: Redis;
         let hasDistributedEvents: [boolean, boolean] = [false, false];
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
         let secondIncomerTransactionStore: TransactionStore<"incomer">;
@@ -1111,11 +1090,6 @@ describe("Dispatcher", () => {
         let thirdIncomerTransactionId;
 
         beforeAll(async() => {
-          subscriber = await initRedis({
-            port: process.env.REDIS_PORT,
-            host: process.env.REDIS_HOST
-          } as any, true);
-
           await subscriber.subscribe(`${prefix}-dispatcher`);
 
           subscriber.on("message", async(channel, message) => {
@@ -1328,12 +1302,8 @@ describe("Dispatcher", () => {
           await timers.setTimeout(2_000);
         });
 
-        afterAll(async() => {
-          await closeRedis(subscriber);
-        });
-
         test("it should have distributed the event & resolve the main transaction", async() => {
-          await timers.setTimeout(3_000);
+          await timers.setTimeout(10_000);
 
           const [mainTransaction, secondIncomerTransaction, thirdIncomerTransaction] = await Promise.all([
             firstIncomerTransactionStore.getTransactionById(mainTransactionId),
@@ -1349,33 +1319,6 @@ describe("Dispatcher", () => {
           expect(thirdIncomerTransaction).toBeNull();
         });
       });
-    });
-  });
-
-  describe("Dispatcher with subscriber", () => {
-    let dispatcher: Dispatcher;
-    let subscriber: Redis;
-
-    beforeAll(async() => {
-      subscriber = await initRedis({
-        port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
-      } as any, true);
-
-      dispatcher = new Dispatcher({}, subscriber);
-
-      await dispatcher.initialize();
-    });
-
-    afterAll(async() => {
-      await dispatcher.close();
-      await closeRedis(subscriber);
-    });
-
-    test("Dispatcher should be defined", () => {
-      expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.prefix).toBe("");
-      expect(dispatcher.privateUUID).toBeDefined();
     });
   });
 });

@@ -41,12 +41,18 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   let dispatcher: Dispatcher<EventOptions<keyof Events>>;
   let backupIncomerTransactionStore;
   let mockedBackedUpSetTransaction;
+  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any);
+
+    subscriber = await initRedis({
+      port: process.env.REDIS_PORT,
+      host: process.env.REDIS_HOST
+    } as any, true);
 
     dispatcher = new Dispatcher({
       pingInterval: 10_000,
@@ -57,7 +63,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsValidationFn,
         validationCbFn: validate
       }
-     });
+     }, subscriber);
 
     backupIncomerTransactionStore = new TransactionStore({
       prefix: "backup",
@@ -75,6 +81,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   afterAll(async() => {
     await dispatcher.close();
     await closeRedis();
+    await closeRedis(subscriber);
   });
 
   afterEach(async() => {
@@ -235,28 +242,28 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       secondPublisher = new Incomer({
         name: randomUUID(),
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       concernedIncomer = new Incomer({
         name: randomUUID(),
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       secondConcernedIncomer = new Incomer({
         name: randomUUID(),
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
-      });
+      }, subscriber);
 
       Reflect.set(concernedIncomer, "logger", incomerLogger);
 
