@@ -23,9 +23,6 @@ import { TransactionStore } from "../../../../src/class/eventManagement/transact
 import { validate } from "../../../../src/index";
 
 // Internal Dependencies Mocks
-const dispatcherLogger = Logger.pino({
-  level: "debug"
-});
 const incomerLogger = Logger.pino({
   level: "debug"
 });
@@ -47,7 +44,6 @@ describe("Publishing/exploiting a custom event", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
-      logger: dispatcherLogger,
       pingInterval: 10_000,
       checkLastActivityInterval: 14_000,
       checkTransactionInterval: 5_000,

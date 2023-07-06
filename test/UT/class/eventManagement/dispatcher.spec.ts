@@ -70,7 +70,6 @@ describe("Dispatcher", () => {
         idleTime: 5_000
        });
 
-
       await clearAllKeys();
 
       await dispatcher.initialize();

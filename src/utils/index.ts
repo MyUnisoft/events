@@ -9,6 +9,7 @@ import { EventOptions, Events, GenericEvent } from "types";
 const ajv = new Ajv();
 const kCustomKey = "scope";
 const kScopeKeys = Object.freeze({
+  transactionId: "id",
   schemaId: "s",
   firmId: "f",
   accountingFolderId: "acf",
@@ -33,28 +34,36 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
   eventsValidationFn.set(name, operationsValidationFunctions);
 }
 
+export type StandardLog<T extends GenericEvent = GenericEvent> = (data: T) => (message: string) => string;
+
 export function defaultStandardLog<
   T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { channel: string }, message: string) {
-  const formattedMessage = `${JSON.stringify(event)}, ${message}`;
+>(event: T & { redisMetadata: { transactionId: string } }) {
+  const logs = Array.from(mapped<T>(event)).join("|");
 
-  if (!event[kCustomKey]) {
-    return formattedMessage;
+  function log(message: string) {
+    return `(${logs}) ${message}`;
   }
 
-  const logs = Array.from(mapped(event)).join("|");
-
-  return logs.length > 0 ? `(${logs}) ${formattedMessage}` : formattedMessage;
+  return log;
 }
 
-function* mapped(event: Record<string, any>) {
-  for (const [key, value] of Object.entries(event[kCustomKey])) {
-    const formattedKey = kScopeKeys[key];
+function* mapped<
+  T extends GenericEvent = EventOptions<keyof Events>
+>(event: T & { redisMetadata: { transactionId: string } }) {
+  for (const [key, formattedKey] of Object.entries(kScopeKeys)) {
+    if (key === "transactionId") {
+      yield `${formattedKey}:${event.redisMetadata[key] ?? "none"}`;
 
-    if (!formattedKey) {
       continue;
     }
 
-    yield `${formattedKey}:${value}`;
+    if (!event[kCustomKey] || !event[kCustomKey][key]) {
+      yield `${formattedKey}:none`;
+
+      continue;
+    }
+
+    yield `${formattedKey}:${event[kCustomKey][key] ?? "none"}`;
   }
 }

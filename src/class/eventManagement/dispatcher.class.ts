@@ -36,8 +36,7 @@ import {
   GenericEvent
 } from "../../types/eventManagement/index";
 import * as eventsSchema from "../../schema/eventManagement/index";
-import { CustomEventsValidationFunctions, defaultStandardLog } from "../../utils/index";
-import { EventOptions, Events } from "../../types";
+import { CustomEventsValidationFunctions, defaultStandardLog, StandardLog } from "../../utils/index";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -46,9 +45,6 @@ const kIdleTime = 80_000;
 const kCheckLastActivityInterval = 90_000;
 const kCheckRelatedTransactionInterval = 60_000;
 const kBackupTransactionStoreName = "backup";
-
-export type StandardLog<T extends GenericEvent = GenericEvent> = (data: T, message: string) => string;
-
 interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
@@ -62,11 +58,11 @@ interface RegisteredIncomer {
 
 type IncomerStore = Record<string, RegisteredIncomer>;
 
-export type DispatcherOptions<T extends GenericEvent = EventOptions<keyof Events>> = {
+export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
-  standardLog?: StandardLog;
+  standardLog?: StandardLog<T>;
   eventsValidation?: {
     eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
     validationCbFn?: (event: T) => void;
@@ -99,7 +95,7 @@ function isIncomerRegistrationMessage(
   return value.name === "register";
 }
 
-export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
+export class Dispatcher<T extends GenericEvent = GenericEvent> {
   readonly type = "dispatcher";
   readonly formattedPrefix: string;
   readonly prefix: string;
@@ -449,6 +445,8 @@ export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
 
         continue;
       }
+
+      this.logger.warn(this.standardLogFn(incomerTransaction as T)("Redistributed injected event to an Incomer"));
     }
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
@@ -506,9 +504,9 @@ export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
           ]);
         }
       }
-    }
 
-    this.logger.warn("Redistributed injected event");
+      this.logger.warn(this.standardLogFn(dispatcherTransaction as T)("Redistributed unresolved injected event to an Incomer"));
+    }
   }
 
   private async handleInactiveIncomer(
@@ -903,7 +901,6 @@ export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
 
     const logData = {
       channel,
-      eventName: name,
       ...message
     };
 
@@ -920,7 +917,7 @@ export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
         this.logger.warn(logData, "No concerned Incomer found");
       }
       else {
-        const transactionId = await this.backupDispatcherTransactionStore.setTransaction({
+        await this.backupDispatcherTransactionStore.setTransaction({
           ...event,
           redisMetadata: {
             origin: this.privateUUID,
@@ -931,7 +928,7 @@ export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
           resolved: false
         } as Transaction<"dispatcher">);
 
-        this.logger.warn(this.standardLogFn({ ...logData, transactionId }, "Backed-up event"));
+        this.logger.warn(this.standardLogFn(logData)("Backed-up event"));
       }
 
       return;
@@ -991,7 +988,7 @@ export class Dispatcher<T extends GenericEvent = EventOptions<keyof Events>> {
     await this.updateIncomerState(redisMetadata.origin);
     await Promise.all(toResolve);
 
-    this.logger.info(this.standardLogFn(logData, "Custom event distributed"));
+    this.logger.info(this.standardLogFn(logData)("Custom event distributed"));
   }
 
   private async approveIncomer(message: IncomerRegistrationMessage) {

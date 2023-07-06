@@ -32,9 +32,9 @@ import {
   EventMessage,
   GenericEvent
 } from "../../types/eventManagement/index";
-import { EventOptions, Events } from "../../types";
-import { defaultStandardLog } from "../../utils/index";
-import { StandardLog } from "./dispatcher.class";
+import { EventOptions, Events, EventsOptions } from "../../types";
+import { StandardLog, defaultStandardLog } from "../../utils/index";
+import { Externals } from "./externals.class";
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
@@ -55,11 +55,11 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "approvement";
 }
 
-export type IncomerOptions<T extends GenericEvent = EventOptions<keyof Events>> = {
+export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
-  standardLog?: StandardLog;
+  standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   eventCallback: (message: CallBackEventMessage<T>) => void;
@@ -67,8 +67,12 @@ export type IncomerOptions<T extends GenericEvent = EventOptions<keyof Events>> 
   abortTime?: number;
 };
 
+// eslint-disable-next-line func-style
+const assert = <T extends GenericEvent = EventOptions<keyof Events>>(): T extends
+  EventOptions<keyof Events> ? true : false => void 0;
+
 export class Incomer <
-  T extends GenericEvent = EventOptions<keyof Events>
+  T extends GenericEvent = GenericEvent
 > extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
@@ -88,6 +92,7 @@ export class Incomer <
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
   private abortTime = 60_000;
   private standardLogFn: StandardLog<T>;
+  private externals: Externals<EventOptions<keyof Events>> | undefined;
 
   constructor(options: IncomerOptions<T>) {
     super();
@@ -114,6 +119,13 @@ export class Incomer <
       prefix: this.prefixedName + this.baseUUID,
       instance: "incomer"
     });
+
+    if (
+      (this.prefix === "test" || this.prefix === "development") &&
+      assert<T>()
+    ) {
+      this.externals = new Externals(options as unknown as IncomerOptions<EventOptions<keyof Events>>);
+    }
   }
 
   get subscriber() {
@@ -124,6 +136,8 @@ export class Incomer <
     if (this.providedUUID) {
       throw new Error("Cannot init multiple times.");
     }
+
+    await this.externals?.initialize();
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
@@ -164,6 +178,10 @@ export class Incomer <
     this.logger.info("Incomer registered");
   }
 
+  public async close() {
+    await this.externals?.close();
+  }
+
   public async publish<
     K extends GenericEvent | null = null
   >(
@@ -185,15 +203,17 @@ export class Incomer <
       resolved: false
     });
 
-    await this.incomerChannel.publish({
+    const finalEvent = {
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
         transactionId
       }
-    } as IncomerChannelMessages<T>["IncomerMessages"]);
+    } as IncomerChannelMessages<T>["IncomerMessages"];
 
-    this.logger.info(this.standardLogFn(event as T, "Published event"));
+    await this.incomerChannel.publish(finalEvent);
+
+    this.logger.info(this.standardLogFn(finalEvent)("Published event"));
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -312,7 +332,7 @@ export class Incomer <
           this.incomerTransactionStore.updateTransaction(transactionId, formattedTransaction as Transaction<"incomer">)
         ]);
 
-        this.logger.info(this.standardLogFn(logData, "Resolved Custom event"));
+        this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
       })
       .exhaustive()
       .catch((error) => {
