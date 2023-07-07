@@ -3,7 +3,8 @@ import {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   EventSubscribe,
-  EventCast
+  EventCast,
+  DispatcherPingMessage
 } from "./index";
 
 // Send by the a Dispatcher

@@ -5,8 +5,8 @@ import timers from "timers/promises";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeRedis,
-  clearAllKeys
+  clearAllKeys,
+  closeAllRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -17,16 +17,10 @@ import { Dispatcher, Incomer } from "../../../../src/index";
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
 
 const dispatcherLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const incomerLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 
@@ -44,24 +38,22 @@ describe("Registration", () => {
     subscriber = await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
-    } as any, true);
+    } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      logger: dispatcherLogger,
       pingInterval: 1_600,
       checkLastActivityInterval: 4_000,
       checkTransactionInterval: 2_400,
       idleTime: 4_000
-     }, subscriber);
-
-    Reflect.set(dispatcher, "logger", dispatcherLogger);
+     });
 
     await dispatcher.initialize();
   });
 
   afterAll(async() => {
     await dispatcher.close();
-    await closeRedis();
-    await closeRedis(subscriber);
+    await closeAllRedis();
   });
 
   afterEach(async() => {
@@ -76,12 +68,11 @@ describe("Registration", () => {
     beforeAll(async() => {
       incomer = new Incomer({
         name: "foo",
+        logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [],
         eventCallback: eventComeBackHandler
-      }, subscriber);
-
-      Reflect.set(incomer, "logger", incomerLogger);
+      });
 
       await incomer.initialize();
     });
@@ -90,7 +81,7 @@ describe("Registration", () => {
       await timers.setTimeout(1_600);
 
       expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
-      expect(mockedIncomerLoggerInfo).toHaveBeenNthCalledWith(3, expect.anything(), "Incomer registered");
+      expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
     });
 
     test("Calling Incomer initialize a second time, it should fail", async() => {
@@ -116,7 +107,7 @@ describe("Registration", () => {
         eventsCast: [],
         eventsSubscribe: [],
         eventCallback: eventComeBackHandler
-      }, subscriber);
+      });
 
       Reflect.set(incomer, "logger", incomerLogger);
 
@@ -127,7 +118,7 @@ describe("Registration", () => {
       await timers.setTimeout(1_600);
 
       expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
-      expect(mockedIncomerLoggerInfo).toHaveBeenNthCalledWith(3, expect.anything(), "Incomer registered");
+      expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
     });
   });
 });

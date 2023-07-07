@@ -6,24 +6,21 @@ import timers from "timers/promises";
 import {
   initRedis,
   closeRedis,
-  Redis,
   Channel,
+  closeAllRedis,
   clearAllKeys
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { Dispatcher, EventOptions, Events, validate } from "../../../../src/index";
+import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const mockedLoggerError = jest.spyOn(logger, "error");
 const mockedLoggerInfo = jest.spyOn(logger, "info");
@@ -35,20 +32,19 @@ const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLa
 const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "handleInactiveIncomer");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
-const mockedDeleteTransaction = jest.spyOn(TransactionStore.prototype, "deleteTransaction");
 
 // CONSTANTS
 const ajv = new Ajv();
 
 beforeAll(async() => {
   await initRedis({
-    port: process.env.REDIS_PORT,
+    port: Number(process.env.REDIS_PORT),
     host: process.env.REDIS_HOST
-  } as any);
+  });
 });
 
 afterAll(async() => {
-  await closeRedis();
+  await closeAllRedis();
 });
 
 describe("Dispatcher", () => {
@@ -62,18 +58,17 @@ describe("Dispatcher", () => {
 
     beforeAll(async() => {
       subscriber = await initRedis({
-        port: process.env.REDIS_PORT,
+        port: Number(process.env.REDIS_PORT),
         host: process.env.REDIS_HOST
-      } as any, true);
+      }, "subscriber");
 
       dispatcher = new Dispatcher({
+        logger,
         pingInterval: 1_600,
         checkLastActivityInterval: 5_000,
         checkTransactionInterval: 2_400,
         idleTime: 5_000
-       }, subscriber);
-
-      Reflect.set(dispatcher, "logger", logger);
+       });
 
       await clearAllKeys();
 
@@ -83,7 +78,7 @@ describe("Dispatcher", () => {
     afterAll(async() => {
       await clearAllKeys();
       await dispatcher.close();
-      await closeRedis(subscriber);
+      await closeRedis("subscriber");
     });
 
     test("Dispatcher should be defined", () => {
@@ -358,22 +353,23 @@ describe("Dispatcher", () => {
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
         host: process.env.REDIS_HOST
-      } as any, true);
+      } as any, "subscriber");
 
       dispatcher = new Dispatcher({
+        logger,
         pingInterval: 1_600,
         checkLastActivityInterval: 3_800,
         checkTransactionInterval: 3_000,
         idleTime: 4_000,
         prefix
-      }, subscriber);
+      });
 
       await dispatcher.initialize();
     });
 
     afterAll(async() => {
       await dispatcher.close();
-      await closeRedis(subscriber);
+      await closeRedis("subscriber");
     });
 
     test("Dispatcher should be defined", () => {
@@ -583,7 +579,7 @@ describe("Dispatcher", () => {
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
         host: process.env.REDIS_HOST
-      } as any, true);
+      } as any, "subscriber");
 
       const eventsValidationFn = new Map();
 
@@ -592,6 +588,7 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
+        logger,
         eventsValidation: {
           eventsValidationFn
         },
@@ -599,7 +596,7 @@ describe("Dispatcher", () => {
         checkLastActivityInterval: 6_000,
         checkTransactionInterval: 4_000,
         idleTime: 6_000
-      }, subscriber);
+      });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -608,7 +605,7 @@ describe("Dispatcher", () => {
 
     afterAll(async() => {
       await dispatcher.close();
-      await closeRedis(subscriber);
+      await closeRedis("subscriber");
     });
 
     test("Dispatcher should be defined", () => {
@@ -1006,7 +1003,7 @@ describe("Dispatcher", () => {
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
         host: process.env.REDIS_HOST
-      } as any, true);
+      } as any, "subscriber");
 
       const eventsValidationFn = new Map();
 
@@ -1015,6 +1012,7 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
+        logger,
         eventsValidation: {
           eventsValidationFn
         },
@@ -1023,7 +1021,7 @@ describe("Dispatcher", () => {
         checkTransactionInterval: 4_000,
         idleTime: 6_000,
         prefix
-      }, subscriber);
+      });
 
       Reflect.set(dispatcher, "logger", logger);
 
@@ -1032,7 +1030,7 @@ describe("Dispatcher", () => {
 
     afterAll(async() => {
       await dispatcher.close();
-      await closeRedis(subscriber);
+      await closeRedis("subscriber");
     });
 
     test("Dispatcher should be defined", () => {

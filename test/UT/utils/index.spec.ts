@@ -1,5 +1,6 @@
 // Import Internal Dependencies
 import { eventsValidationFn } from "../../../src/index";
+import { defaultStandardLog } from "../../../src/utils";
 
 describe("eventsValidationFn", () => {
   test("events should be defined", () => {
@@ -96,3 +97,69 @@ describe("eventsValidationFn", () => {
     });
   });
 });
+
+describe("defaultStandardLog", () => {
+  test(`given a payload with a scope object with props schemaId,
+        firmId, accountingFolderId, and persPhysiqueId, it should return
+        a string with the given info formatted.`, () => {
+    const payload = {
+      event: "foo",
+      channel: "bar",
+      scope: {
+        schemaId: 1,
+        firmId: 2,
+        accountingFolderId: 3,
+        persPhysiqueId: 4
+      },
+      redisMetadata: {
+        transactionId: "foo"
+      },
+      data: {
+        foo: "bar"
+      }
+    };
+
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4) foo`;
+
+    expect(defaultStandardLog(payload)("foo")).toBe(expected);
+  });
+
+  test("given a payload without scope object, it should just return the given object as string", () => {
+    const payload = {
+      event: "foo",
+      channel: "bar",
+      redisMetadata: {
+        transactionId: "foo"
+      },
+      data: {
+        foo: "bar"
+      }
+    };
+
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none) foo`;
+
+    expect(defaultStandardLog(payload)("foo")).toBe(expected);
+  });
+
+  test("given a payload with any of the specified property in the scope object, it should return the given object as string", () => {
+    const payload = {
+      event: "foo",
+      channel: "bar",
+      scope: {
+        foo: "bar"
+      },
+      redisMetadata: {
+        transactionId: "foo"
+      },
+      data: {
+        foo: "bar"
+      }
+    };
+
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none) foo`;
+
+    expect(defaultStandardLog(payload)("foo")).toBe(expected);
+  })
+});
+
+

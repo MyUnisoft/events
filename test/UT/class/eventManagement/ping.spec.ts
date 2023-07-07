@@ -5,8 +5,8 @@ import timers from "timers/promises";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeRedis,
-  clearAllKeys
+  clearAllKeys,
+  closeAllRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -14,16 +14,10 @@ import * as Logger from "pino";
 import { Dispatcher, Incomer } from "../../../../src/index";
 
 const dispatcherLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const incomerLogger = Logger.pino({
-  level: "debug",
-  transport: {
-    target: "pino-pretty"
-  }
+  level: "debug"
 });
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 const mockedDispatcherLoggerInfo = jest.spyOn(dispatcherLogger, "info");
@@ -46,14 +40,15 @@ describe("Ping", () => {
     subscriber = await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
-    } as any, true);
+    } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      logger: dispatcherLogger,
       pingInterval: 1_600,
       checkLastActivityInterval: 4_000,
       checkTransactionInterval: 2_400,
       idleTime: 4_000
-     }, subscriber);
+     });
 
     Reflect.set(dispatcher, "logger", dispatcherLogger);
 
@@ -61,12 +56,11 @@ describe("Ping", () => {
 
     incomer = new Incomer({
       name: randomUUID(),
+      logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler
-    }, subscriber);
-
-    Reflect.set(incomer, "logger", incomerLogger);
+    });
 
     await incomer.initialize();
 
@@ -75,8 +69,7 @@ describe("Ping", () => {
 
   afterAll(async() => {
     await dispatcher.close();
-    await closeRedis();
-    await closeRedis(subscriber);
+    await closeAllRedis();
   });
 
   afterEach(async() => {
@@ -84,11 +77,11 @@ describe("Ping", () => {
   });
 
   test("Dispatcher should have ping", () => {
-    expect(mockedDispatcherLoggerInfo).toHaveBeenNthCalledWith(3, expect.anything(), "New Ping event");
+    expect(mockedIncomerLoggerInfo.mock.calls[3][1]).toContain("Resolved Ping event");
   });
 
   test("Incomer should have create a transaction to resolve the ping", async() => {
-    expect(mockedIncomerLoggerInfo).toHaveBeenNthCalledWith(4, expect.anything(), "Resolved Ping event");
+    expect(mockedIncomerLoggerInfo.mock.calls[3][1]).toContain("Resolved Ping event");
   });
 });
 

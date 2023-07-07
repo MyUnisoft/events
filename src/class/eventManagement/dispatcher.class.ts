@@ -3,8 +3,12 @@
 import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
-import * as Redis from "@myunisoft/redis";
-import * as logger from "pino";
+import {
+  Channel,
+  getRedis,
+  KVPeer
+} from "@myunisoft/redis";
+import { Logger, pino } from "pino";
 import Ajv, { ValidateFunction } from "ajv";
 import { match } from "ts-pattern";
 
@@ -14,6 +18,7 @@ import {
   kIncomerStoreName
 } from "../../utils/config";
 import {
+  Transaction,
   Transactions,
   TransactionStore
 } from "./transaction.class";
@@ -22,12 +27,16 @@ import {
   EventCast,
   EventSubscribe,
   DispatcherChannelMessages,
-  IncomerChannelMessages
+  IncomerChannelMessages,
+  DispatcherRegistrationMessage,
+  IncomerRegistrationMessage,
+  DispatcherPingMessage,
+  DistributedEventMessage,
+  EventMessage,
+  GenericEvent
 } from "../../types/eventManagement/index";
 import * as eventsSchema from "../../schema/eventManagement/index";
-import { DispatcherRegistrationMessage, IncomerRegistrationMessage } from "../../types/eventManagement/dispatcherChannel";
-import { DispatcherPingMessage, DistributedEventMessage, EventMessage } from "../../types/eventManagement/incomerChannel";
-import { CustomEventsValidationFunctions } from "../../utils/index";
+import { CustomEventsValidationFunctions, defaultStandardLog, StandardLog } from "../../utils/index";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -36,7 +45,6 @@ const kIdleTime = 80_000;
 const kCheckLastActivityInterval = 90_000;
 const kCheckRelatedTransactionInterval = 60_000;
 const kBackupTransactionStoreName = "backup";
-
 interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
@@ -50,10 +58,11 @@ interface RegisteredIncomer {
 
 type IncomerStore = Record<string, RegisteredIncomer>;
 
-export type DispatcherOptions<T extends Record<string, any> =
-Record<string, any>> = {
+export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
+  logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  standardLog?: StandardLog<T>;
   eventsValidation?: {
     eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
     validationCbFn?: (event: T) => void;
@@ -66,17 +75,17 @@ Record<string, any>> = {
 
 type DispatcherChannelEvents = { name: "register" };
 
-function isDispatcherChannelMessage(
+function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(
   value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessages"]
+  IncomerChannelMessages<T>["IncomerMessages"]
 ): value is DispatcherChannelMessages["IncomerMessages"] {
   return value.name === "register";
 }
 
-function isIncomerChannelMessage(
+function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(
   value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages["IncomerMessages"]
-): value is IncomerChannelMessages["IncomerMessages"] {
+  IncomerChannelMessages<T>["IncomerMessages"]
+): value is IncomerChannelMessages<T>["IncomerMessages"] {
   return value.name !== "register";
 }
 
@@ -86,8 +95,7 @@ function isIncomerRegistrationMessage(
   return value.name === "register";
 }
 
-export class Dispatcher<T extends Record<string, any> & { data: Record<string, any> } =
-Record<string, any> & { data: Record<string, any> }> {
+export class Dispatcher<T extends GenericEvent = GenericEvent> {
   readonly type = "dispatcher";
   readonly formattedPrefix: string;
   readonly prefix: string;
@@ -95,17 +103,15 @@ Record<string, any> & { data: Record<string, any> }> {
   readonly dispatcherChannelName: string;
   readonly privateUUID = randomUUID();
 
-  protected subscriber: Redis.Redis;
-
-  private dispatcherChannel: Redis.Channel<DispatcherChannelMessages["DispatcherMessages"]>;
-  private incomerStore: Redis.KVPeer<IncomerStore>;
+  private dispatcherChannel: Channel<DispatcherChannelMessages["DispatcherMessages"]>;
+  private incomerStore: KVPeer<IncomerStore>;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
   private backupIncomerTransactionStore: TransactionStore<"incomer">;
   private backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
 
-  private logger: logger.Logger;
+  private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   private incomerChannels: Map<string,
-    Redis.Channel<IncomerChannelMessages["DispatcherMessages"] | DistributedEventMessage>> = new Map();
+    Channel<IncomerChannelMessages<T>["DispatcherMessages"] | DistributedEventMessage<T>>> = new Map();
 
   private pingInterval: NodeJS.Timer;
   private checkLastActivityInterval: NodeJS.Timer;
@@ -114,13 +120,15 @@ Record<string, any> & { data: Record<string, any> }> {
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
   private validationCbFn: (event: T) => void = null;
+  private standardLogFn: StandardLog<T>;
 
-  constructor(options: DispatcherOptions<T> = {}, subscriber: Redis.Redis) {
+  constructor(options: DispatcherOptions<T>) {
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = this.formattedPrefix + kIncomerStoreName;
     this.dispatcherChannelName = this.formattedPrefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
+    this.standardLogFn = options.standardLog ?? defaultStandardLog;
 
     this.eventsValidationFn = options?.eventsValidation?.eventsValidationFn ?? new Map();
     this.validationCbFn = options?.eventsValidation?.validationCbFn;
@@ -129,16 +137,15 @@ Record<string, any> & { data: Record<string, any> }> {
       this.eventsValidationFn.set(name, ajv.compile(validationSchema));
     }
 
-    this.logger = logger.pino({
-      level: "debug",
+    this.logger = options.logger ?? pino({
+      name: this.formattedPrefix + this.type,
+      level: "info",
       transport: {
         target: "pino-pretty"
       }
-    }).child({ dispatcher: this.formattedPrefix + this.type });
+    });
 
-    this.subscriber = subscriber;
-
-    this.incomerStore = new Redis.KVPeer({
+    this.incomerStore = new KVPeer({
       prefix: this.prefix,
       type: "object"
     });
@@ -158,7 +165,7 @@ Record<string, any> & { data: Record<string, any> }> {
       instance: "dispatcher"
     });
 
-    this.dispatcherChannel = new Redis.Channel({
+    this.dispatcherChannel = new Channel({
       prefix: this.prefix,
       name: channels.dispatcher
     });
@@ -197,6 +204,10 @@ Record<string, any> & { data: Record<string, any> }> {
     }, options.checkTransactionInterval ?? kCheckRelatedTransactionInterval).unref();
   }
 
+  get subscriber() {
+    return getRedis("subscriber");
+  }
+
   public async initialize() {
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
@@ -219,7 +230,7 @@ Record<string, any> & { data: Record<string, any> }> {
 
     for (const [uuid, incomer] of Object.entries(tree)) {
       const incomerChannel = this.incomerChannels.get(uuid) ??
-        new Redis.Channel({
+        new Channel({
           name: uuid,
           prefix: incomer.prefix
         });
@@ -243,10 +254,7 @@ Record<string, any> & { data: Record<string, any> }> {
         formattedEvent: event
       });
 
-      this.logger.info({
-        ...event,
-        uptime: process.uptime()
-      }, "New Ping event");
+      this.logger.info(event, "New Ping event");
     }
   }
 
@@ -262,20 +270,15 @@ Record<string, any> & { data: Record<string, any> }> {
 
       // Remove the incomer from the tree & update it.
       await this.handleInactiveIncomer(tree, uuid);
-
-      this.logger.info({
-        uuid,
-        incomer,
-        uptime: process.uptime()
-      }, "Removed inactive incomer");
+      this.logger.info({ uuid, incomer }, "Removed inactive incomer");
     }
   }
 
   private async publishEvent(options: {
     concernedStore?: TransactionStore<"incomer">;
-    concernedChannel: Redis.Channel<
+    concernedChannel: Channel<
       DispatcherChannelMessages["DispatcherMessages"] |
-      (IncomerChannelMessages["DispatcherMessages"] | DistributedEventMessage)
+      (IncomerChannelMessages<T>["DispatcherMessages"] | DistributedEventMessage<T>)
     >;
     transactionMeta: {
       mainTransaction: boolean;
@@ -416,7 +419,7 @@ Record<string, any> & { data: Record<string, any> }> {
         const { providedUUID, prefix } = concernedRelatedTransactionIncomer;
 
         const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
-          new Redis.Channel({
+          new Channel({
             name: providedUUID,
             prefix
           });
@@ -442,6 +445,8 @@ Record<string, any> & { data: Record<string, any> }> {
 
         continue;
       }
+
+      this.logger.warn(this.standardLogFn(incomerTransaction as T)("Redistributed injected event to an Incomer"));
     }
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
@@ -460,13 +465,12 @@ Record<string, any> & { data: Record<string, any> }> {
           );
 
           if (!concernedIncomer) {
+            delete dispatcherTransaction.redisMetadata;
+            delete dispatcherTransaction.aliveSince;
+
             await Promise.all([
               this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId),
-              this.backupDispatcherTransactionStore.setTransaction({
-                name: dispatcherTransaction.name,
-                data: dispatcherTransaction.data,
-                ...dispatcherTransaction
-              })
+              this.backupDispatcherTransactionStore.setTransaction({ ...dispatcherTransaction })
             ]);
 
             continue;
@@ -475,7 +479,7 @@ Record<string, any> & { data: Record<string, any> }> {
           const { providedUUID, prefix } = concernedIncomer;
 
           const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
-            new Redis.Channel({
+            new Channel({
               name: providedUUID,
               prefix
             });
@@ -500,9 +504,9 @@ Record<string, any> & { data: Record<string, any> }> {
           ]);
         }
       }
-    }
 
-    this.logger.info("Redistributed injected event");
+      this.logger.warn(this.standardLogFn(dispatcherTransaction as T)("Redistributed unresolved injected event to an Incomer"));
+    }
   }
 
   private async handleInactiveIncomer(
@@ -591,7 +595,7 @@ Record<string, any> & { data: Record<string, any> }> {
         const { providedUUID, prefix } = concernedIncomer;
 
         const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
-          new Redis.Channel({
+          new Channel({
             name: providedUUID,
             prefix
           });
@@ -638,7 +642,7 @@ Record<string, any> & { data: Record<string, any> }> {
       const { providedUUID, prefix } = concernedIncomer;
 
       const concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID) ??
-        new Redis.Channel({
+        new Channel({
           name: providedUUID,
           prefix
         });
@@ -716,7 +720,10 @@ Record<string, any> & { data: Record<string, any> }> {
       await Promise.all([
         this.updateIncomerState(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin),
         relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
-        this.dispatcherTransactionStore.updateTransaction(dispatcherTransactionId, dispatcherTransaction)
+        this.dispatcherTransactionStore.updateTransaction(
+          dispatcherTransactionId,
+          dispatcherTransaction
+        )
       ]);
     }
   }
@@ -813,7 +820,7 @@ Record<string, any> & { data: Record<string, any> }> {
     }
 
     if (this.validationCbFn && isIncomerChannelMessage(message)) {
-      this.validationCbFn({ ...message, redisMetadata: null } as T);
+      this.validationCbFn({ ...message });
 
       return;
     }
@@ -829,7 +836,7 @@ Record<string, any> & { data: Record<string, any> }> {
     }
 
     const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages["IncomerMessages"] = JSON.parse(message);
+      IncomerChannelMessages<T>["IncomerMessages"] = JSON.parse(message);
 
     try {
       if (!formattedMessage.name || !formattedMessage.redisMetadata) {
@@ -868,13 +875,12 @@ Record<string, any> & { data: Record<string, any> }> {
 
     const logData = {
       channel,
-      ...message,
-      uptime: process.uptime()
+      ...message
     };
 
     match<DispatcherChannelEvents>({ name })
       .with({ name: "register" }, async() => {
-        this.logger.info(logData, "New Registration on Dispatcher Channel");
+        this.logger.info(logData, "Registration asked");
 
         if (isIncomerRegistrationMessage(message)) {
           await this.approveIncomer(message);
@@ -888,16 +894,14 @@ Record<string, any> & { data: Record<string, any> }> {
 
   private async handleIncomerMessages(
     channel: string,
-    message: IncomerChannelMessages["IncomerMessages"]
+    message: IncomerChannelMessages<T>["IncomerMessages"]
   ) {
     const { redisMetadata, ...event } = message;
     const { name } = event;
 
     const logData = {
       channel,
-      eventName: name,
-      ...message,
-      uptime: process.uptime()
+      ...message
     };
 
     const incomerTree = await this.getTree();
@@ -913,18 +917,18 @@ Record<string, any> & { data: Record<string, any> }> {
         this.logger.warn(logData, "No concerned Incomer found");
       }
       else {
-        const transactionId = await this.backupDispatcherTransactionStore.setTransaction({
+        await this.backupDispatcherTransactionStore.setTransaction({
           ...event,
           redisMetadata: {
             origin: this.privateUUID,
-            to: "foo"
+            to: ""
           },
           mainTransaction: false,
           relatedTransaction: redisMetadata.transactionId,
           resolved: false
-        });
+        } as Transaction<"dispatcher">);
 
-        this.logger.warn({ ...logData, transactionId }, "Backed-up event");
+        this.logger.warn(this.standardLogFn(logData)("Backed-up event"));
       }
 
       return;
@@ -953,7 +957,7 @@ Record<string, any> & { data: Record<string, any> }> {
       const { providedUUID, prefix } = incomer;
 
       const relatedChannel = this.incomerChannels.get(providedUUID) ??
-        new Redis.Channel({
+        new Channel({
           name: providedUUID,
           prefix
         });
@@ -983,7 +987,8 @@ Record<string, any> & { data: Record<string, any> }> {
 
     await this.updateIncomerState(redisMetadata.origin);
     await Promise.all(toResolve);
-    this.logger.info(logData, "Distributed injected event");
+
+    this.logger.info(this.standardLogFn(logData)("Custom event distributed"));
   }
 
   private async approveIncomer(message: IncomerRegistrationMessage) {
@@ -1034,7 +1039,7 @@ Record<string, any> & { data: Record<string, any> }> {
     });
 
     // Subscribe to the exclusive service channel
-    this.incomerChannels.set(providedUUID, new Redis.Channel({
+    this.incomerChannels.set(providedUUID, new Channel({
       name: providedUUID,
       prefix
     }));
@@ -1059,9 +1064,6 @@ Record<string, any> & { data: Record<string, any> }> {
       this.dispatcherTransactionStore.deleteTransaction(transactionId)
     ]);
 
-    this.logger.info({
-      ...event,
-      uptime: process.uptime()
-    }, "New approvement event");
+    this.logger.info("Approved Incomer");
   }
 }

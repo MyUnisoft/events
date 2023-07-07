@@ -22,5 +22,7 @@ export interface IncomerTransactionMetadata {
   transactionId?: string;
 }
 
-export { DispatcherChannelMessages } from "./dispatcherChannel";
-export { IncomerChannelMessages } from "./incomerChannel";
+export type GenericEvent = Record<string, any> & { data: Record<string, any> };
+
+export * from "./dispatcherChannel";
+export * from "./incomerChannel";
