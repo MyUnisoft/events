@@ -40,7 +40,8 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortTime: 5_000
+      abortTime: 5_000,
+      externalsInitialized: true
     });
   });
 

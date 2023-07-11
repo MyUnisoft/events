@@ -2,16 +2,14 @@
 import { Incomer, IncomerOptions } from "./incomer.class";
 import { Dispatcher } from "./dispatcher.class";
 import {
-  EventOptions,
-  Events
+  GenericEvent
 } from "../../types";
 import {
   AVAILABLE_EVENTS,
-  eventsValidationFn,
-  validate
+  eventsValidationFn
 } from "../../index";
 
-export class Externals<T extends EventOptions<keyof Events> = EventOptions<keyof Events>> {
+export class Externals<T extends GenericEvent = GenericEvent> {
   private incomer: Incomer<T>;
   private dispatcher: Dispatcher<T>;
 
@@ -21,7 +19,8 @@ export class Externals<T extends EventOptions<keyof Events> = EventOptions<keyof
       eventsCast: options.eventsSubscribe.map((val) => val.name),
       eventsSubscribe: Object.values(AVAILABLE_EVENTS).filter(
         (event) => options.eventsCast.find((eventCast) => eventCast === event.name)
-      )
+      ),
+      externalsInitialized: true
     });
 
     this.dispatcher = new Dispatcher({
@@ -31,8 +30,7 @@ export class Externals<T extends EventOptions<keyof Events> = EventOptions<keyof
       checkTransactionInterval: Number(process.env.MYUNISOFT_DISPATCHER_TRANSACTION_CHECK) || undefined,
       idleTime: Number(process.env.MYUNISOFT_IDLE_TIME) || undefined,
       eventsValidation: {
-        eventsValidationFn,
-        validationCbFn: validate
+        eventsValidationFn
       }
     });
   }
