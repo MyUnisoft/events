@@ -65,11 +65,8 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   eventCallback: (message: CallBackEventMessage<T>) => void;
   prefix?: Prefix;
   abortTime?: number;
+  externalsInitialized?: boolean;
 };
-
-// eslint-disable-next-line func-style
-const assert = <T extends GenericEvent = EventOptions<keyof Events>>(): T extends
-  EventOptions<keyof Events> ? true : false => void 0;
 
 export class Incomer <
   T extends GenericEvent = GenericEvent
@@ -92,7 +89,8 @@ export class Incomer <
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
   private abortTime = 60_000;
   private standardLogFn: StandardLog<T>;
-  private externals: Externals<EventOptions<keyof Events>> | undefined;
+
+  public externals: Externals<T> | undefined;
 
   constructor(options: IncomerOptions<T>) {
     super();
@@ -121,10 +119,9 @@ export class Incomer <
     });
 
     if (
-      (this.prefix === "test" || this.prefix === "development") &&
-      assert<T>()
+      (this.prefix === "test" || this.prefix === "development") && !options.externalsInitialized
     ) {
-      this.externals = new Externals(options as unknown as IncomerOptions<EventOptions<keyof Events>>);
+      this.externals = new Externals(options);
     }
   }
 
