@@ -3,7 +3,7 @@ import Ajv, { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import { eventsValidationSchemas } from "../schema/index";
-import { EventOptions, Events, GenericEvent } from "types";
+import { EventOptions, Events, GenericEvent } from "../types";
 
 // CONSTANTS
 const ajv = new Ajv();
