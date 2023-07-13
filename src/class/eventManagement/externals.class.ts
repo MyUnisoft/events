@@ -10,8 +10,8 @@ import {
 } from "../../index";
 
 export class Externals<T extends GenericEvent = GenericEvent> {
-  private incomer: Incomer<T>;
-  private dispatcher: Dispatcher<T>;
+  public incomer: Incomer<T>;
+  public dispatcher: Dispatcher<T>;
 
   constructor(options: IncomerOptions<T>) {
     this.incomer = new Incomer({

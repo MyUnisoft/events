@@ -32,7 +32,6 @@ import {
   EventMessage,
   GenericEvent
 } from "../../types/eventManagement/index";
-import { EventOptions, Events, EventsOptions } from "../../types";
 import { StandardLog, defaultStandardLog } from "../../utils/index";
 import { Externals } from "./externals.class";
 
