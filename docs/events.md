@@ -111,3 +111,18 @@ export interface AdminMessage {
   }
 }
 ```
+
+# ThirdParty
+
+- **Operations**: CREATE, UPDATE, DELETE
+- [JSON Schema](./json-schema/events/thirdParty.md)
+
+```ts
+export interface ThirdParty {
+  name: "thirdParty";
+  operation: ThirdPartyOperation;
+  data: {
+    code: string;
+  }
+}
+```
