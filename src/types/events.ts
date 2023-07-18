@@ -93,6 +93,18 @@ export interface AdminMessage {
   }
 }
 
+export type ThirdPartyOperation = Operation[
+  keyof Omit<Operation, "void">
+]
+
+export interface ThirdParty {
+  name: "thirdParty";
+  operation: ThirdPartyOperation;
+  data: {
+    code: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -100,4 +112,5 @@ export interface Events {
   portfolio: Portfolio;
   accountingLineEntry: AccountingLineEntry;
   adminMessage: AdminMessage;
+  thirdParty: ThirdParty;
 }

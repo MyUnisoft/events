@@ -21,6 +21,10 @@ describe("eventsValidationFn", () => {
       expect(connector.has("update")).toBe(true);
       expect(connector.has("delete")).toBe(true);
     });
+
+    test("connector should not have a validation function for \"void\"", () => {
+      expect(connector.has("void")).toBe(false);
+    });
   });
 
   describe("accountingFolder", () => {
@@ -34,6 +38,12 @@ describe("eventsValidationFn", () => {
 
     test("connector should have a validation function for \"create\"", () => {
       expect(accountingFolder.has("create")).toBe(true);
+    });
+
+    test("accountingFolder should not have a validation function for \"update\", \"delete\", \"void\"", () => {
+      expect(accountingFolder.has("update")).toBe(false);
+      expect(accountingFolder.has("delete")).toBe(false);
+      expect(accountingFolder.has("void")).toBe(false);
     });
   });
 
@@ -49,6 +59,12 @@ describe("eventsValidationFn", () => {
     test("document should have a validation function for \"create\"", () => {
       expect(document.has("create")).toBe(true);
     });
+
+    test("document should not have a validation function for \"update\", \"delete\", \"void\"", () => {
+      expect(document.has("update")).toBe(false);
+      expect(document.has("delete")).toBe(false);
+      expect(document.has("void")).toBe(false);
+    });
   });
 
   describe("portfolio", () => {
@@ -60,12 +76,14 @@ describe("eventsValidationFn", () => {
       portfolio = eventsValidationFn.get("portfolio");
     });
 
-    test("portfolio should have a validation function for \"create\"", () => {
+    test("portfolio should have a validation function for \"create\", \"delete\"", () => {
       expect(portfolio.has("create")).toBe(true);
+      expect(portfolio.has("delete")).toBe(true);
     });
 
-    test("portfolio should have a validation function for \"delete\"", () => {
-      expect(portfolio.has("delete")).toBe(true);
+    test("portfolio should not have a validation function for \"update\", \"void\"", () => {
+      expect(portfolio.has("update")).toBe(false);
+      expect(portfolio.has("void")).toBe(false);
     });
   });
 
@@ -81,6 +99,12 @@ describe("eventsValidationFn", () => {
     test("accountingLineEntry should have a validation function for \"create\"", () => {
       expect(accountingLineEntry.has("create")).toBe(true);
     });
+
+    test("accountingLineEntry should not have a validation function for \"update\", \"delete\", \"void\"", () => {
+      expect(accountingLineEntry.has("update")).toBe(false);
+      expect(accountingLineEntry.has("delete")).toBe(false);
+      expect(accountingLineEntry.has("void")).toBe(false);
+    });
   });
 
   describe("AdminMessage", () => {
@@ -95,7 +119,33 @@ describe("eventsValidationFn", () => {
     test("adminMessage should have a validation function for \"void\"", () => {
       expect(adminMessage.has("void")).toBe(true);
     });
+
+    test("adminMessage should not have a validation function for \"create\", \"update\", \"delete\"", () => {
+      expect(adminMessage.has("create")).toBe(false);
+      expect(adminMessage.has("update")).toBe(false);
+      expect(adminMessage.has("delete")).toBe(false);
+    });
   });
+
+  describe("ThirdParty", () => {
+    let thirdParty;
+
+    beforeAll(() => {
+      expect(eventsValidationFn.has("thirdParty")).toBe(true);
+
+      thirdParty = eventsValidationFn.get("thirdParty");
+    });
+
+    test("thirdParty should have a validation function for \"create\", \"update\", \"delete\"", () => {
+      expect(thirdParty.has("create")).toBe(true);
+      expect(thirdParty.has("update")).toBe(true);
+      expect(thirdParty.has("delete")).toBe(true);
+    });
+
+    test("thirdParty should not have a validation function for \"void\"", () => {
+      expect(thirdParty.has("void")).toBe(false);
+    });
+  })
 });
 
 describe("defaultStandardLog", () => {
