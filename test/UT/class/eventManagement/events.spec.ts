@@ -325,6 +325,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: expect.anything(),
+        published: true,
         mainTransaction: true,
         resolved: false,
         relatedTransaction: null
@@ -522,12 +523,13 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: expect.anything(),
+        published: true,
         mainTransaction: true,
         resolved: false,
         relatedTransaction: null
       });
 
-      expect(mockedIncomerSetTransaction).toHaveBeenCalledWith({
+      expect(mockedIncomerSetTransaction).toHaveBeenNthCalledWith(1, {
         ...event,
         redisMetadata: expect.anything(),
         mainTransaction: false,
@@ -553,6 +555,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(publisherTransactions).not.toContain({
         ...event,
         redisMetadata: expect.anything(),
+        published: true,
         relatedTransaction: null,
         mainTransaction: true,
         resolved: false

@@ -1,5 +1,6 @@
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -9,7 +10,7 @@ import {
 import * as Logger from "pino";
 
 // Import Internal Dependencies
-import { Incomer } from "../../../../src/index";
+import { Dispatcher, Incomer } from "../../../../src/index";
 
 const incomerLogger = Logger.pino({
   level: "debug"
@@ -21,7 +22,6 @@ describe("Init Incomer without Dispatcher alive", () => {
   }
 
   let incomer: Incomer;
-  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
@@ -29,7 +29,7 @@ describe("Init Incomer without Dispatcher alive", () => {
       host: process.env.REDIS_HOST
     } as any);
 
-    subscriber = await initRedis({
+    await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any, "subscriber");
@@ -40,20 +40,21 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortTime: 5_000,
+      abortRegistrationTime: 2_000,
       externalsInitialized: true
     });
   });
 
   test("Incomer should not init", async() => {
-    expect.assertions(1);
+    await incomer.initialize();
 
-    try {
-      await incomer.initialize();
-    }
-    catch (error) {
-      expect(error).toBeDefined();
-    }
+    await timers.setTimeout(10_000);
+
+    const dispatcher = new Dispatcher({});
+
+    await dispatcher.initialize();
+
+    await timers.setTimeout(5_000);
   })
 
   afterAll(async() => {

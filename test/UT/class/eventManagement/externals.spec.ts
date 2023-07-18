@@ -44,19 +44,14 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortTime: 5_000,
+      abortRegistrationTime: 5_000,
       externalsInitialized: true
     });
 
     test("it should init", async() => {
-      expect.assertions(1);
+      await incomer.initialize();
 
-      try {
-        await incomer.initialize();
-      }
-      catch (error) {
-        expect(error).toBeDefined();
-      }
+      expect(incomer.externals).not.toBeDefined();
     });
 
     afterAll(async() => {
@@ -72,7 +67,7 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortTime: 5_000
+      abortRegistrationTime: 5_000
     });
 
     test("it should init", async() => {
@@ -94,7 +89,7 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortTime: 5_000
+      abortRegistrationTime: 5_000
     });
 
     test("it should init", async() => {

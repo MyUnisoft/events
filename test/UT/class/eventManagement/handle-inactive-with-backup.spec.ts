@@ -33,7 +33,6 @@ const mockedEventComeBackHandler = jest.fn();
 
 describe("Publishing/exploiting a custom event & inactive incomer", () => {
   let dispatcher: Dispatcher<EventOptions<keyof Events>>;
-  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
@@ -41,7 +40,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       host: process.env.REDIS_HOST
     } as any);
 
-    subscriber = await initRedis({
+    await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any, "subscriber");
@@ -64,7 +63,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   });
 
   afterAll(async() => {
-    await dispatcher.close();
+    dispatcher.close();
     await closeAllRedis();
   });
 
@@ -226,6 +225,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: expect.anything(),
+        published: true,
         mainTransaction: true,
         resolved: false,
         relatedTransaction: null

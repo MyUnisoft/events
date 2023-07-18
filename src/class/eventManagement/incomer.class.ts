@@ -1,6 +1,7 @@
 // Import Node.js Dependencies
 import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import { setTimeout } from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -32,9 +33,13 @@ import {
   EventMessage,
   GenericEvent
 } from "../../types/eventManagement/index";
-import { EventOptions, Events, EventsOptions } from "../../types";
 import { StandardLog, defaultStandardLog } from "../../utils/index";
 import { Externals } from "./externals.class";
+import { PING_INTERVAL } from "./dispatcher.class";
+
+// CONSTANTS
+const kCancelTimeout = new AbortController();
+const kCancelTask = new AbortController();
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
@@ -64,7 +69,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   eventsSubscribe: EventSubscribe[];
   eventCallback: (message: CallBackEventMessage<T>) => void;
   prefix?: Prefix;
-  abortTime?: number;
+  abortRegistrationTime?: number;
   externalsInitialized?: boolean;
 };
 
@@ -87,8 +92,12 @@ export class Incomer <
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
-  private abortTime = 60_000;
+  private abortRegistrationTime = 60_000;
   private standardLogFn: StandardLog<T>;
+  private checkRegistrationInterval: NodeJS.Timer;
+  private checkTransactionsStateInterval: NodeJS.Timer;
+  private dispatcherIsAlive = false;
+  private lastPingDate: number;
 
   public externals: Externals<T> | undefined;
 
@@ -123,6 +132,26 @@ export class Incomer <
     ) {
       this.externals = new Externals(options);
     }
+
+    this.checkTransactionsStateInterval = setInterval(async() => {
+      if (!this.dispatcherIsAlive) {
+        return;
+      }
+      else if (this.lastPingDate + (PING_INTERVAL + this.abortRegistrationTime) < Date.now()) {
+        this.dispatcherIsAlive = false;
+
+        return;
+      }
+
+      this.dispatcherIsAlive = true;
+
+      try {
+        await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
+      }
+      catch (error) {
+        this.logger.error(error);
+      }
+    }, this.abortRegistrationTime).unref();
   }
 
   get subscriber() {
@@ -170,13 +199,57 @@ export class Incomer <
 
     this.logger.info("Registering as a new incomer on dispatcher");
 
-    await once(this, "registered", { signal: AbortSignal.timeout(this.abortTime) });
+    try {
+      await once(this, "registered", { signal: AbortSignal.timeout(this.abortRegistrationTime) });
+    }
+    catch {
+      this.checkRegistrationInterval = setInterval(async() => {
+        if (this.dispatcherIsAlive) {
+          return;
+        }
 
+        try {
+          await this.dispatcherChannel.publish({
+            ...event,
+            redisMetadata: {
+              ...event.redisMetadata,
+              transactionId: this.registerTransactionId
+            }
+          });
+
+          await once(this, "registered", { signal: AbortSignal.timeout(this.abortRegistrationTime) });
+        }
+        catch (error) {
+          this.logger.error(error);
+
+          this.dispatcherIsAlive = false;
+
+          return;
+        }
+
+        this.dispatcherIsAlive = true;
+
+        clearInterval(this.checkRegistrationInterval);
+        this.checkRegistrationInterval = undefined;
+      }, this.abortRegistrationTime * 2).unref();
+
+      return;
+    }
+
+    this.dispatcherIsAlive = true;
     this.logger.info("Incomer registered");
   }
 
   public async close() {
     await this.externals?.close();
+
+    clearInterval(this.checkTransactionsStateInterval);
+    this.checkTransactionsStateInterval = undefined;
+
+    if (this.checkRegistrationInterval) {
+      clearInterval(this.checkRegistrationInterval);
+      this.checkRegistrationInterval = undefined;
+    }
   }
 
   public async publish<
@@ -195,6 +268,7 @@ export class Incomer <
 
     const transactionId = await this.incomerTransactionStore.setTransaction({
       ...formattedEvent,
+      published: this.dispatcherIsAlive,
       mainTransaction: true,
       relatedTransaction: null,
       resolved: false
@@ -208,9 +282,54 @@ export class Incomer <
       }
     } as IncomerChannelMessages<T>["IncomerMessages"];
 
+    if (!this.dispatcherIsAlive) {
+      this.logger.info(this.standardLogFn(finalEvent)("Event Stored but not published"));
+
+      return;
+    }
+
     await this.incomerChannel.publish(finalEvent);
 
     this.logger.info(this.standardLogFn(finalEvent)("Published event"));
+  }
+
+  private async updateTransactionsStateTimeout() {
+    try {
+      await setTimeout(this.abortRegistrationTime, undefined, { signal: kCancelTimeout.signal });
+      kCancelTask.abort();
+    }
+    catch {
+      // Ignore
+    }
+  }
+
+  private async updateTransactionsState() {
+    try {
+      const transactions = await this.incomerTransactionStore.getTransactions();
+
+      const toResolve: Promise<any>[] = [];
+      for (const [transactionId, transaction] of Object.entries(transactions)) {
+        if (!transaction.published) {
+          toResolve.push(
+            Promise.all([
+              this.incomerChannel.publish({
+                ...transaction,
+                redisMetadata: {
+                  ...transaction.redisMetadata,
+                  transactionId
+                }
+              }),
+              this.incomerTransactionStore.updateTransaction(transactionId, { ...transaction, published: true })
+            ])
+          );
+        }
+      }
+
+      await Promise.all(toResolve);
+    }
+    finally {
+      kCancelTimeout.abort();
+    }
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -297,6 +416,9 @@ export class Incomer <
           relatedTransaction: message.redisMetadata.transactionId,
           resolved: true
         });
+
+        this.lastPingDate = Date.now();
+        this.dispatcherIsAlive = true;
 
         this.logger.info(logData, "Resolved Ping event");
       })
