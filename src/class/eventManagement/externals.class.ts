@@ -6,12 +6,13 @@ import {
 } from "../../types";
 import {
   AVAILABLE_EVENTS,
-  eventsValidationFn
+  eventsValidationFn,
+  validate
 } from "../../index";
 
 export class Externals<T extends GenericEvent = GenericEvent> {
-  private incomer: Incomer<T>;
-  private dispatcher: Dispatcher<T>;
+  public incomer: Incomer<T>;
+  public dispatcher: Dispatcher<T>;
 
   constructor(options: IncomerOptions<T>) {
     this.incomer = new Incomer({
@@ -30,7 +31,8 @@ export class Externals<T extends GenericEvent = GenericEvent> {
       checkTransactionInterval: Number(process.env.MYUNISOFT_DISPATCHER_TRANSACTION_CHECK) || undefined,
       idleTime: Number(process.env.MYUNISOFT_IDLE_TIME) || undefined,
       eventsValidation: {
-        eventsValidationFn
+        eventsValidationFn,
+        validationCbFn: validate as any
       }
     });
   }
