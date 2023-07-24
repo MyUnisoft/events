@@ -23,6 +23,7 @@ type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "di
   Omit<IncomerTransactionMetadata, "transactionId">;
 
 type MainTransaction = {
+  published?: boolean;
   mainTransaction: true;
   relatedTransaction: null;
   resolved: false;
@@ -93,18 +94,39 @@ export class TransactionStore<
     this.key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }
 
-  async getTransactions(): Promise<Transactions<T>> {
-    const transactionsKeys = await this.redis.keys(`${this.key}-*`);
+  async* transactionLazyFetch() {
+    const count = 100;
+    let cursor = 0;
+    let lastResult = count;
 
+    while (lastResult === count) {
+      const [lastCursor, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
+
+      cursor = Number(lastCursor);
+      lastResult = elements.length;
+
+      yield elements;
+
+      continue;
+    }
+
+    const [, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
+
+    return elements;
+  }
+
+  async getTransactions(): Promise<Transactions<T>> {
     const mappedTransactions: Transactions<T> = new Map();
 
-    const transactions = await Promise.all(transactionsKeys.map(
-      (transactionKey) => this.getValue(transactionKey)
-    ));
+    for await (const transactionKeys of this.transactionLazyFetch()) {
+      const transactions = await Promise.all(transactionKeys.map(
+        (transactionKey) => this.getValue(transactionKey)
+      ));
 
-    for (const transaction of transactions) {
-      if (transaction !== null && "transactionId" in transaction.redisMetadata) {
-        mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
+      for (const transaction of transactions) {
+        if (transaction !== null && "transactionId" in transaction.redisMetadata) {
+          mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
+        }
       }
     }
 

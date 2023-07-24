@@ -40,11 +40,12 @@ import { CustomEventsValidationFunctions, defaultStandardLog, StandardLog } from
 
 // CONSTANTS
 const ajv = new Ajv();
-const kPingInterval = 60_000;
 const kIdleTime = 80_000;
 const kCheckLastActivityInterval = 90_000;
 const kCheckRelatedTransactionInterval = 60_000;
 const kBackupTransactionStoreName = "backup";
+export const PING_INTERVAL = 60_000;
+
 interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
@@ -177,7 +178,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       catch (error) {
         this.logger.error(error.message);
       }
-    }, options.pingInterval ?? kPingInterval).unref();
+    }, options.pingInterval ?? PING_INTERVAL).unref();
 
     this.checkLastActivityInterval = setInterval(async() => {
       try {
@@ -214,7 +215,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
   }
 
-  public async close() {
+  public close() {
     clearInterval(this.pingInterval);
     this.pingInterval = undefined;
 

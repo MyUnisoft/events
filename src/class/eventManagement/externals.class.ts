@@ -43,6 +43,7 @@ export class Externals<T extends GenericEvent = GenericEvent> {
   }
 
   public async close() {
-    await this.dispatcher.close();
+    this.dispatcher.close();
+    await this.incomer.close();
   }
 }
