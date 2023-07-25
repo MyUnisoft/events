@@ -9,7 +9,7 @@
         "$ref": "Scope"
       },
       "webhookId": {
-        "type": "number"
+        "type": "string"
       },
       "createdAt": {
         "type": "number"
