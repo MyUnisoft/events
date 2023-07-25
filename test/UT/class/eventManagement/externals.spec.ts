@@ -44,7 +44,7 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortRegistrationTime: 5_000,
+      abortPublishTime: 5_000,
       externalsInitialized: true
     });
 
@@ -67,7 +67,8 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortRegistrationTime: 5_000
+      abortPublishTime: 5_000,
+      externalsInitialized: false
     });
 
     test("it should init", async() => {
@@ -89,7 +90,8 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortRegistrationTime: 5_000
+      abortPublishTime: 5_000,
+      externalsInitialized: false
     });
 
     test("it should init", async() => {
