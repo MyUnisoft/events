@@ -12,6 +12,9 @@ import * as Logger from "pino";
 // Import Internal Dependencies
 import { Dispatcher, Incomer } from "../../../../src/index";
 
+// Internal Dependencies Mocks
+const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
+
 const incomerLogger = Logger.pino({
   level: "debug"
 });
@@ -22,6 +25,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   }
 
   let incomer: Incomer;
+  let dispatcher: Dispatcher;
 
   beforeAll(async() => {
     await initRedis({
@@ -40,24 +44,28 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortRegistrationTime: 2_000,
+      abortPublishTime: 2_000,
       externalsInitialized: true
     });
+
+    dispatcher = new Dispatcher();
   });
 
-  test("Incomer should not init", async() => {
+  test("Incomer should init with or without a Dispatcher", async() => {
     await incomer.initialize();
 
-    await timers.setTimeout(10_000);
-
-    const dispatcher = new Dispatcher({});
+    await timers.setTimeout(5_000);
 
     await dispatcher.initialize();
 
     await timers.setTimeout(5_000);
+
+    expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
   })
 
   afterAll(async() => {
+    dispatcher.close();
+    await incomer.close();
     await closeAllRedis();
   });
 });

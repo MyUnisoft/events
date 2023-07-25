@@ -69,7 +69,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   eventsSubscribe: EventSubscribe[];
   eventCallback: (message: CallBackEventMessage<T>) => void;
   prefix?: Prefix;
-  abortRegistrationTime?: number;
+  abortPublishTime?: number;
   externalsInitialized?: boolean;
 };
 
@@ -92,7 +92,7 @@ export class Incomer <
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
-  private abortRegistrationTime = 60_000;
+  private abortPublishTime = 60_000;
   private standardLogFn: StandardLog<T>;
   private checkRegistrationInterval: NodeJS.Timer;
   private checkTransactionsStateInterval: NodeJS.Timer;
@@ -128,7 +128,7 @@ export class Incomer <
     });
 
     if (
-      (this.prefix === "test" || this.prefix === "development") && !options.externalsInitialized
+      (this.prefix === "test" || this.prefix === "development") && options.externalsInitialized === false
     ) {
       this.externals = new Externals(options);
     }
@@ -137,7 +137,7 @@ export class Incomer <
       if (!this.dispatcherIsAlive) {
         return;
       }
-      else if (this.lastPingDate + (PING_INTERVAL + this.abortRegistrationTime) < Date.now()) {
+      else if (this.lastPingDate + (PING_INTERVAL + this.abortPublishTime) < Date.now()) {
         this.dispatcherIsAlive = false;
 
         return;
@@ -151,7 +151,7 @@ export class Incomer <
       catch (error) {
         this.logger.error(error);
       }
-    }, this.abortRegistrationTime).unref();
+    }, this.abortPublishTime).unref();
   }
 
   get subscriber() {
@@ -200,7 +200,7 @@ export class Incomer <
     this.logger.info("Registering as a new incomer on dispatcher");
 
     try {
-      await once(this, "registered", { signal: AbortSignal.timeout(this.abortRegistrationTime) });
+      await once(this, "registered", { signal: AbortSignal.timeout(this.abortPublishTime) });
     }
     catch {
       this.checkRegistrationInterval = setInterval(async() => {
@@ -217,7 +217,7 @@ export class Incomer <
             }
           });
 
-          await once(this, "registered", { signal: AbortSignal.timeout(this.abortRegistrationTime) });
+          await once(this, "registered", { signal: AbortSignal.timeout(this.abortPublishTime) });
         }
         catch (error) {
           this.logger.error(error);
@@ -231,7 +231,7 @@ export class Incomer <
 
         clearInterval(this.checkRegistrationInterval);
         this.checkRegistrationInterval = undefined;
-      }, this.abortRegistrationTime * 2).unref();
+      }, this.abortPublishTime * 2).unref();
 
       return;
     }
@@ -295,7 +295,7 @@ export class Incomer <
 
   private async updateTransactionsStateTimeout() {
     try {
-      await setTimeout(this.abortRegistrationTime, undefined, { signal: kCancelTimeout.signal });
+      await setTimeout(this.abortPublishTime, undefined, { signal: kCancelTimeout.signal });
       kCancelTask.abort();
     }
     catch {

@@ -15,6 +15,7 @@
 ## 🚧 Requirements
 
 - [Node.js](https://nodejs.org/en/) version 16 or higher
+- Docker (for running tests).
 
 ## 🚀 Getting Started
 
@@ -130,12 +131,25 @@ if (isDeleteOperation(event.operation)) {
 
 ### API
 
+#### Dispatcher & Incomer class
+
+> There is the documentation of [**Dispatcher**](./docs/class/dispatcher.md), and [**Incomer**](./docs/class/incomer.md) classes.
+
+---
+
 #### validate< T extends keyof Events >(options: EventOptions<T>): void
-Throw an error if a given event is not internaly known.
+
+> Throw an error if a given event is not internaly known.
+
+---
 
 #### isCreateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["create"]
 
+---
+
 #### isUpdateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["update"]
+
+---
 
 #### isDeleteOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["delete"]
 

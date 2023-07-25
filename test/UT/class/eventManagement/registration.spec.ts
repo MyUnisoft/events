@@ -27,7 +27,6 @@ const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 describe("Registration", () => {
   let dispatcher: Dispatcher;
   let incomer: Incomer;
-  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
@@ -35,7 +34,7 @@ describe("Registration", () => {
       host: process.env.REDIS_HOST
     } as any);
 
-    subscriber = await initRedis({
+    await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any, "subscriber");
@@ -52,7 +51,7 @@ describe("Registration", () => {
   });
 
   afterAll(async() => {
-    await dispatcher.close();
+    dispatcher.close();
     await closeAllRedis();
   });
 
@@ -64,6 +63,10 @@ describe("Registration", () => {
     const eventComeBackHandler = async(message) => {
       console.log(message);
     }
+
+    afterAll(async() => {
+      await incomer.close();
+    });
 
     beforeAll(async() => {
       incomer = new Incomer({
@@ -100,6 +103,10 @@ describe("Registration", () => {
     const eventComeBackHandler = async(message) => {
       console.log(message);
     }
+
+    afterAll(async() => {
+      await incomer.close();
+    })
 
     beforeAll(async() => {
       incomer = new Incomer({

@@ -72,7 +72,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
   idleTime?: number;
-}
+};
 
 type DispatcherChannelEvents = { name: "register" };
 
@@ -123,7 +123,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private validationCbFn: (event: T) => void = null;
   private standardLogFn: StandardLog<T>;
 
-  constructor(options: DispatcherOptions<T>) {
+  constructor(options: DispatcherOptions<T> = {}) {
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = this.formattedPrefix + kIncomerStoreName;

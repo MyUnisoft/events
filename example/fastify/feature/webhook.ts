@@ -1,6 +1,3 @@
-// Import Node.js Dependencies
-import { createHmac } from "crypto";
-
 // Import Internal Dependencies
 import * as MyEvents from "../../../src/index";
 
@@ -11,11 +8,9 @@ import {
   FastifyInstance
 } from "fastify";
 
-const kMyUnisoftToken = process.env.THIRD_PARTY_SECRET!;
-
 export async function webhooksAPI(server: FastifyInstance) {
-  server.post("/anyEvents", { preHandler: signPayload }, getAnyWebhooks);
-  server.post("/connector", { preHandler: signPayload }, getConnectorWebhooks);
+  server.post("/anyEvents", getAnyWebhooks);
+  server.post("/connector", getConnectorWebhooks);
 }
 
 type GetAnyWebhooksRequest = FastifyRequest<{
@@ -41,19 +36,3 @@ type GetConnectorWebhooksRequest = FastifyRequest<{
 async function getConnectorWebhooks(req: GetConnectorWebhooksRequest, reply: FastifyReply) {
   // Do some code
 }
-
-function signPayload(req: GetAnyWebhooksRequest, reply: FastifyReply, done) {
-  const webhooks = req.body;
-  const { date, signature } = req.headers;
-
-  const signed = createHmac("sha256", kMyUnisoftToken)
-    .update(JSON.stringify({ webhooks, date }))
-    .digest("hex");
-
-  if (signed !== signature) {
-    reply.status(401).send();
-  }
-
-  done();
-}
-

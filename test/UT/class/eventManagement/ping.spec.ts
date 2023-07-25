@@ -20,7 +20,6 @@ const incomerLogger = Logger.pino({
   level: "debug"
 });
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
-const mockedDispatcherLoggerInfo = jest.spyOn(dispatcherLogger, "info");
 
 describe("Ping", () => {
   const eventComeBackHandler = async(message) => {
@@ -29,7 +28,6 @@ describe("Ping", () => {
 
   let dispatcher: Dispatcher;
   let incomer: Incomer;
-  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
@@ -37,7 +35,7 @@ describe("Ping", () => {
       host: process.env.REDIS_HOST
     } as any);
 
-    subscriber = await initRedis({
+    await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any, "subscriber");
@@ -68,7 +66,8 @@ describe("Ping", () => {
   });
 
   afterAll(async() => {
-    await dispatcher.close();
+    dispatcher.close();
+    await incomer.close();
     await closeAllRedis();
   });
 
