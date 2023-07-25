@@ -285,7 +285,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
       id: 1,
       code: "JFAC"
     },
-    webhookId: 1,
+    webhookId: "1",
     createdAt: Date.now()
   },
   {
@@ -297,7 +297,7 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
     data: {
       id: 1
     },
-    webhookId: 2,
+    webhookId: "2",
     createdAt: Date.now()
   },
 ];

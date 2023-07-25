@@ -31,7 +31,7 @@ export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = [
 
 type WebhookResponse<K extends keyof Events> = {
   scope: Scope;
-  webhookId: number;
+  webhookId: string;
   createdAt: number;
 } & Events[K];
 
