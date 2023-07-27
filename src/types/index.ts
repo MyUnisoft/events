@@ -4,7 +4,10 @@ import { Events } from "./events";
 export interface Scope {
   schemaId: number;
   firmId?: number | null;
+  firmSIRET?: number | null;
   accountingFolderId?: number | null;
+  accountingFolderSIRET?: number | null;
+  accountingFolderRef?: string | null;
   persPhysiqueId?: number | null;
 }
 

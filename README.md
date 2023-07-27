@@ -44,7 +44,10 @@ An Event fully constituted is composed by a `name`, an `operation` and multiple 
 export interface Scope {
   schemaId: number;
   firmId?: number | null;
+  firmSIRET?: number | null;
   accountingFolderId?: number | null;
+  accountingFolderSIRET?: number | null;
+  accountingFolderRef?: string | null;
   persPhysiqueId?: number | null;
 }
 
