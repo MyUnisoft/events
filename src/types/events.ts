@@ -77,7 +77,7 @@ export interface AccountingLineEntry {
 
 export type AdminMessageOperation = Operation[
   keyof Pick<Operation, "void">
-]
+];
 
 export interface AdminMessage {
   name: "adminMessage";

@@ -1,3 +1,12 @@
+```ts
+export interface Operation {
+  create: "CREATE";
+  update: "UPDATE";
+  delete: "DELETE";
+  void: "VOID";
+}
+```
+
 # Connector
 
 Event notifying the modification of a partner integration.
@@ -6,9 +15,13 @@ Event notifying the modification of a partner integration.
 - [JSON Schema](./json-schema/events/connector.md)
 
 ```ts
+export type ConnectorOperation = Operation[
+  keyof Omit<Operation, "void">
+];
+
 export interface Connector {
   name: "connector";
-  operation: "CREATE" | "UPDATE" | "DELETE";
+  operation: ConnectorOperation;
   data: {
     id: string;
     code: string;
@@ -25,9 +38,13 @@ Event notifying the creation of a new Accounting Folder (a company).
 - [JSON Schema](./json-schema/events/accountingFolder.md)
 
 ```ts
+export type AccountingFolderOperation = Operation[
+  keyof Pick<Operation, "create">
+];
+
 export interface AccountingFolder {
   name: "accountingFolder";
-  operation: "CREATE";
+  operation: AccountingFolderOperation;
   data: {
     id: string;
   };
@@ -42,6 +59,10 @@ Event notifying the creation/addition of a document.
 - [JSON Schema](./json-schema/events/document.md)
 
 ```ts
+export type DocumentOperation = Operation[
+  keyof Pick<Operation, "create">
+];
+
 export enum DocumentKind {
   DossierAnnuel = "AF",
   DossierPermanent = "PF",
@@ -51,7 +72,7 @@ export enum DocumentKind {
 
 export interface Document {
   name: "document";
-  operation: "CREATE";
+  operation: DocumentOperation;
   data: {
     id: string;
     kind: DocumentKind;
@@ -67,6 +88,10 @@ Event notifying the creation or deletion of an Accounting Portfolio (or Accounti
 - [JSON Schema](./json-schema/events/portfolio.md)
 
 ```ts
+export type PortfolioOperation = Operation[
+  keyof Omit<Operation, "update" | "void">
+];
+
 export interface Portfolio {
   name: "portfolio";
   operation: PortfolioOperation;
@@ -82,6 +107,10 @@ export interface Portfolio {
 - [JSON Schema](./json-schema/events/accountingLineEntry.md)
 
 ```ts
+export type AccountingLineEntryOperation = Operation[
+  keyof Pick<Operation, "create">
+];
+
 export interface AccountingLineEntry {
   name: "accountingLineEntry";
   operation: AccountingLineEntryOperation;
@@ -97,6 +126,10 @@ export interface AccountingLineEntry {
 - [JSON Schema](./json-schema/events/adminMessage.md)
 
 ```ts
+export type AdminMessageOperation = Operation[
+  keyof Pick<Operation, "void">
+];
+
 export interface AdminMessage {
   name: "adminMessage";
   operation: AdminMessageOperation;
@@ -118,6 +151,10 @@ export interface AdminMessage {
 - [JSON Schema](./json-schema/events/thirdParty.md)
 
 ```ts
+export type ThirdPartyOperation = Operation[
+  keyof Omit<Operation, "void">
+]
+
 export interface ThirdParty {
   name: "thirdParty";
   operation: ThirdPartyOperation;
