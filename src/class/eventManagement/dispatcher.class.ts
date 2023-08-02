@@ -686,6 +686,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
         continue;
       }
 
+      const relatedIncomer = incomers[dispatcherTransaction.redisMetadata.to];
+
+      if (!relatedIncomer) {
+        continue;
+      }
+
       const prefix = incomers[dispatcherTransaction.redisMetadata.to].prefix ?? "";
       const relatedIncomerTransactionStore = new TransactionStore({
         prefix: `${prefix ? `${prefix}-` : ""}${dispatcherTransaction.redisMetadata.to}`,
