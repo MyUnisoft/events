@@ -95,13 +95,28 @@ export interface AdminMessage {
 
 export type ThirdPartyOperation = Operation[
   keyof Omit<Operation, "void">
-]
+];
 
 export interface ThirdParty {
   name: "thirdParty";
   operation: ThirdPartyOperation;
   data: {
     code: string;
+  }
+}
+
+export type AccountingEntryLetteringOperation = Operation[
+  keyof Pick<Operation, "create">
+];
+
+export interface AccountingEntryLettering {
+  name: "accountingEntryLettering";
+  operation: AccountingEntryLetteringOperation;
+  data: {
+    id: string;
+    piece2: number;
+    paymentType: string;
+    piece1?: number;
   }
 }
 
@@ -113,4 +128,5 @@ export interface Events {
   accountingLineEntry: AccountingLineEntry;
   adminMessage: AdminMessage;
   thirdParty: ThirdParty;
+  accountingEntryLettering: AccountingEntryLettering;
 }

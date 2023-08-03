@@ -145,7 +145,27 @@ describe("eventsValidationFn", () => {
     test("thirdParty should not have a validation function for \"void\"", () => {
       expect(thirdParty.has("void")).toBe(false);
     });
-  })
+  });
+
+  describe("AccountingEntryLettering", () => {
+    let accountingEntryLettering;
+
+    beforeAll(() => {
+      expect(eventsValidationFn.has("accountingEntryLettering")).toBe(true);
+
+      accountingEntryLettering = eventsValidationFn.get("accountingEntryLettering");
+    });
+
+    test("thirdParty should have a validation function for \"create\", \"update\", \"delete\"", () => {
+      expect(accountingEntryLettering.has("create")).toBe(true);
+    });
+
+    test("thirdParty should not have a validation function for \"update\", \"delete\", \"void\"", () => {
+      expect(accountingEntryLettering.has("update")).toBe(false);
+      expect(accountingEntryLettering.has("delete")).toBe(false);
+      expect(accountingEntryLettering.has("void")).toBe(false);
+    });
+  });
 });
 
 describe("defaultStandardLog", () => {
