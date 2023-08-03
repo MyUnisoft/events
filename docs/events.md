@@ -163,3 +163,25 @@ export interface ThirdParty {
   }
 }
 ```
+
+# AccountingEntryLettering
+
+- **Operations**: CREATE
+- [JSON Schema](./json-schema/events/accountingEntryLettering.md)
+
+```ts
+export type AccountingEntryLetteringOperation = Operation[
+  keyof Pick<Operation, "create">
+];
+
+export interface AccountingEntryLettering {
+  name: "accountingEntryLettering";
+  operation: AccountingEntryLetteringOperation;
+  data: {
+    id: string;
+    piece2: number;
+    paymentType: string;
+    piece1?: number;
+  }
+}
+```

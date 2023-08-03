@@ -1,0 +1,24 @@
+{
+  "accountingEntryLettering": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "piece2": {
+          "type": "number"
+        },
+        "paymentType": {
+          "type": "string"
+        },
+        "piece1": {
+          "type": "number"
+        }
+      },
+      "required": ["id", "piece2", "paymentType"],
+      "additionalProperties": false
+    }
+  }
+}
