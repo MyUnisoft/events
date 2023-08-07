@@ -826,7 +826,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       throw new Error("Malformed message");
     }
 
-    if (this.validationCbFn && isIncomerChannelMessage(message)) {
+    if (this.validationCbFn && isIncomerChannelMessage(message) && event.name !== "ping") {
       this.validationCbFn({ ...message });
 
       return;
