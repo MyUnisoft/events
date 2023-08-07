@@ -26,11 +26,11 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
   }
 
   const event = eventsValidationFn.get(name);
-  if (!event.has(operation.toLocaleLowerCase())) {
+  if (!event.has(operation?.toLocaleLowerCase())) {
     throw new Error(`Unknown "operation": ${operation} for the "event": ${name}`);
   }
 
-  const operationValidationFunction = event.get(operation.toLocaleLowerCase());
+  const operationValidationFunction = event.get(operation?.toLocaleLowerCase());
   if (!operationValidationFunction(data)) {
     throw new Error(`"event": ${name} | "operation": ${operation}: ${[...operationValidationFunction.errors]
       .map((error) => error.message)}`);

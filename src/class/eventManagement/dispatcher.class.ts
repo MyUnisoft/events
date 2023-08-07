@@ -851,7 +851,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       }
 
       // Avoid reacting to his own message
-      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
+      // Edge case when dispatcher is also an incomer and approve himself
+      if (formattedMessage.redisMetadata.origin === this.privateUUID || formattedMessage.name === "approvement") {
         return;
       }
 
