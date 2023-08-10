@@ -36,13 +36,20 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
 
 export type StandardLog<T extends GenericEvent = GenericEvent> = (data: T) => (message: string) => string;
 
+function logValueFallback(value: string): string {
+  return value ?? "none";
+}
+
 export function defaultStandardLog<
   T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { redisMetadata: { transactionId: string } }) {
+>(event: T & { redisMetadata: { transactionId: string; origin?: string; } }) {
   const logs = Array.from(mapped<T>(event)).join("|");
 
+  // eslint-disable-next-line max-len
+  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}`;
+
   function log(message: string) {
-    return `(${logs}) ${message}`;
+    return `(${logs})(${eventMeta}) ${message}`;
   }
 
   return log;
@@ -53,7 +60,7 @@ function* mapped<
 >(event: T & { redisMetadata: { transactionId: string } }) {
   for (const [key, formattedKey] of Object.entries(kScopeKeys)) {
     if (key === "transactionId") {
-      yield `${formattedKey}:${event.redisMetadata[key] ?? "none"}`;
+      yield `${formattedKey}:${logValueFallback(event.redisMetadata[key])}`;
 
       continue;
     }
@@ -64,6 +71,6 @@ function* mapped<
       continue;
     }
 
-    yield `${formattedKey}:${event[kCustomKey][key] ?? "none"}`;
+    yield `${formattedKey}:${logValueFallback(event[kCustomKey][key])}`;
   }
 }

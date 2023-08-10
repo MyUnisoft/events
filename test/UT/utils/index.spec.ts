@@ -173,7 +173,8 @@ describe("defaultStandardLog", () => {
         firmId, accountingFolderId, and persPhysiqueId, it should return
         a string with the given info formatted.`, () => {
     const payload = {
-      event: "foo",
+      name: "foo",
+      operation: "CREATE",
       channel: "bar",
       scope: {
         schemaId: 1,
@@ -182,6 +183,7 @@ describe("defaultStandardLog", () => {
         persPhysiqueId: 4
       },
       redisMetadata: {
+        origin: "bar",
         transactionId: "foo"
       },
       data: {
@@ -189,16 +191,17 @@ describe("defaultStandardLog", () => {
       }
     };
 
-    const expected = `(id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4) foo`;
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4)(name:foo|ope:CREATE|from:bar) foo`;
 
     expect(defaultStandardLog(payload)("foo")).toBe(expected);
   });
 
-  test("given a payload without scope object, it should just return the given object as string", () => {
+  test("given a payload without scope object, it should just return data about the event & the message", () => {
     const payload = {
-      event: "foo",
+      name: "foo",
       channel: "bar",
       redisMetadata: {
+        origin: "bar",
         transactionId: "foo"
       },
       data: {
@@ -206,14 +209,14 @@ describe("defaultStandardLog", () => {
       }
     };
 
-    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none) foo`;
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none)(name:foo|ope:none|from:bar) foo`;
 
     expect(defaultStandardLog(payload)("foo")).toBe(expected);
   });
 
-  test("given a payload with any of the specified property in the scope object, it should return the given object as string", () => {
+  test("given a payload with any of the specified property in the scope object, it should return the props", () => {
     const payload = {
-      event: "foo",
+      name: "foo",
       channel: "bar",
       scope: {
         foo: "bar"
@@ -226,7 +229,7 @@ describe("defaultStandardLog", () => {
       }
     };
 
-    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none) foo`;
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none)(name:foo|ope:none|from:none) foo`;
 
     expect(defaultStandardLog(payload)("foo")).toBe(expected);
   })

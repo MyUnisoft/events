@@ -504,9 +504,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
             this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
           ]);
         }
-      }
 
-      this.logger.warn(this.standardLogFn(dispatcherTransaction as T)("Redistributed unresolved injected event to an Incomer"));
+        this.logger.warn(this.standardLogFn(dispatcherTransaction as T)("Redistributed unresolved injected event to an Incomer"));
+      }
     }
   }
 
