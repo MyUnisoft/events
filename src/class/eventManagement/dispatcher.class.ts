@@ -40,11 +40,11 @@ import { CustomEventsValidationFunctions, defaultStandardLog, StandardLog } from
 
 // CONSTANTS
 const ajv = new Ajv();
-const kIdleTime = 80_000;
-const kCheckLastActivityInterval = 90_000;
-const kCheckRelatedTransactionInterval = 60_000;
+const kIdleTime = 60_000 * 10;
+const kCheckLastActivityInterval = 60_000 * 2;
+const kCheckRelatedTransactionInterval = 60_000 * 3;
 const kBackupTransactionStoreName = "backup";
-export const PING_INTERVAL = 60_000;
+export const PING_INTERVAL = 60_000 * 5;
 
 interface RegisteredIncomer {
   providedUUID: string;
@@ -126,7 +126,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   constructor(options: DispatcherOptions<T> = {}) {
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
-    this.treeName = this.formattedPrefix + kIncomerStoreName;
+    this.treeName = kIncomerStoreName;
     this.dispatcherChannelName = this.formattedPrefix + channels.dispatcher;
     this.idleTime = options.idleTime ?? kIdleTime;
     this.standardLogFn = options.standardLog ?? defaultStandardLog;
@@ -551,9 +551,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private async checkForDistributableIncomerTransactions(backedUpIncomerTransactions: Transactions<"incomer">) {
     const toResolve = [];
 
-    for (const [backedUpTransactionId, backedUpTransaction] of backedUpIncomerTransactions.entries()) {
-      const incomers = await this.getTree();
+    const incomers = await this.getTree();
 
+    for (const [backedUpTransactionId, backedUpTransaction] of backedUpIncomerTransactions.entries()) {
       if (backedUpTransaction.mainTransaction) {
         const concernedIncomer = Object.values(incomers).find(
           (incomer) => incomer.eventsCast.find(
@@ -738,9 +738,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private async resolveIncomerMainTransactions(
     dispatcherTransactions: Transactions<"dispatcher">
   ) {
-    const incomerTree = await this.getTree();
+    const incomers = await this.getTree();
 
-    for (const incomer of Object.values(incomerTree)) {
+    for (const incomer of Object.values(incomers)) {
       const incomerStore = new TransactionStore({
         prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomer.providedUUID}`,
         instance: "incomer"
