@@ -61,9 +61,7 @@ describe("Registration", () => {
   });
 
   describe("Initializing consecutively the same Incomer", () => {
-    const eventComeBackHandler = async(message) => {
-      console.log(message);
-    }
+    const eventComeBackHandler = () => void 0;
 
     afterAll(async() => {
       await incomer.close();
@@ -101,9 +99,7 @@ describe("Registration", () => {
   });
 
   describe("Initializing a new Incomer", () => {
-    const eventComeBackHandler = async(message) => {
-      console.log(message);
-    }
+    const eventComeBackHandler = () => void 0;
 
     afterAll(async() => {
       await incomer.close();

@@ -32,9 +32,7 @@ afterAll(async() => {
 });
 
 describe("Init Incomer without Dispatcher alive & prefix as \"test\"", () => {
-  const eventComeBackHandler = async(message) => {
-    console.log(message);
-  }
+  const eventComeBackHandler = () => void 0;
 
   describe("With externalsInitialized at true", () => {
     const incomer: Incomer = new Incomer({

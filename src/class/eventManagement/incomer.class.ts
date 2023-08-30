@@ -62,18 +62,19 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
+  prefix?: Prefix;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   eventCallback: (message: CallBackEventMessage<T>) => void;
-  prefix?: Prefix;
   dispatcherInactivityOptions?: {
     /* max interval between received ping before considering dispatcher off */
     maxPingInterval?: number;
     /* interval between  */
     publishInterval?: number;
   };
+  isDispatcherInstance?: boolean;
   externalsInitialized?: boolean;
 };
 
@@ -82,7 +83,9 @@ export class Incomer <
 > extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
+  readonly isDispatcherInstance?: boolean;
   readonly eventCallback: (message: CallBackEventMessage<T>) => void;
+
   public dispatcherIsAlive = false;
 
   private prefixedName: string;
@@ -141,7 +144,7 @@ export class Incomer <
     }
 
     this.checkTransactionsStateInterval = setInterval(async() => {
-      if (!this.lastPingDate) {
+      if (!this.lastPingDate || this.isDispatcherInstance) {
         return;
       }
 
@@ -290,7 +293,7 @@ export class Incomer <
       }
     } as IncomerChannelMessages<T>["IncomerMessages"];
 
-    if (!this.dispatcherIsAlive) {
+    if (!this.dispatcherIsAlive && !this.isDispatcherInstance) {
       this.logger.info(this.standardLogFn(finalEvent)("Event Stored but not published"));
 
       return;
