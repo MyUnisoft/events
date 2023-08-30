@@ -46,6 +46,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      name: "pulsar",
       logger: dispatcherLogger,
       pingInterval: 10_000,
       checkLastActivityInterval: 2_600,

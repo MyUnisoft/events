@@ -43,6 +43,7 @@ describe("Publishing/exploiting a custom event", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      name: "pulsar",
       pingInterval: 10_000,
       checkLastActivityInterval: 14_000,
       checkTransactionInterval: 5_000,
@@ -97,7 +98,7 @@ describe("Publishing/exploiting a custom event", () => {
 
     beforeAll(async() => {
       publisher = new Incomer({
-        name: randomUUID(),
+        name: "foo",
         logger: incomerLogger,
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
@@ -105,7 +106,7 @@ describe("Publishing/exploiting a custom event", () => {
       });
 
       unConcernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "bar",
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [],
@@ -225,7 +226,7 @@ describe("Publishing/exploiting a custom event", () => {
 
     beforeAll(async() => {
       publisher = new Incomer({
-        name: randomUUID(),
+        name: "foo",
         logger: incomerLogger,
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
@@ -233,7 +234,7 @@ describe("Publishing/exploiting a custom event", () => {
       });
 
       concernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "bar",
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
@@ -241,7 +242,7 @@ describe("Publishing/exploiting a custom event", () => {
       });
 
       secondConcernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "foo-bar",
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
@@ -429,7 +430,7 @@ describe("Publishing/exploiting a custom event", () => {
 
     beforeAll(async() => {
       publisher = new Incomer({
-        name: randomUUID(),
+        name: "foo",
         logger: incomerLogger,
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
@@ -437,7 +438,7 @@ describe("Publishing/exploiting a custom event", () => {
       });
 
       concernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "bar",
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
@@ -445,7 +446,7 @@ describe("Publishing/exploiting a custom event", () => {
       });
 
       secondConcernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "foo-bar",
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
@@ -534,7 +535,7 @@ describe("Publishing/exploiting a custom event", () => {
     });
 
     test("callback function must have been call & one of the incomers should have create the relating transaction", async() => {
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(5_000);
 
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,

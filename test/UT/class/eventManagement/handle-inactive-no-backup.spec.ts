@@ -49,6 +49,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
+      name: "pulsar",
       logger: dispatcherLogger,
       pingInterval: 10_000,
       checkLastActivityInterval: 2_600,
@@ -74,7 +75,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   });
 
   afterAll(async() => {
-    await dispatcher.close();
+    dispatcher.close();
     await closeAllRedis();
   });
 
@@ -232,21 +233,21 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
     beforeAll(async() => {
       publisher = new Incomer({
-        name: randomUUID(),
+        name: "foo",
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
       });
 
       secondPublisher = new Incomer({
-        name: randomUUID(),
+        name: "bar",
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
       });
 
       concernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "foo-bar",
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
@@ -254,7 +255,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       });
 
       secondConcernedIncomer = new Incomer({
-        name: randomUUID(),
+        name: "foo-bar-foo",
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler

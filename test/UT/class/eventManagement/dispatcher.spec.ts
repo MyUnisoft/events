@@ -63,6 +63,7 @@ describe("Dispatcher", () => {
       }, "subscriber");
 
       dispatcher = new Dispatcher({
+        name: "pulsar",
         logger,
         pingInterval: 1_600,
         checkLastActivityInterval: 5_000,
@@ -102,7 +103,8 @@ describe("Dispatcher", () => {
     });
 
     describe("Publishing a well formed register event", () => {
-      let incomerName = randomUUID();
+      let incomerName = "foo";
+      let uuid = randomUUID();
 
       beforeAll(() => {
         jest.clearAllMocks();
@@ -121,7 +123,7 @@ describe("Dispatcher", () => {
             eventsSubscribe: []
           },
           redisMetadata: {
-            origin: incomerName,
+            origin: uuid,
             transactionId: "foo"
           }
         };
@@ -150,7 +152,7 @@ describe("Dispatcher", () => {
             eventsSubscribe: []
           },
           redisMetadata: {
-            origin: incomerName
+            origin: uuid
           }
         };
 
@@ -162,7 +164,7 @@ describe("Dispatcher", () => {
           // jest.clearAllMocks();
 
           incomerTransactionStore = new TransactionStore({
-            prefix: incomerName,
+            prefix: uuid,
             instance: "incomer"
           });
 
@@ -227,7 +229,8 @@ describe("Dispatcher", () => {
     });
 
     describe("Handling a ping event", () => {
-      let incomerName = randomUUID();
+      let incomerName = "foo";
+      let uuid = randomUUID();
       let pongTransactionId: string;
       let pingTransactionId: string;
       let incomerTransactionStore: TransactionStore<"incomer">;
@@ -286,12 +289,12 @@ describe("Dispatcher", () => {
             eventsSubscribe: []
           },
           redisMetadata: {
-            origin: incomerName
+            origin: uuid
           }
         };
 
         incomerTransactionStore = new TransactionStore({
-          prefix: incomerName,
+          prefix: uuid,
           instance: "incomer"
         });
 
@@ -310,7 +313,7 @@ describe("Dispatcher", () => {
             eventsSubscribe: []
           },
           redisMetadata: {
-            origin: incomerName,
+            origin: uuid,
             transactionId
           }
         });
@@ -356,6 +359,7 @@ describe("Dispatcher", () => {
       } as any, "subscriber");
 
       dispatcher = new Dispatcher({
+        name: "pulsar",
         logger,
         pingInterval: 1_600,
         checkLastActivityInterval: 3_800,
@@ -380,7 +384,8 @@ describe("Dispatcher", () => {
 
     describe("Publishing on the dispatcher channel", () => {
       describe("Publishing well formed register event", () => {
-        let incomerName = randomUUID();
+        let incomerName = "foo";
+        let uuid = randomUUID();
         let approved = false;
 
         beforeAll(async() => {
@@ -409,13 +414,13 @@ describe("Dispatcher", () => {
               eventsSubscribe: []
             },
             redisMetadata: {
-              origin: incomerName,
+              origin: uuid,
               prefix
             }
           }
 
           const incomerTransactionStore = new TransactionStore({
-            prefix: `${prefix}-${incomerName}`,
+            prefix: `${prefix}-${uuid}`,
             instance: "incomer"
           });
 
@@ -430,7 +435,7 @@ describe("Dispatcher", () => {
           await channel.publish({
             ...event,
             redisMetadata: {
-              origin: incomerName,
+              origin: uuid,
               prefix,
               transactionId
             }
@@ -453,7 +458,8 @@ describe("Dispatcher", () => {
     });
 
     describe("Handling a ping event", () => {
-      let incomerName = randomUUID();
+      let incomerName = "foo";
+      let uuid = randomUUID();
       let pingResponseTransaction: string;
       let incomerTransactionStore: TransactionStore<"incomer">;
 
@@ -508,13 +514,13 @@ describe("Dispatcher", () => {
             eventsSubscribe: []
           },
           redisMetadata: {
-            origin: incomerName,
+            origin: uuid,
             prefix
           }
         };
 
         incomerTransactionStore = new TransactionStore({
-          prefix: `${prefix}-${incomerName}`,
+          prefix: `${prefix}-${uuid}`,
           instance: "incomer"
         });
 
@@ -533,7 +539,7 @@ describe("Dispatcher", () => {
             eventsSubscribe: []
           },
           redisMetadata: {
-            origin: incomerName,
+            origin: uuid,
             prefix,
             transactionId
           }
@@ -588,6 +594,7 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
+        name: "pulsar",
         logger,
         eventsValidation: {
           eventsValidationFn
@@ -692,7 +699,8 @@ describe("Dispatcher", () => {
 
     describe("Publishing on the dispatcher channel", () => {
       describe("Publishing well formed register event", () => {
-        let incomerName = randomUUID();
+        let incomerName = "foo";
+        let uuid = randomUUID();
         let approved = false;
 
         beforeAll(async() => {
@@ -721,12 +729,12 @@ describe("Dispatcher", () => {
               eventsSubscribe: []
             },
             redisMetadata: {
-              origin: incomerName
+              origin: uuid
             }
           }
 
           const incomerTransactionStore = new TransactionStore({
-            prefix: incomerName,
+            prefix: uuid,
             instance: "incomer"
           });
 
@@ -740,7 +748,7 @@ describe("Dispatcher", () => {
           await channel.publish({
             ...event,
             redisMetadata: {
-              origin: incomerName,
+              origin: uuid,
               transactionId
             }
           });
@@ -819,8 +827,10 @@ describe("Dispatcher", () => {
       });
 
       describe("Publishing an injected event", () => {
-        const firstIncomerName = randomUUID();
-        const secondIncomerName = randomUUID();
+        const firstIncomerName = "foo";
+        const firstUuid = randomUUID();
+        const secondIncomerName = "bar";
+        const secondUuid = randomUUID();
         let firstIncomerProvidedUUID;
         let secondIncomerProvidedUUID;
         let hasDistributedEvents = false;
@@ -838,7 +848,7 @@ describe("Dispatcher", () => {
               if (formattedMessage.name === "approvement") {
                 const uuid = formattedMessage.data.uuid;
 
-                if (formattedMessage.redisMetadata.to === firstIncomerName) {
+                if (formattedMessage.redisMetadata.to === firstUuid) {
                   firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
@@ -917,7 +927,7 @@ describe("Dispatcher", () => {
               eventsSubscribe: []
             },
             redisMetadata: {
-              origin: firstIncomerName
+              origin: firstUuid
             }
           };
 
@@ -929,17 +939,17 @@ describe("Dispatcher", () => {
               eventsSubscribe: [{ name: "foo" }]
             },
             redisMetadata: {
-              origin: secondIncomerName
+              origin: secondUuid
             }
           };
 
           firstIncomerTransactionStore = new TransactionStore({
-            prefix: firstIncomerName,
+            prefix: firstUuid,
             instance: "incomer"
           });
 
           secondIncomerTransactionStore = new TransactionStore({
-            prefix: secondIncomerName,
+            prefix: secondUuid,
             instance: "incomer"
           });
 
@@ -1012,6 +1022,7 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
+        name: "pulsar",
         logger,
         eventsValidation: {
           eventsValidationFn
@@ -1073,9 +1084,12 @@ describe("Dispatcher", () => {
       });
 
       describe("Publishing an injected event", () => {
-        const firstIncomerName = randomUUID();
-        const secondIncomerName = randomUUID();
-        const thirdIncomerName = randomUUID();
+        const firstIncomerName = "foo";
+        const firstIncomerUuid = randomUUID();
+        const secondIncomerName = "bar";
+        const secondIncomerUuid = randomUUID();
+        const thirdIncomerName = "foo-bar";
+        const thirdIncomerUuid = randomUUID();
         let firstIncomerProvidedUUID;
         let secondIncomerProvidedUUID;
         let thirdIncomerProvidedUUID;
@@ -1097,7 +1111,7 @@ describe("Dispatcher", () => {
               if (formattedMessage.name === "approvement") {
                 const uuid = formattedMessage.data.uuid;
 
-                if (formattedMessage.redisMetadata.to === firstIncomerName) {
+                if (formattedMessage.redisMetadata.to === firstIncomerUuid) {
                   firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
@@ -1136,14 +1150,14 @@ describe("Dispatcher", () => {
                     }
                   });
                 }
-                else if (formattedMessage.redisMetadata.to === secondIncomerName) {
+                else if (formattedMessage.redisMetadata.to === secondIncomerUuid) {
                   secondIncomerProvidedUUID = uuid;
                   secondIncomerTransactionStore = new TransactionStore({
                     prefix: `${prefix}-${secondIncomerProvidedUUID}`,
                     instance: "incomer"
                   });
                 }
-                else if (formattedMessage.redisMetadata.to === thirdIncomerName) {
+                else if (formattedMessage.redisMetadata.to === thirdIncomerUuid) {
                   thirdIncomerProvidedUUID = uuid;
                   thirdIncomerTransactionStore = new TransactionStore({
                     prefix: `${prefix}-${thirdIncomerProvidedUUID}`,
@@ -1206,7 +1220,7 @@ describe("Dispatcher", () => {
               eventsSubscribe: []
             },
             redisMetadata: {
-              origin: firstIncomerName,
+              origin: firstIncomerUuid,
               prefix
             }
           };
@@ -1219,7 +1233,7 @@ describe("Dispatcher", () => {
               eventsSubscribe: [{ name: "foo", horizontalScale: true }]
             },
             redisMetadata: {
-              origin: secondIncomerName,
+              origin: secondIncomerUuid,
               prefix
             }
           };
@@ -1232,23 +1246,23 @@ describe("Dispatcher", () => {
               eventsSubscribe: [{ name: "foo", horizontalScale: true }]
             },
             redisMetadata: {
-              origin: thirdIncomerName,
+              origin: thirdIncomerUuid,
               prefix
             }
           };
 
           firstIncomerTransactionStore = new TransactionStore({
-            prefix: `${prefix}-${firstIncomerName}`,
+            prefix: `${prefix}-${firstIncomerUuid}`,
             instance: "incomer"
           });
 
           secondIncomerTransactionStore = new TransactionStore({
-            prefix: `${prefix}-${secondIncomerName}`,
+            prefix: `${prefix}-${secondIncomerUuid}`,
             instance: "incomer"
           });
 
           thirdIncomerTransactionStore = new TransactionStore({
-            prefix: `${prefix}-${thirdIncomerName}`,
+            prefix: `${prefix}-${thirdIncomerUuid}`,
             instance: "incomer"
           });
 

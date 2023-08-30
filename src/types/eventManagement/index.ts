@@ -18,6 +18,7 @@ export interface DispatcherTransactionMetadata {
 
 export interface IncomerTransactionMetadata {
   origin: string;
+  to?: string;
   prefix?: Prefix;
   transactionId?: string;
 }

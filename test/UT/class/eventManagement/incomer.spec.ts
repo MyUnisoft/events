@@ -39,29 +39,62 @@ describe("Init Incomer without Dispatcher alive", () => {
     } as any, "subscriber");
 
     incomer = new Incomer({
-      name: randomUUID(),
+      name: "foo",
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortPublishTime: 2_000,
+      dispatcherInactivityOptions: {
+        maxPingInterval: 5_000,
+        publishInterval: 1_000
+      },
       externalsInitialized: true
     });
 
-    dispatcher = new Dispatcher();
+    dispatcher = new Dispatcher({
+      name: "pulsar",
+      pingInterval: 3_000
+    });
   });
 
-  test("Incomer should init with or without a Dispatcher", async() => {
+  test("Incomer should init without a Dispatcher alive", async() => {
     await incomer.initialize();
 
     await timers.setTimeout(5_000);
 
+    expect(incomer.dispatcherIsAlive).toBe(false);
+  });
+
+  test("It should register when a Dispatcher is alive", async() => {
     await dispatcher.initialize();
 
     await timers.setTimeout(5_000);
 
+    expect(incomer.dispatcherIsAlive).toBe(true);
     expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
   })
+
+  test("It should set the dispatcher state at false when there is not Dispatcher sending ping", async() => {
+    dispatcher.close();
+
+    await timers.setTimeout(5_000);
+
+    expect(incomer.dispatcherIsAlive).toBe(false);
+  });
+
+  test("It should set the dispatcher state at true when there is a Dispatcher sending ping", async() => {
+    const secondDispatcher = new Dispatcher({
+      name: "pulsar",
+      pingInterval: 3_000
+    });
+    await secondDispatcher.initialize()
+
+    await timers.setTimeout(5_000);
+
+    expect(incomer.dispatcherIsAlive).toBe(true);
+
+    secondDispatcher.close();
+  });
 
   afterAll(async() => {
     dispatcher.close();
