@@ -61,6 +61,7 @@ type IncomerStore = Record<string, RegisteredIncomer>;
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
+  name: string;
   prefix?: Prefix;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
   standardLog?: StandardLog<T>;
@@ -104,6 +105,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   readonly dispatcherChannelName: string;
   readonly privateUUID = randomUUID();
 
+  private dispatcherName: string;
   private dispatcherChannel: Channel<DispatcherChannelMessages["DispatcherMessages"]>;
   private incomerStore: KVPeer<IncomerStore>;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -123,7 +125,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private validationCbFn: (event: T) => void = null;
   private standardLogFn: StandardLog<T>;
 
-  constructor(options: DispatcherOptions<T> = {}) {
+  constructor(options: DispatcherOptions<T>) {
+    this.dispatcherName = options.name;
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = kIncomerStoreName;
@@ -230,6 +233,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     const tree = await this.getTree();
 
     for (const [uuid, incomer] of Object.entries(tree)) {
+      if (incomer.name === this.dispatcherName) {
+        continue;
+      }
+
       const incomerChannel = this.incomerChannels.get(uuid) ??
         new Channel({
           name: uuid,
@@ -419,11 +426,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
         const { providedUUID, prefix } = concernedRelatedTransactionIncomer;
 
-        const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
-          new Channel({
+        let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+        if (!concernedIncomerChannel) {
+          concernedIncomerChannel = new Channel({
             name: providedUUID,
             prefix
           });
+
+          this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+        }
 
         await Promise.all([
           this.publishEvent({
@@ -479,11 +491,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
           const { providedUUID, prefix } = concernedIncomer;
 
-          const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
-            new Channel({
+          let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+          if (!concernedIncomerChannel) {
+            concernedIncomerChannel = new Channel({
               name: providedUUID,
               prefix
             });
+
+            this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+          }
 
           await Promise.all([
             this.publishEvent({
@@ -595,11 +612,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
         const { providedUUID, prefix } = concernedIncomer;
 
-        const concernedIncomerChannel = this.incomerChannels.get(providedUUID) ??
-          new Channel({
+        let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+        if (!concernedIncomerChannel) {
+          concernedIncomerChannel = new Channel({
             name: providedUUID,
             prefix
           });
+
+          this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+        }
 
         toResolve.push([
           this.publishEvent({
@@ -642,11 +664,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
       const { providedUUID, prefix } = concernedIncomer;
 
-      const concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID) ??
-        new Channel({
+      let concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID);
+
+      if (!concernedIncomerChannel) {
+        concernedIncomerChannel = new Channel({
           name: providedUUID,
           prefix
         });
+
+        this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+      }
 
       await Promise.all([
         this.publishEvent({
@@ -917,7 +944,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     const concernedIncomers = Object.values(incomerTree)
       .filter(
         (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name) &&
-        (incomer.providedUUID !== redisMetadata.origin || incomer.name !== "pulsar")
+        (incomer.providedUUID !== redisMetadata.origin || incomer.name !== this.dispatcherName)
       );
 
     if (concernedIncomers.length === 0) {
@@ -964,13 +991,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     for (const incomer of filteredConcernedIncomers) {
       const { providedUUID, prefix } = incomer;
 
-      const relatedChannel = this.incomerChannels.get(providedUUID) ??
-        new Channel({
+      let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+      if (!concernedIncomerChannel) {
+        concernedIncomerChannel = new Channel({
           name: providedUUID,
           prefix
         });
 
-      if (!relatedChannel) {
+        this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+      }
+
+      if (!concernedIncomerChannel) {
         throw new Error("Channel not found");
       }
 
@@ -983,7 +1015,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       };
 
       toResolve.push(this.publishEvent({
-        concernedChannel: relatedChannel,
+        concernedChannel: concernedIncomerChannel,
         transactionMeta: {
           mainTransaction: false,
           relatedTransaction: redisMetadata.transactionId,

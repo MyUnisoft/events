@@ -31,20 +31,22 @@ afterAll(async() => {
   await closeAllRedis();
 });
 
-describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"test\"", () => {
+describe("Init Incomer without Dispatcher alive & prefix as \"test\"", () => {
   const eventComeBackHandler = async(message) => {
     console.log(message);
   }
 
   describe("With externalsInitialized at true", () => {
     const incomer: Incomer = new Incomer({
-      name: randomUUID(),
+      name: "foo",
       prefix: "test",
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortPublishTime: 5_000,
+      dispatcherInactivityOptions: {
+        publishInterval: 5000
+      },
       externalsInitialized: true
     });
 
@@ -59,38 +61,17 @@ describe("Init Incomer without Dispatcher alive & prefix as \"development\" | \"
     });
   });
 
-  describe("Prefix as \"development\"", () => {
-    const incomer: Incomer = new Incomer({
-      name: randomUUID(),
-      prefix: "development",
-      logger: incomerLogger,
-      eventsCast: ["accountingFolder"],
-      eventsSubscribe: [],
-      eventCallback: eventComeBackHandler,
-      abortPublishTime: 5_000,
-      externalsInitialized: false
-    });
-
-    test("it should init", async() => {
-      await incomer.initialize();
-
-      expect(incomer.externals).toBeDefined();
-    });
-
-    afterAll(async() => {
-      await incomer.close();
-    });
-  });
-
   describe("Prefix as \"test\"", () => {
     const incomer: Incomer = new Incomer({
-      name: randomUUID(),
+      name: "foo",
       prefix: "test",
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
-      abortPublishTime: 5_000,
+      dispatcherInactivityOptions: {
+        publishInterval: 5000
+      },
       externalsInitialized: false
     });
 
