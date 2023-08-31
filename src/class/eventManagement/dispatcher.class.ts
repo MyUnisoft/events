@@ -944,7 +944,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     const concernedIncomers = Object.values(incomerTree)
       .filter(
         (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name) &&
-        (incomer.providedUUID !== redisMetadata.origin || incomer.name !== this.dispatcherName)
+        (incomer.providedUUID !== redisMetadata.origin || (incomer.name !== this.dispatcherName && name !== "ping"))
       );
 
     if (concernedIncomers.length === 0) {

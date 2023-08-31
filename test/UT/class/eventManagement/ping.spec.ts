@@ -22,9 +22,7 @@ const incomerLogger = Logger.pino({
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 
 describe("Ping", () => {
-  const eventComeBackHandler = async(message) => {
-    console.log(message);
-  }
+  const eventComeBackHandler = () => void 0;
 
   let dispatcher: Dispatcher;
   let incomer: Incomer;
