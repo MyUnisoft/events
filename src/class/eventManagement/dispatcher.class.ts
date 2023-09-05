@@ -271,15 +271,60 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     const now = Date.now();
 
-    for (const [uuid, incomer] of Object.entries(tree)) {
-      if (now <= incomer.lastActivity + this.idleTime) {
-        continue;
+    const nonactives = Object.values(tree).filter((incomer) => now > incomer.lastActivity + this.idleTime);
+
+    if (nonactives.length === 0) {
+      return;
+    }
+
+    for (const inactive of nonactives) {
+      delete tree[inactive.providedUUID];
+    }
+
+    try {
+      if (Object.keys(tree).length > 0) {
+        await this.incomerStore.deleteValue(this.treeName);
+        await this.incomerStore.setValue({
+          key: this.treeName,
+          value: tree
+        });
+      }
+      else {
+        await this.incomerStore.deleteValue(this.treeName);
       }
 
-      // Remove the incomer from the tree & update it.
-      await this.handleInactiveIncomer(tree, uuid);
-      this.logger.info({ uuid, incomer }, "Removed inactive incomer");
+      const toHandle = [];
+
+      for (const inactive of nonactives) {
+        const transactionStore = new TransactionStore({
+          prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
+          instance: "incomer"
+        });
+
+        const [incomerTransactions, dispatcherTransactions] = await Promise.all([
+          transactionStore.getTransactions(),
+          this.dispatcherTransactionStore.getTransactions()
+        ]);
+
+        toHandle.push(this.InactiveIncomerTransactionsResolution({
+          incomers: tree,
+          incomerUUID: inactive.providedUUID,
+          incomerTransactionStore: transactionStore,
+          incomerTransactions,
+          dispatcherTransactions
+        }));
+      }
+
+      await Promise.all(toHandle);
     }
+    catch (error) {
+      this.logger.error(
+        { uuids: [...nonactives.map((incomer) => incomer.providedUUID)].join(",") },
+        "Failed to remove nonactives incomers"
+      );
+    }
+
+    this.logger.info({ uuids: [...nonactives.map((incomer) => incomer.providedUUID)].join(",") }, "Removed nonactives incomers");
   }
 
   private async publishEvent(options: {
@@ -525,44 +570,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
         this.logger.warn(this.standardLogFn(dispatcherTransaction as T)("Redistributed unresolved injected event to an Incomer"));
       }
     }
-  }
-
-  private async handleInactiveIncomer(
-    incomers: IncomerStore,
-    incomerUUID: string
-  ) {
-    const incomer = incomers[incomerUUID];
-
-    delete incomers[incomerUUID];
-    this.incomerChannels.delete(incomerUUID);
-
-    if (Object.entries(incomers).length > 0) {
-      await this.incomerStore.setValue({
-        key: this.treeName,
-        value: incomers
-      });
-    }
-    else {
-      await this.incomerStore.deleteValue(this.treeName);
-    }
-
-    const incomerTransactionStore = new TransactionStore({
-      prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomerUUID}`,
-      instance: "incomer"
-    });
-
-    const [incomerTransactions, dispatcherTransactions] = await Promise.all([
-      incomerTransactionStore.getTransactions(),
-      this.dispatcherTransactionStore.getTransactions()
-    ]);
-
-    await this.InactiveIncomerTransactionsResolution({
-      incomers,
-      incomerUUID,
-      incomerTransactionStore,
-      incomerTransactions,
-      dispatcherTransactions
-    });
   }
 
   private async checkForDistributableIncomerTransactions(backedUpIncomerTransactions: Transactions<"incomer">) {
