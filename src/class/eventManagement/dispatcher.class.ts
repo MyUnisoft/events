@@ -364,9 +364,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     const now = Date.now();
 
-    const nonactives = Object.values(tree).filter(
-      (incomer) => (now > incomer.lastActivity + this.idleTime)
-    );
+    const nonactives = Object.values(tree).filter((incomer) => now > incomer.lastActivity + this.idleTime);
 
     if (nonactives.length === 0) {
       return;
