@@ -37,7 +37,7 @@ async function guard(req: FastifyRequest): Promise<void> {
   const { signature, date } = headers;
 
   const generatedSignature = createHmac("sha256", kSecret)
-    .update(JSON.stringify({ body, date }))
+    .update(JSON.stringify(body) + date)
     .digest("hex");
 
   if (signature !== generatedSignature) {
