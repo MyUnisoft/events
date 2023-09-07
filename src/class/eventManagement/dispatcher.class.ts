@@ -61,7 +61,6 @@ type IncomerStore = Record<string, RegisteredIncomer>;
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
-  name: string;
   prefix?: Prefix;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
   standardLog?: StandardLog<T>;
@@ -73,6 +72,10 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
   idleTime?: number;
+  /** Used to avoid self ping & as discriminant for dispatcher instance that scale */
+  incomerUUID?: string;
+  /** Used as discriminant for dispatcher instance that scale */
+  instanceName?: string;
 };
 
 type DispatcherChannelEvents = { name: "register" };
@@ -105,7 +108,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   readonly dispatcherChannelName: string;
   readonly privateUUID = randomUUID();
 
-  private dispatcherName: string;
+  private selfProvidedUUID: string;
+  private instanceName: string | undefined;
+  private isWorking = false;
   private dispatcherChannel: Channel<DispatcherChannelMessages["DispatcherMessages"]>;
   private incomerStore: KVPeer<IncomerStore>;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -119,6 +124,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private pingInterval: NodeJS.Timer;
   private checkLastActivityInterval: NodeJS.Timer;
   private checkRelatedTransactionInterval: NodeJS.Timer;
+  private checkDispatcherStateInterval: NodeJS.Timer;
   private idleTime: number;
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
@@ -126,7 +132,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private standardLogFn: StandardLog<T>;
 
   constructor(options: DispatcherOptions<T>) {
-    this.dispatcherName = options.name;
+    Object.assign(this, options);
+
+    this.selfProvidedUUID = options.incomerUUID;
     this.prefix = options.prefix ?? "";
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = kIncomerStoreName;
@@ -176,6 +184,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     this.pingInterval = setInterval(async() => {
       try {
+        if (!this.isWorking) {
+          return;
+        }
+
         await this.ping();
       }
       catch (error) {
@@ -185,6 +197,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     this.checkLastActivityInterval = setInterval(async() => {
       try {
+        if (!this.isWorking) {
+          return;
+        }
+
         await this.checkLastActivity();
       }
       catch (error) {
@@ -194,6 +210,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     this.checkRelatedTransactionInterval = setInterval(async() => {
       try {
+        if (!this.isWorking) {
+          return;
+        }
+
         const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
 
         // Resolve Dispatcher transactions
@@ -213,6 +233,66 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   }
 
   public async initialize() {
+    const tree = await this.getTree();
+
+    const now = Date.now();
+
+    for (const incomer of Object.values(tree)) {
+      if (
+        incomer.name === this.instanceName && (
+          incomer.baseUUID !== this.selfProvidedUUID || incomer.providedUUID !== this.selfProvidedUUID
+        ) && !(
+          now > incomer.lastActivity + this.idleTime
+        )) {
+        this.checkDispatcherStateInterval = setInterval(async() => {
+          const tree = await this.getTree();
+
+          const now = Date.now();
+
+          for (const incomer of Object.values(tree)) {
+            if (
+              incomer.name === this.instanceName && (
+                incomer.baseUUID !== this.selfProvidedUUID || incomer.providedUUID !== this.selfProvidedUUID
+              ) && !(
+                now > incomer.lastActivity + this.idleTime
+              )) {
+              break;
+            }
+          }
+
+          delete tree[this.selfProvidedUUID];
+          try {
+            const toResolve = Object.keys(tree)
+              .map((incomerUUID) => this.updateIncomerState(incomerUUID));
+
+            await this.subscriber.subscribe(this.dispatcherChannelName);
+            this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
+
+            await Promise.all(toResolve);
+          }
+          catch (error) {
+            this.logger.error(error);
+
+            this.isWorking = false;
+
+            return;
+          }
+
+
+          this.isWorking = true;
+
+          if (this.checkDispatcherStateInterval) {
+            clearInterval(this.checkDispatcherStateInterval);
+            this.checkDispatcherStateInterval = undefined;
+          }
+        }, this.idleTime).unref();
+
+        return;
+      }
+    }
+
+    this.isWorking = true;
+
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
     this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
@@ -227,13 +307,22 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     clearInterval(this.checkLastActivityInterval);
     this.checkLastActivityInterval = undefined;
+
+    if (this.checkDispatcherStateInterval) {
+      clearInterval(this.checkDispatcherStateInterval);
+      this.checkDispatcherStateInterval = undefined;
+    }
   }
 
   private async ping() {
     const tree = await this.getTree();
 
+    const pingToResolve = [];
+    const concernedIncomers: string[] = [];
     for (const [uuid, incomer] of Object.entries(tree)) {
-      if (incomer.name === this.dispatcherName) {
+      if (incomer.providedUUID === this.selfProvidedUUID) {
+        pingToResolve.push(this.updateIncomerState(incomer.providedUUID));
+
         continue;
       }
 
@@ -252,7 +341,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
         }
       };
 
-      await this.publishEvent({
+      concernedIncomers.push(uuid);
+
+      pingToResolve.push(this.publishEvent({
         concernedChannel: incomerChannel,
         transactionMeta: {
           mainTransaction: true,
@@ -260,10 +351,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
           resolved: false
         },
         formattedEvent: event
-      });
-
-      this.logger.info(event, "New Ping event");
+      }));
     }
+
+    await Promise.all(pingToResolve);
+
+    this.logger.info({ incomers: concernedIncomers }, "New Ping events");
   }
 
   private async checkLastActivity() {
@@ -271,7 +364,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     const now = Date.now();
 
-    const nonactives = Object.values(tree).filter((incomer) => now > incomer.lastActivity + this.idleTime);
+    const nonactives = Object.values(tree).filter(
+      (incomer) => (now > incomer.lastActivity + this.idleTime)
+    );
 
     if (nonactives.length === 0) {
       return;
@@ -829,15 +924,21 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     const tree = await this.getTree();
 
     if (!tree[origin]) {
-      throw new Error("Couldn't find the related incomer");
+      throw new Error(`Couldn't find the related incomer ${origin}`);
     }
 
     tree[origin].lastActivity = Date.now();
 
-    await this.incomerStore.setValue({
-      key: this.treeName,
-      value: tree
-    });
+    try {
+      await this.incomerStore.deleteValue(this.treeName);
+      await this.incomerStore.setValue({
+        key: this.treeName,
+        value: tree
+      });
+    }
+    catch (error) {
+      this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
+    }
   }
 
   private async getTree(): Promise<IncomerStore> {
@@ -886,7 +987,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
       // Avoid reacting to his own message
       // Edge case when dispatcher is also an incomer and approve himself
-      if (formattedMessage.redisMetadata.origin === this.privateUUID || formattedMessage.name === "approvement") {
+      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
         return;
       }
 
@@ -950,8 +1051,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     const concernedIncomers = Object.values(incomerTree)
       .filter(
-        (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name) &&
-        (incomer.providedUUID !== redisMetadata.origin || (incomer.name !== this.dispatcherName && name !== "ping"))
+        (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name)
       );
 
     if (concernedIncomers.length === 0) {
@@ -1009,10 +1109,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
         this.incomerChannels.set(providedUUID, concernedIncomerChannel);
       }
 
-      if (!concernedIncomerChannel) {
-        throw new Error("Channel not found");
-      }
-
       const formattedEvent = {
         ...message,
         redisMetadata: {
@@ -1035,7 +1131,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     await this.updateIncomerState(redisMetadata.origin);
     await Promise.all(toResolve);
 
-    this.logger.info(this.standardLogFn(logData)("Custom event distributed"));
+    this.logger.info(this.standardLogFn(
+      Object.assign({}, logData, {
+        redisMetadata: {
+          ...redisMetadata,
+          to: `[${filteredConcernedIncomers.map((incomer) => incomer.providedUUID)}]`
+        }
+      })
+    )("Custom event distributed"));
   }
 
   private async approveIncomer(message: IncomerRegistrationMessage) {
@@ -1053,6 +1156,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     }
 
     const providedUUID = randomUUID();
+
+    if (origin === this.selfProvidedUUID) {
+      this.selfProvidedUUID = providedUUID;
+    }
 
     // Get Incomers Tree
     const relatedIncomerTree = await this.getTree();

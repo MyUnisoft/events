@@ -43,7 +43,6 @@ describe("Publishing/exploiting a custom event", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
-      name: "pulsar",
       pingInterval: 10_000,
       checkLastActivityInterval: 14_000,
       checkTransactionInterval: 5_000,
@@ -122,7 +121,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(publisher, "incomerChannelName", data.uuid);
             Reflect.set(publisher, "providedUUID", data.uuid);
 
-            publisher["subscriber"].subscribe(data.uuid);
+            publisher["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(publisher, "incomerChannel", new Channel({
               name: data.uuid
@@ -143,7 +142,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(unConcernedIncomer, "incomerChannelName", data.uuid);
             Reflect.set(unConcernedIncomer, "providedUUID", data.uuid);
 
-            unConcernedIncomer["subscriber"].subscribe(data.uuid);
+            unConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(unConcernedIncomer, "incomerChannel", new Channel({
               name: data.uuid
@@ -258,7 +257,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(publisher, "incomerChannelName", data.uuid);
             Reflect.set(publisher, "providedUUID", data.uuid);
 
-            publisher["subscriber"].subscribe(data.uuid);
+            publisher["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(publisher, "incomerChannel", new Channel({
               name: data.uuid
@@ -279,7 +278,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
             Reflect.set(concernedIncomer, "providedUUID", data.uuid);
 
-            concernedIncomer["subscriber"].subscribe(data.uuid);
+            concernedIncomer["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(concernedIncomer, "incomerChannel", new Channel({
               name: data.uuid
@@ -300,7 +299,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
             Reflect.set(secondConcernedIncomer, "providedUUID", data.uuid);
 
-            secondConcernedIncomer["subscriber"].subscribe(data.uuid);
+            secondConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
               name: data.uuid
@@ -462,7 +461,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(publisher, "incomerChannelName", data.uuid);
             Reflect.set(publisher, "providedUUID", data.uuid);
 
-            publisher["subscriber"].subscribe(data.uuid);
+            publisher["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(publisher, "incomerChannel", new Channel({
               name: data.uuid
@@ -483,7 +482,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
             Reflect.set(concernedIncomer, "providedUUID", data.uuid);
 
-            concernedIncomer["subscriber"].subscribe(data.uuid);
+            concernedIncomer["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(concernedIncomer, "incomerChannel", new Channel({
               name: data.uuid
@@ -504,7 +503,7 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
             Reflect.set(secondConcernedIncomer, "providedUUID", data.uuid);
 
-            secondConcernedIncomer["subscriber"].subscribe(data.uuid);
+            secondConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
             Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
               name: data.uuid

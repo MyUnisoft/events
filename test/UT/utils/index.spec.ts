@@ -191,7 +191,7 @@ describe("defaultStandardLog", () => {
       }
     };
 
-    const expected = `(id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4)(name:foo|ope:CREATE|from:bar) foo`;
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4)(name:foo|ope:CREATE|from:bar|to:none) foo`;
 
     expect(defaultStandardLog(payload)("foo")).toBe(expected);
   });
@@ -202,14 +202,15 @@ describe("defaultStandardLog", () => {
       channel: "bar",
       redisMetadata: {
         origin: "bar",
-        transactionId: "foo"
+        transactionId: "foo",
+        to: "[foo, bar]"
       },
       data: {
         foo: "bar"
       }
     };
 
-    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none)(name:foo|ope:none|from:bar) foo`;
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none)(name:foo|ope:none|from:bar|to:[foo, bar]) foo`;
 
     expect(defaultStandardLog(payload)("foo")).toBe(expected);
   });
@@ -229,7 +230,7 @@ describe("defaultStandardLog", () => {
       }
     };
 
-    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none)(name:foo|ope:none|from:none) foo`;
+    const expected = `(id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none)(name:foo|ope:none|from:none|to:none) foo`;
 
     expect(defaultStandardLog(payload)("foo")).toBe(expected);
   })

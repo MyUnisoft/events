@@ -87,6 +87,7 @@ export class Incomer <
   readonly eventCallback: (message: CallBackEventMessage<T>) => void;
 
   public dispatcherIsAlive = false;
+  public baseUUID = randomUUID();
 
   private prefixedName: string;
   private registerTransactionId: string | null;
@@ -94,7 +95,6 @@ export class Incomer <
   private eventsSubscribe: EventSubscribe[];
   private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
-  private baseUUID = randomUUID();
   private providedUUID: string;
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   private incomerChannelName: string;

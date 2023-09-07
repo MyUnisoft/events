@@ -49,7 +49,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
-      name: "pulsar",
       logger: dispatcherLogger,
       pingInterval: 10_000,
       checkLastActivityInterval: 2_600,
@@ -120,7 +119,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           Reflect.set(publisher, "incomerChannelName", data.uuid);
           Reflect.set(publisher, "providedUUID", data.uuid);
 
-          publisher["subscriber"].subscribe(data.uuid);
+          publisher["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(publisher, "incomerChannel", new Channel({
             name: data.uuid
@@ -141,7 +140,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
           Reflect.set(concernedIncomer, "providedUUID", data.uuid);
 
-          concernedIncomer["subscriber"].subscribe(data.uuid);
+          concernedIncomer["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(concernedIncomer, "incomerChannel", new Channel({
             name: data.uuid
@@ -160,7 +159,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
           Reflect.set(secondConcernedIncomer, "providedUUID", data.uuid);
 
-          secondConcernedIncomer["subscriber"].subscribe(data.uuid);
+          secondConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
             name: data.uuid
@@ -179,7 +178,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           Reflect.set(secondPublisher, "incomerChannelName", data.uuid);
           Reflect.set(secondPublisher, "providedUUID", data.uuid);
 
-          secondPublisher["subscriber"].subscribe(data.uuid);
+          secondPublisher["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(secondPublisher, "incomerChannel", new Channel({
             name: data.uuid
