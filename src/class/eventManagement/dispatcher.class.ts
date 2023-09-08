@@ -249,12 +249,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
           const now = Date.now();
 
+          let toRemove: RegisteredIncomer;
           for (const incomer of Object.values(tree)) {
             if (
               incomer.name === this.instanceName && (
                 incomer.baseUUID !== this.selfProvidedUUID || incomer.providedUUID !== this.selfProvidedUUID
               )) {
               if ((now > incomer.lastActivity + this.idleTime)) {
+                toRemove = incomer;
                 delete tree[incomer.providedUUID];
               }
               else {
@@ -264,13 +266,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
           }
 
           try {
-            const toResolve = Object.keys(tree)
-              .map((incomerUUID) => this.updateIncomerState(incomerUUID));
-
             await this.subscriber.subscribe(this.dispatcherChannelName);
             this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
 
-            await Promise.all(toResolve);
+            await Promise.all([
+              this.removeNonActives(tree, [toRemove]),
+              this.ping()
+            ]);
           }
           catch (error) {
             this.logger.error(error);
@@ -279,7 +281,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
             return;
           }
-
 
           this.isWorking = true;
 
@@ -296,8 +297,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     this.isWorking = true;
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
-
     this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
+
+    await this.ping();
   }
 
   public close() {
@@ -357,25 +359,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     }
 
     await Promise.all(pingToResolve);
-
-    this.logger.info({ incomers: concernedIncomers }, "New Ping events");
+    if (concernedIncomers.length > 0) {
+      this.logger.info({ incomers: concernedIncomers }, "New Ping events");
+    }
   }
 
-  private async checkLastActivity() {
-    const tree = await this.getTree();
-
-    const now = Date.now();
-
-    const nonactives = Object.values(tree).filter((incomer) => now > incomer.lastActivity + this.idleTime);
-
-    if (nonactives.length === 0) {
-      return;
-    }
-
-    for (const inactive of nonactives) {
-      delete tree[inactive.providedUUID];
-    }
-
+  private async removeNonActives(tree: IncomerStore, nonActives: RegisteredIncomer[]) {
     try {
       if (Object.keys(tree).length > 0) {
         await this.incomerStore.deleteValue(this.treeName);
@@ -390,7 +379,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
       const toHandle = [];
 
-      for (const inactive of nonactives) {
+      for (const inactive of nonActives) {
         const transactionStore = new TransactionStore({
           prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
           instance: "incomer"
@@ -414,12 +403,30 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     }
     catch (error) {
       this.logger.error(
-        { uuids: [...nonactives.map((incomer) => incomer.providedUUID)].join(",") },
+        { uuids: [...nonActives.map((incomer) => incomer.providedUUID)].join(",") },
         "Failed to remove nonactives incomers"
       );
     }
+  }
 
-    this.logger.info({ uuids: [...nonactives.map((incomer) => incomer.providedUUID)].join(",") }, "Removed nonactives incomers");
+  private async checkLastActivity() {
+    const tree = await this.getTree();
+
+    const now = Date.now();
+
+    const nonActives = Object.values(tree).filter((incomer) => now > incomer.lastActivity + this.idleTime);
+
+    if (nonActives.length === 0) {
+      return;
+    }
+
+    for (const inactive of nonActives) {
+      delete tree[inactive.providedUUID];
+    }
+
+    await this.removeNonActives(tree, nonActives);
+
+    this.logger.info({ uuids: [...nonActives.map((incomer) => incomer.providedUUID)].join(",") }, "Removed nonactives incomers");
   }
 
   private async publishEvent(options: {
