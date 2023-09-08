@@ -40,7 +40,6 @@ describe("Registration", () => {
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
-      name: "pulsar",
       logger: dispatcherLogger,
       pingInterval: 1_600,
       checkLastActivityInterval: 4_000,

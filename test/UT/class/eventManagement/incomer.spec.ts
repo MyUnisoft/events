@@ -65,7 +65,6 @@ describe("Init Incomer without Dispatcher alive", () => {
     });
 
     dispatcher = new Dispatcher({
-      name: "pulsar",
       pingInterval: 3_000
     });
   });
@@ -103,7 +102,6 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   test("It should set the dispatcher state at true when there is a Dispatcher sending ping", async() => {
     const secondDispatcher = new Dispatcher({
-      name: "pulsar",
       pingInterval: 3_000
     });
     await secondDispatcher.initialize()

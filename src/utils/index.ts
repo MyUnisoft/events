@@ -42,11 +42,11 @@ function logValueFallback(value: string): string {
 
 export function defaultStandardLog<
   T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { redisMetadata: { transactionId: string; origin?: string; } }) {
+>(event: T & { redisMetadata: { transactionId: string; origin?: string; to?: string } }) {
   const logs = Array.from(mapped<T>(event)).join("|");
 
   // eslint-disable-next-line max-len
-  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}`;
+  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}`;
 
   function log(message: string) {
     return `(${logs})(${eventMeta}) ${message}`;

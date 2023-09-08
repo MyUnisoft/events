@@ -29,27 +29,27 @@ const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "
 const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
 const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
-const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "handleInactiveIncomer");
+const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "InactiveIncomerTransactionsResolution");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
 
 // CONSTANTS
 const ajv = new Ajv();
 
-beforeAll(async() => {
-  await initRedis({
-    port: Number(process.env.REDIS_PORT),
-    host: process.env.REDIS_HOST
-  });
-});
-
-afterAll(async() => {
-  await closeAllRedis();
-});
-
 describe("Dispatcher", () => {
-  afterEach(() => {
+  afterEach(async() => {
     jest.clearAllMocks();
+  });
+
+  beforeAll(async() => {
+    await initRedis({
+      port: Number(process.env.REDIS_PORT),
+      host: process.env.REDIS_HOST
+    });
+  });
+
+  afterAll(async() => {
+    await closeAllRedis();
   });
 
   describe("Dispatcher without options", () => {
@@ -63,7 +63,6 @@ describe("Dispatcher", () => {
       }, "subscriber");
 
       dispatcher = new Dispatcher({
-        name: "pulsar",
         logger,
         pingInterval: 1_600,
         checkLastActivityInterval: 5_000,
@@ -71,13 +70,10 @@ describe("Dispatcher", () => {
         idleTime: 5_000
        });
 
-      await clearAllKeys();
-
       await dispatcher.initialize();
     });
 
     afterAll(async() => {
-      await clearAllKeys();
       dispatcher.close();
       await closeRedis("subscriber");
     });
@@ -106,8 +102,9 @@ describe("Dispatcher", () => {
       let incomerName = "foo";
       let uuid = randomUUID();
 
-      beforeAll(() => {
+      beforeAll(async() => {
         jest.clearAllMocks();
+        await clearAllKeys();
       });
 
       test("without unresolved transaction, it should fail and throw a new Error", async() => {
@@ -359,7 +356,6 @@ describe("Dispatcher", () => {
       } as any, "subscriber");
 
       dispatcher = new Dispatcher({
-        name: "pulsar",
         logger,
         pingInterval: 1_600,
         checkLastActivityInterval: 3_800,
@@ -579,7 +575,6 @@ describe("Dispatcher", () => {
     let subscriber;
 
     beforeAll(async() => {
-      await clearAllKeys();
       jest.clearAllMocks();
 
       subscriber = await initRedis({
@@ -594,7 +589,6 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
-        name: "pulsar",
         logger,
         eventsValidation: {
           eventsValidationFn
@@ -807,7 +801,7 @@ describe("Dispatcher", () => {
         });
 
         // eslint-disable-next-line dot-notation
-        await dispatcher["subscriber"].subscribe("foo");
+        await dispatcher["subscriber"]!.subscribe("foo");
 
         await channel.publish({
           name: "foo",
@@ -1007,7 +1001,6 @@ describe("Dispatcher", () => {
     let subscriber;
 
     beforeAll(async() => {
-      await clearAllKeys();
       jest.clearAllMocks();
 
       subscriber = await initRedis({
@@ -1022,7 +1015,6 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
-        name: "pulsar",
         logger,
         eventsValidation: {
           eventsValidationFn
@@ -1063,7 +1055,7 @@ describe("Dispatcher", () => {
         });
 
         // eslint-disable-next-line dot-notation
-        await dispatcher["subscriber"].subscribe(`${prefix}-foo`);
+        await dispatcher["subscriber"]!.subscribe(`${prefix}-foo`);
 
         await channel.publish({
           name: "foo",
