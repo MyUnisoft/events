@@ -295,7 +295,7 @@ export class Incomer <
       }
     } as IncomerChannelMessages<T>["IncomerMessages"];
 
-    if (!this.dispatcherIsAlive && !this.isDispatcherInstance) {
+    if (!this.dispatcherIsAlive) {
       this.logger.info(this.standardLogFn(finalEvent)("Event Stored but not published"));
 
       return;
