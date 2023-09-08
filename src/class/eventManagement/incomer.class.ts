@@ -39,6 +39,8 @@ import { Externals } from "./externals.class";
 // CONSTANTS
 const kCancelTimeout = new AbortController();
 const kCancelTask = new AbortController();
+// Arbitrary value according to fastify default pluginTimeout
+const kDefaultStartTime = 8_000;
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
@@ -211,7 +213,7 @@ export class Incomer <
     this.logger.info("Registering as a new incomer on dispatcher");
 
     try {
-      await once(this, "registered", { signal: AbortSignal.timeout(this.publishInterval) });
+      await once(this, "registered", { signal: AbortSignal.timeout(kDefaultStartTime) });
     }
     catch {
       this.checkRegistrationInterval = setInterval(async() => {
@@ -231,7 +233,7 @@ export class Incomer <
           await once(this, "registered", { signal: AbortSignal.timeout(this.publishInterval) });
         }
         catch (error) {
-          this.logger.error(error);
+          this.logger.error("Failed to register in time.");
 
           this.dispatcherIsAlive = false;
 
