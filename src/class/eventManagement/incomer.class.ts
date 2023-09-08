@@ -1,7 +1,7 @@
 // Import Node.js Dependencies
 import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { setTimeout } from "node:timers/promises";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -107,6 +107,7 @@ export class Incomer <
   private standardLogFn: StandardLog<T>;
   private checkRegistrationInterval: NodeJS.Timer;
   private checkTransactionsStateInterval: NodeJS.Timer;
+  private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
 
   public externals: Externals<T> | undefined;
@@ -146,25 +147,29 @@ export class Incomer <
     }
 
     this.checkTransactionsStateInterval = setInterval(async() => {
-      if (!this.lastPingDate || this.isDispatcherInstance) {
+      if (!this.lastPingDate || this.isDispatcherInstance || this.dispatcherIsAlive === true) {
         return;
       }
 
-      if (this.lastPingDate + this.maxPingInterval < Date.now()) {
-        this.dispatcherIsAlive = false;
+      await this.checkDispatcherState();
+    }, this.maxPingInterval).unref();
+  }
 
-        return;
-      }
+  private async checkDispatcherState() {
+    if (this.lastPingDate + this.maxPingInterval < Date.now()) {
+      this.dispatcherIsAlive = false;
 
-      this.dispatcherIsAlive = true;
+      return;
+    }
 
-      try {
-        await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
-      }
-      catch (error) {
-        this.logger.error(error);
-      }
-    }, this.publishInterval).unref();
+    this.dispatcherIsAlive = true;
+
+    try {
+      await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
+    }
+    catch (error) {
+      this.logger.error(error);
+    }
   }
 
   get subscriber() {
@@ -263,6 +268,11 @@ export class Incomer <
       clearInterval(this.checkRegistrationInterval);
       this.checkRegistrationInterval = undefined;
     }
+
+    if (this.checkDispatcherStateTimeout) {
+      clearTimeout(this.checkDispatcherStateTimeout);
+      this.checkDispatcherStateTimeout = undefined;
+    }
   }
 
   public async publish<
@@ -308,7 +318,7 @@ export class Incomer <
 
   private async updateTransactionsStateTimeout() {
     try {
-      await setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
+      await timers.setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
       kCancelTask.abort();
     }
     catch {
@@ -412,6 +422,17 @@ export class Incomer <
 
     match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
       .with({ name: "ping" }, async(res: { name: "ping", message: DispatcherPingMessage }) => {
+        this.lastPingDate = Date.now();
+        this.dispatcherIsAlive = true;
+
+        if (this.checkDispatcherStateTimeout) {
+          clearTimeout(this.checkDispatcherStateTimeout);
+          this.checkDispatcherStateTimeout = undefined;
+        }
+        this.checkDispatcherStateTimeout = setTimeout(async() => {
+          await this.checkDispatcherState();
+        }, this.maxPingInterval);
+
         const { message } = res;
 
         const logData = {
@@ -429,9 +450,6 @@ export class Incomer <
           relatedTransaction: message.redisMetadata.transactionId,
           resolved: true
         });
-
-        this.lastPingDate = Date.now();
-        this.dispatcherIsAlive = true;
 
         this.logger.info(logData, "Resolved Ping event");
       })
