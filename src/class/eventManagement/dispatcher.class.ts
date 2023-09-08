@@ -91,7 +91,7 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(
   value: DispatcherChannelMessages["IncomerMessages"] |
   IncomerChannelMessages<T>["IncomerMessages"]
 ): value is IncomerChannelMessages<T>["IncomerMessages"] {
-  return value.name !== "register";
+  return value.name !== "register" && value.name !== "ping";
 }
 
 function isIncomerRegistrationMessage(
@@ -253,14 +253,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
             if (
               incomer.name === this.instanceName && (
                 incomer.baseUUID !== this.selfProvidedUUID || incomer.providedUUID !== this.selfProvidedUUID
-              ) && !(
-                now > incomer.lastActivity + this.idleTime
               )) {
-              break;
+              if ((now > incomer.lastActivity + this.idleTime)) {
+                delete tree[incomer.providedUUID];
+              }
+              else {
+                return;
+              }
             }
           }
 
-          delete tree[this.selfProvidedUUID];
           try {
             const toResolve = Object.keys(tree)
               .map((incomerUUID) => this.updateIncomerState(incomerUUID));
