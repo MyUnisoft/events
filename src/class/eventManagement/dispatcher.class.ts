@@ -1,6 +1,8 @@
 /* eslint-disable max-lines */
 // Import Node.js Dependencies
+import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -44,12 +46,15 @@ const kIdleTime = 60_000 * 10;
 const kCheckLastActivityInterval = 60_000 * 2;
 const kCheckRelatedTransactionInterval = 60_000 * 3;
 const kBackupTransactionStoreName = "backup";
+const kCancelTimeout = new AbortController();
+const kCancelTask = new AbortController();
 export const PING_INTERVAL = 60_000 * 5;
 
 interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
   name: string;
+  isDispatcherActiveInstance: boolean;
   lastActivity: number;
   aliveSince: number;
   eventsCast: EventCast[];
@@ -100,7 +105,7 @@ function isIncomerRegistrationMessage(
   return value.name === "register";
 }
 
-export class Dispatcher<T extends GenericEvent = GenericEvent> {
+export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
   readonly type = "dispatcher";
   readonly formattedPrefix: string;
   readonly prefix: string;
@@ -111,7 +116,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private selfProvidedUUID: string;
   private instanceName: string | undefined;
   private isWorking = false;
-  private dispatcherChannel: Channel<DispatcherChannelMessages["DispatcherMessages"]>;
+  private dispatcherChannel: Channel<
+    DispatcherChannelMessages["DispatcherMessages"] | { name: "OK", redisMetadata: { origin: string } }
+  >;
   private incomerStore: KVPeer<IncomerStore>;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
   private backupIncomerTransactionStore: TransactionStore<"incomer">;
@@ -121,9 +128,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private incomerChannels: Map<string,
     Channel<IncomerChannelMessages<T>["DispatcherMessages"] | DistributedEventMessage<T>>> = new Map();
 
-  private pingInterval: NodeJS.Timer;
-  private checkLastActivityInterval: NodeJS.Timer;
-  private checkRelatedTransactionInterval: NodeJS.Timer;
+  private pingInterval: number;
+  private pingIntervalTimer: NodeJS.Timer;
+  private checkLastActivityInterval: number;
+  private checkLastActivityIntervalTimer: NodeJS.Timer;
+  private checkRelatedTransactionInterval: number;
+  private checkRelatedTransactionIntervalTimer: NodeJS.Timer;
   private checkDispatcherStateInterval: NodeJS.Timer;
   private idleTime: number;
 
@@ -132,6 +142,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   private standardLogFn: StandardLog<T>;
 
   constructor(options: DispatcherOptions<T>) {
+    super();
+
     Object.assign(this, options);
 
     this.selfProvidedUUID = options.incomerUUID;
@@ -139,8 +151,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
     this.treeName = kIncomerStoreName;
     this.dispatcherChannelName = this.formattedPrefix + channels.dispatcher;
-    this.idleTime = options.idleTime ?? kIdleTime;
     this.standardLogFn = options.standardLog ?? defaultStandardLog;
+    this.idleTime = options.idleTime ?? kIdleTime;
+    this.pingInterval = options.pingInterval ?? PING_INTERVAL;
+    this.checkRelatedTransactionInterval = options.checkTransactionInterval ?? kCheckRelatedTransactionInterval;
+    this.checkLastActivityInterval = options.checkLastActivityInterval ?? kCheckLastActivityInterval;
 
     this.eventsValidationFn = options?.eventsValidation?.eventsValidationFn ?? new Map();
     this.validationCbFn = options?.eventsValidation?.validationCbFn;
@@ -182,7 +197,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       name: channels.dispatcher
     });
 
-    this.pingInterval = setInterval(async() => {
+    this.pingIntervalTimer = setInterval(async() => {
       try {
         if (!this.isWorking) {
           return;
@@ -193,22 +208,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       catch (error) {
         this.logger.error(error.message);
       }
-    }, options.pingInterval ?? PING_INTERVAL).unref();
+    }, this.pingInterval).unref();
 
-    this.checkLastActivityInterval = setInterval(async() => {
-      try {
-        if (!this.isWorking) {
-          return;
-        }
+    this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
 
-        await this.checkLastActivity();
-      }
-      catch (error) {
-        this.logger.error(error.message);
-      }
-    }, options.checkLastActivityInterval ?? kCheckLastActivityInterval).unref();
-
-    this.checkRelatedTransactionInterval = setInterval(async() => {
+    this.checkRelatedTransactionIntervalTimer = setInterval(async() => {
       try {
         if (!this.isWorking) {
           return;
@@ -225,7 +229,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       catch (error) {
         this.logger.error(error.message);
       }
-    }, options.checkTransactionInterval ?? kCheckRelatedTransactionInterval).unref();
+    }, this.checkRelatedTransactionInterval).unref();
   }
 
   get subscriber() {
@@ -233,6 +237,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   }
 
   public async initialize() {
+    await this.subscriber.subscribe(this.dispatcherChannelName);
+    this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
+
     const tree = await this.getTree();
 
     const now = Date.now();
@@ -240,21 +247,23 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     for (const incomer of Object.values(tree)) {
       if (
         incomer.name === this.instanceName && (
-          incomer.baseUUID !== this.selfProvidedUUID || incomer.providedUUID !== this.selfProvidedUUID
+          incomer.baseUUID !== this.selfProvidedUUID
         ) && !(
           now > incomer.lastActivity + this.idleTime
         )) {
         this.checkDispatcherStateInterval = setInterval(async() => {
           const tree = await this.getTree();
+          await this.updateIncomerState(tree, this.selfProvidedUUID, true);
 
           const now = Date.now();
 
           let toRemove: RegisteredIncomer;
           for (const incomer of Object.values(tree)) {
             if (
-              incomer.name === this.instanceName && (
-                incomer.baseUUID !== this.selfProvidedUUID || incomer.providedUUID !== this.selfProvidedUUID
-              )) {
+              (incomer.name === this.instanceName) &&
+              (incomer.baseUUID !== this.selfProvidedUUID) &&
+              (incomer.isDispatcherActiveInstance)
+            ) {
               if ((now > incomer.lastActivity + this.idleTime)) {
                 toRemove = incomer;
                 delete tree[incomer.providedUUID];
@@ -266,13 +275,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
           }
 
           try {
-            await this.subscriber.subscribe(this.dispatcherChannelName);
-            this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
-
-            await Promise.all([
-              this.removeNonActives(tree, [toRemove]),
-              this.ping()
+            await Promise.race([
+              this.updateDispatcherStateTimeout(),
+              this.updateDispatcherState()
             ]);
+
+            clearInterval(this.checkLastActivityIntervalTimer);
           }
           catch (error) {
             this.logger.error(error);
@@ -284,11 +292,31 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
           this.isWorking = true;
 
+          const toResolve = [this.ping()];
+
+          if (toRemove) {
+            toResolve.push(this.removeNonActives(tree, [toRemove]));
+          }
+          try {
+            await Promise.all(toResolve);
+          }
+          catch (error) {
+            this.logger.error(error);
+
+            return;
+          }
+
+          timers.setTimeout(this.checkRelatedTransactionInterval, () => {
+            this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
+          });
+
           if (this.checkDispatcherStateInterval) {
             clearInterval(this.checkDispatcherStateInterval);
             this.checkDispatcherStateInterval = undefined;
           }
-        }, this.idleTime).unref();
+
+          this.logger.info(`Dispatcher ${this.selfProvidedUUID} took relay on ${toRemove.baseUUID}`);
+        }, this.pingInterval).unref();
 
         return;
       }
@@ -296,25 +324,60 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     this.isWorking = true;
 
-    await this.subscriber.subscribe(this.dispatcherChannelName);
-    this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
-
     await this.ping();
   }
 
   public close() {
-    clearInterval(this.pingInterval);
-    this.pingInterval = undefined;
+    clearInterval(this.pingIntervalTimer);
+    this.pingIntervalTimer = undefined;
 
-    clearInterval(this.checkRelatedTransactionInterval);
-    this.checkRelatedTransactionInterval = undefined;
+    clearInterval(this.checkRelatedTransactionIntervalTimer);
+    this.checkRelatedTransactionIntervalTimer = undefined;
 
-    clearInterval(this.checkLastActivityInterval);
-    this.checkLastActivityInterval = undefined;
+    clearInterval(this.checkLastActivityIntervalTimer);
+    this.checkLastActivityIntervalTimer = undefined;
 
     if (this.checkDispatcherStateInterval) {
       clearInterval(this.checkDispatcherStateInterval);
       this.checkDispatcherStateInterval = undefined;
+    }
+  }
+
+  private checkLastActivityIntervalFn() {
+    return setInterval(async() => {
+      try {
+        if (!this.isWorking) {
+          return;
+        }
+
+        await this.checkLastActivity();
+      }
+      catch (error) {
+        this.logger.error(error.message);
+      }
+    }, this.checkLastActivityInterval).unref();
+  }
+
+  private async updateDispatcherState() {
+    try {
+      await Promise.all([
+        this.setAsActiveDispatcher(),
+        this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } }),
+        timers.setImmediate()
+      ]);
+    }
+    finally {
+      kCancelTimeout.abort();
+    }
+  }
+
+  private async updateDispatcherStateTimeout() {
+    try {
+      await once(this, "OK", { signal: kCancelTimeout.signal });
+      kCancelTask.abort();
+    }
+    catch {
+      // Ignore
     }
   }
 
@@ -324,8 +387,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     const pingToResolve = [];
     const concernedIncomers: string[] = [];
     for (const [uuid, incomer] of Object.entries(tree)) {
-      if (incomer.providedUUID === this.selfProvidedUUID) {
-        pingToResolve.push(this.updateIncomerState(incomer.providedUUID));
+      if (incomer.baseUUID === this.selfProvidedUUID) {
+        pingToResolve.push(this.updateIncomerState(tree, incomer.providedUUID));
 
         continue;
       }
@@ -379,6 +442,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
       const toHandle = [];
 
+
       for (const inactive of nonActives) {
         const transactionStore = new TransactionStore({
           prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
@@ -403,7 +467,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     }
     catch (error) {
       this.logger.error(
-        { uuids: [...nonActives.map((incomer) => incomer.providedUUID)].join(",") },
+        { uuids: [...nonActives.map((incomer) => incomer?.providedUUID)].join(",") },
         "Failed to remove nonactives incomers"
       );
     }
@@ -851,7 +915,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       if (dispatcherTransaction.mainTransaction) {
         // Only in case of ping event
         await Promise.all([
-          this.updateIncomerState(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin),
+          this.updateIncomerState(incomers, relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin),
           relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
           this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
         ]);
@@ -861,7 +925,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
       dispatcherTransaction.resolved = true;
       await Promise.all([
-        this.updateIncomerState(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin),
+        this.updateIncomerState(incomers, relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin),
         relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
         this.dispatcherTransactionStore.updateTransaction(
           dispatcherTransactionId,
@@ -912,6 +976,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
         for (const relatedDispatcherTransactionId of relatedDispatcherTransactionsId) {
           transactionToResolve.push(this.updateIncomerState(
+            incomers,
             incomerTransactions.get(
               dispatcherTransactions.get(relatedDispatcherTransactionId).relatedTransaction
             ).redisMetadata.origin
@@ -927,14 +992,23 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     }
   }
 
-  private async updateIncomerState(origin: string) {
-    const tree = await this.getTree();
+  private async updateIncomerState(tree: IncomerStore, origin: string, isDispatcherInstance = false) {
+    if (isDispatcherInstance) {
+      for (const incomer of Object.values(tree)) {
+        if (incomer.baseUUID === this.selfProvidedUUID) {
+          tree[incomer.providedUUID].lastActivity = Date.now();
 
-    if (!tree[origin]) {
-      throw new Error(`Couldn't find the related incomer ${origin}`);
+          break;
+        }
+      }
     }
+    else {
+      if (!tree[origin]) {
+        throw new Error(`Couldn't find the related incomer ${origin}`);
+      }
 
-    tree[origin].lastActivity = Date.now();
+      tree[origin].lastActivity = Date.now();
+    }
 
     try {
       await this.incomerStore.deleteValue(this.treeName);
@@ -945,6 +1019,29 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     }
     catch (error) {
       this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
+    }
+  }
+
+  private async setAsActiveDispatcher() {
+    const tree = await this.getTree();
+
+    for (const incomer of Object.values(tree)) {
+      if (incomer.baseUUID === this.selfProvidedUUID) {
+        tree[incomer.providedUUID] = Object.assign(tree[incomer.providedUUID], { isDispatcherActiveInstance: true });
+
+        try {
+          await this.incomerStore.deleteValue(this.treeName);
+          await this.incomerStore.setValue({
+            key: this.treeName,
+            value: tree
+          });
+        }
+        catch (error) {
+          this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
+        }
+
+        break;
+      }
     }
   }
 
@@ -980,12 +1077,28 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
   }
 
   private async handleMessages(channel: string, message: string) {
-    if (!message) {
+    if (!message || !this.isWorking) {
       return;
     }
 
     const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
       IncomerChannelMessages<T>["IncomerMessages"] = JSON.parse(message);
+
+    if (!this.isWorking) {
+      if (formattedMessage.name === "OK" && formattedMessage.redisMetadata.origin !== this.privateUUID) {
+        this.emit("OK");
+
+        return;
+      }
+
+      return;
+    }
+
+    if (this.isWorking) {
+      if (formattedMessage.name === "OK" && formattedMessage.redisMetadata.origin === this.privateUUID) {
+        return;
+      }
+    }
 
     try {
       if (!formattedMessage.name || !formattedMessage.redisMetadata) {
@@ -1135,7 +1248,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
       }));
     }
 
-    await this.updateIncomerState(redisMetadata.origin);
+    await this.updateIncomerState(incomerTree, redisMetadata.origin);
     await Promise.all(toResolve);
 
     this.logger.info(this.standardLogFn(
@@ -1164,10 +1277,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
 
     const providedUUID = randomUUID();
 
-    if (origin === this.selfProvidedUUID) {
-      this.selfProvidedUUID = providedUUID;
-    }
-
     // Get Incomers Tree
     const relatedIncomerTree = await this.getTree();
 
@@ -1186,6 +1295,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
     const incomer = Object.assign({}, {
       ...data,
       providedUUID,
+      isDispatcherActiveInstance: origin === this.selfProvidedUUID,
       baseUUID: origin,
       lastActivity: now,
       aliveSince: now,
