@@ -260,11 +260,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           let toRemove: RegisteredIncomer;
           for (const incomer of Object.values(tree)) {
             if (
-              (incomer.name === this.instanceName) &&
-              (incomer.baseUUID !== this.selfProvidedUUID) &&
-              (incomer.isDispatcherActiveInstance)
+              incomer.name === this.instanceName &&
+              incomer.baseUUID !== this.selfProvidedUUID &&
+              incomer.isDispatcherActiveInstance
             ) {
-              if ((now > incomer.lastActivity + this.idleTime)) {
+              if (now > incomer.lastActivity + this.idleTime) {
                 toRemove = incomer;
                 delete tree[incomer.providedUUID];
               }
@@ -292,13 +292,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
           this.isWorking = true;
 
-          const toResolve = [this.ping()];
-
-          if (toRemove) {
-            toResolve.push(this.removeNonActives(tree, [toRemove]));
-          }
           try {
-            await Promise.all(toResolve);
+            await Promise.all([this.ping(), toRemove && this.removeNonActives(tree, [toRemove])]);
           }
           catch (error) {
             this.logger.error(error);

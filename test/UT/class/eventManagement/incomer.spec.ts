@@ -82,7 +82,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("It should register when a Dispatcher is alive", async() => {
     await dispatcher.initialize();
 
-    await timers.setTimeout(3_500);
+    await timers.setTimeout(3_000);
 
     expect(incomer.dispatcherIsAlive).toBe(true);
     expect(dispatcherIncomer.dispatcherIsAlive).toBe(true);
@@ -93,7 +93,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   {
     dispatcher.close();
 
-    await timers.setTimeout(3_500);
+    await timers.setTimeout(3_000);
 
     expect(dispatcherIncomer.dispatcherIsAlive).toBe(false);
     expect(incomer.dispatcherIsAlive).toBe(false);
