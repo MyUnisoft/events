@@ -124,7 +124,7 @@ export class TransactionStore<
       ));
 
       for (const transaction of transactions) {
-        if (transaction !== null && "transactionId" in transaction.redisMetadata) {
+        if (transaction !== null && (transaction.redisMetadata && "transactionId" in transaction.redisMetadata)) {
           mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
         }
       }
