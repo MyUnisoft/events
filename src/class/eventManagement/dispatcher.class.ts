@@ -135,6 +135,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private checkRelatedTransactionInterval: number;
   private checkRelatedTransactionIntervalTimer: NodeJS.Timer;
   private checkDispatcherStateInterval: NodeJS.Timer;
+  private resetCheckLastActivityTimeout: NodeJS.Timer;
   private idleTime: number;
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
@@ -301,9 +302,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             return;
           }
 
-          timers.setTimeout(this.checkRelatedTransactionInterval, () => {
+          this.resetCheckLastActivityTimeout = setTimeout(() => {
             this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
-          });
+          }, this.checkRelatedTransactionInterval).unref();
 
           if (this.checkDispatcherStateInterval) {
             clearInterval(this.checkDispatcherStateInterval);
@@ -331,6 +332,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     clearInterval(this.checkLastActivityIntervalTimer);
     this.checkLastActivityIntervalTimer = undefined;
+
+    if (this.resetCheckLastActivityTimeout) {
+      clearTimeout(this.resetCheckLastActivityTimeout);
+      this.resetCheckLastActivityTimeout = undefined;
+    }
 
     if (this.checkDispatcherStateInterval) {
       clearInterval(this.checkDispatcherStateInterval);
