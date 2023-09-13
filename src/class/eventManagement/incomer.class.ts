@@ -73,7 +73,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   dispatcherInactivityOptions?: {
     /* max interval between received ping before considering dispatcher off */
     maxPingInterval?: number;
-    /* interval between  */
+    /* max interval between a new event (based on ping interval) */
     publishInterval?: number;
   };
   isDispatcherInstance?: boolean;
@@ -147,7 +147,7 @@ export class Incomer <
     }
 
     this.checkTransactionsStateInterval = setInterval(async() => {
-      if (!this.lastPingDate || this.isDispatcherInstance || this.dispatcherIsAlive === true) {
+      if (!this.lastPingDate || this.isDispatcherInstance) {
         return;
       }
 
@@ -164,12 +164,11 @@ export class Incomer <
 
     this.dispatcherIsAlive = true;
 
-    try {
-      await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
-    }
-    catch (error) {
-      this.logger.error(error);
-    }
+    kCancelTask.signal.addEventListener("abort", () => {
+      this.logger.warn({ error: kCancelTask.signal.reason });
+    }, { once: true });
+
+    await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
   }
 
   get subscriber() {
@@ -319,7 +318,7 @@ export class Incomer <
   private async updateTransactionsStateTimeout() {
     try {
       await timers.setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
-      kCancelTask.abort();
+      kCancelTask.abort("Dispatcher state check before publishing more..");
     }
     catch {
       // Ignore
@@ -330,32 +329,20 @@ export class Incomer <
     try {
       const transactions = await this.incomerTransactionStore.getTransactions();
 
-      kCancelTask.signal.addEventListener("abort", () => {
-        throw new Error("Dispatcher relay has been taken");
-      }, { once: true });
-
-      const toResolve: Promise<any>[] = [];
       for (const [transactionId, transaction] of Object.entries(transactions)) {
         if (!transaction.published) {
-          toResolve.push(
-            Promise.all([
-              this.incomerChannel.publish({
-                ...transaction,
-                redisMetadata: {
-                  ...transaction.redisMetadata,
-                  transactionId
-                }
-              }),
-              this.incomerTransactionStore.updateTransaction(transactionId, { ...transaction, published: true })
-            ])
-          );
+          await Promise.all([
+            this.incomerChannel.publish({
+              ...transaction,
+              redisMetadata: {
+                ...transaction.redisMetadata,
+                transactionId
+              }
+            }),
+            this.incomerTransactionStore.updateTransaction(transactionId, { ...transaction, published: true })
+          ]);
         }
       }
-
-      await Promise.all(toResolve);
-    }
-    catch (error) {
-      this.logger.error(error);
     }
     finally {
       kCancelTimeout.abort();

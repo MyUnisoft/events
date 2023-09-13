@@ -304,8 +304,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               return;
             }
 
-            this.resetCheckLastActivityTimeout = setTimeout(() => {
-              this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
+            this.resetCheckLastActivityTimeout = setTimeout(async() => {
+              try {
+                const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
+
+                // Resolve Dispatcher transactions
+                await this.resolveDispatcherTransactions(dispatcherTransactions);
+
+                this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
+              }
+              catch (error) {
+                this.logger.error(error);
+              }
             }, this.checkRelatedTransactionInterval).unref();
 
             if (this.checkDispatcherStateInterval) {
