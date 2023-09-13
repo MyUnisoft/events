@@ -330,6 +330,10 @@ export class Incomer <
     try {
       const transactions = await this.incomerTransactionStore.getTransactions();
 
+      kCancelTask.signal.addEventListener("abort", () => {
+        throw new Error("Dispatcher relay has been taken");
+      }, { once: true });
+
       const toResolve: Promise<any>[] = [];
       for (const [transactionId, transaction] of Object.entries(transactions)) {
         if (!transaction.published) {
@@ -349,6 +353,9 @@ export class Incomer <
       }
 
       await Promise.all(toResolve);
+    }
+    catch (error) {
+      this.logger.error(error);
     }
     finally {
       kCancelTimeout.abort();

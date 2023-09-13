@@ -254,7 +254,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         )) {
         this.checkDispatcherStateInterval = setInterval(async() => {
           const tree = await this.getTree();
-          await this.updateIncomerState(tree, this.selfProvidedUUID, true);
 
           const now = Date.now();
 
@@ -275,43 +274,47 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             }
           }
 
-          try {
-            await Promise.race([
-              this.updateDispatcherStateTimeout(),
-              this.updateDispatcherState()
-            ]);
+          let aborted = false;
+          kCancelTask.signal.addEventListener("abort", () => {
+            this.logger.warn({ error: kCancelTask.signal.reason });
 
-            clearInterval(this.checkLastActivityIntervalTimer);
-          }
-          catch (error) {
-            this.logger.error(error);
+            aborted = true;
+          }, { once: true });
 
-            this.isWorking = false;
+          await Promise.race([
+            this.updateDispatcherStateTimeout(),
+            this.updateDispatcherState()
+          ]);
 
-            return;
-          }
+          clearInterval(this.checkLastActivityIntervalTimer);
 
-          this.isWorking = true;
+          setImmediate((async() => {
+            if (aborted) {
+              return;
+            }
 
-          try {
-            await Promise.all([this.ping(), toRemove && this.removeNonActives(tree, [toRemove])]);
-          }
-          catch (error) {
-            this.logger.error(error);
+            this.isWorking = true;
 
-            return;
-          }
+            try {
+              await Promise.all([this.ping(), toRemove && this.removeNonActives(tree, [toRemove])]);
+            }
+            catch (error) {
+              this.logger.error(error);
 
-          this.resetCheckLastActivityTimeout = setTimeout(() => {
-            this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
-          }, this.checkRelatedTransactionInterval).unref();
+              return;
+            }
 
-          if (this.checkDispatcherStateInterval) {
-            clearInterval(this.checkDispatcherStateInterval);
-            this.checkDispatcherStateInterval = undefined;
-          }
+            this.resetCheckLastActivityTimeout = setTimeout(() => {
+              this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
+            }, this.checkRelatedTransactionInterval).unref();
 
-          this.logger.info(`Dispatcher ${this.selfProvidedUUID} took relay on ${toRemove.baseUUID}`);
+            if (this.checkDispatcherStateInterval) {
+              clearInterval(this.checkDispatcherStateInterval);
+              this.checkDispatcherStateInterval = undefined;
+            }
+
+            this.logger.info(`Dispatcher ${this.selfProvidedUUID} took relay on ${toRemove?.baseUUID}`);
+          }));
         }, this.pingInterval).unref();
 
         return;
@@ -361,11 +364,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async updateDispatcherState() {
     try {
-      await Promise.all([
-        this.setAsActiveDispatcher(),
-        this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } }),
-        timers.setImmediate()
-      ]);
+      await timers.setTimeout(Math.random() * 500);
+      await this.setAsActiveDispatcher();
+      await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
     }
     finally {
       kCancelTimeout.abort();
@@ -375,7 +376,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private async updateDispatcherStateTimeout() {
     try {
       await once(this, "OK", { signal: kCancelTimeout.signal });
-      kCancelTask.abort();
+      kCancelTask.abort("Timed out on dispatcher retake");
     }
     catch {
       // Ignore
@@ -1012,11 +1013,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     try {
-      await this.incomerStore.deleteValue(this.treeName);
-      await this.incomerStore.setValue({
-        key: this.treeName,
-        value: tree
-      });
+      await Promise.all([
+        this.incomerStore.deleteValue(this.treeName),
+        this.incomerStore.setValue({
+          key: this.treeName,
+          value: tree
+        })
+      ]);
     }
     catch (error) {
       this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
@@ -1078,7 +1081,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async handleMessages(channel: string, message: string) {
-    if (!message || !this.isWorking) {
+    if (!message) {
       return;
     }
 
@@ -1096,7 +1099,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     if (this.isWorking) {
-      if (formattedMessage.name === "OK" && formattedMessage.redisMetadata.origin === this.privateUUID) {
+      if (formattedMessage.name === "OK") {
         return;
       }
     }
