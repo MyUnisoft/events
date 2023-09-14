@@ -199,24 +199,24 @@ export class Incomer <
       }
     };
 
-    this.registerTransactionId = await this.incomerTransactionStore.setTransaction({
-      ...event,
-      mainTransaction: true,
-      relatedTransaction: null,
-      resolved: false
-    });
-
-    await this.dispatcherChannel.publish({
-      ...event,
-      redisMetadata: {
-        ...event.redisMetadata,
-        transactionId: this.registerTransactionId
-      }
-    });
-
     this.logger.info("Registering as a new incomer on dispatcher");
 
     try {
+      this.registerTransactionId = await this.incomerTransactionStore.setTransaction({
+        ...event,
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: false
+      });
+
+      await this.dispatcherChannel.publish({
+        ...event,
+        redisMetadata: {
+          ...event.redisMetadata,
+          transactionId: this.registerTransactionId
+        }
+      });
+
       await once(this, "registered", { signal: AbortSignal.timeout(kDefaultStartTime) });
     }
     catch {

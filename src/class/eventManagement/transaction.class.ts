@@ -95,15 +95,17 @@ export class TransactionStore<
   }
 
   async* transactionLazyFetch() {
-    const count = 100;
+    let index = 0;
+    const count = 10;
     let cursor = 0;
     let lastResult = count;
 
-    while (lastResult === count) {
+    while (lastResult !== 0 && index <= 10) {
       const [lastCursor, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
 
       cursor = Number(lastCursor);
       lastResult = elements.length;
+      index++;
 
       yield elements;
 
