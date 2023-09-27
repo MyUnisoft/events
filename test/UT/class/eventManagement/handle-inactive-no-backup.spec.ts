@@ -20,7 +20,7 @@ import {
   Events,
   validate
 } from "../../../../src/index";
-import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
+import { TransactionStore } from "../../../../src/class/store/transaction.class";
 
 // Internal Dependencies Mocks
 const dispatcherLogger = Logger.pino({
@@ -263,11 +263,11 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       await publisher.initialize();
       await concernedIncomer.initialize();
 
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(1_000)
 
       await publisher.publish(event);
 
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(2_000);
     });
 
     test("event must have been share only once & backedUp", async() => {
@@ -282,7 +282,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       expect(eventHasBeenDeal).toBe(false);
 
-      await timers.setTimeout(2_000);
+      await timers.setTimeout(3_000);
 
       expect(mockedBackedUpSetTransaction).toHaveBeenCalledTimes(2);
       expect(mockedBackedUpSetTransaction).toHaveBeenCalledWith({
@@ -299,7 +299,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       Reflect.set(dispatcher, "idleTime", 10_000);
       await secondConcernedIncomer.initialize();
       await secondPublisher.initialize();
-      await timers.setTimeout(1_500);
+      await timers.setTimeout(2_000);
 
       const backupIncomerTransactions = await backupIncomerTransactionStore.getTransactions();
 

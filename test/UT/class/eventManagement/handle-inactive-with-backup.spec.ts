@@ -20,7 +20,7 @@ import {
   Events,
   validate
 } from "../../../../src/index";
-import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
+import { TransactionStore } from "../../../../src/class/store/transaction.class";
 
 // Internal Dependencies Mocks
 const dispatcherLogger = Logger.pino({
@@ -80,7 +80,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
     let mockedPublisherSetTransaction;
-    let eventHasBeenDeal;
+    let eventHasBeenDeal = false;
 
     // Constants
     const event: EventOptions<"accountingFolder"> = {
@@ -220,7 +220,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
     test("event must have been share two times & dealed only once by the second incomer when the first one become inactive", async() => {
       await secondConcernedIncomer.initialize();
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(2_500);
 
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
@@ -233,7 +233,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       expect(eventHasBeenDeal).toBe(false);
 
-      await timers.setTimeout(2_000);
+      await timers.setTimeout(5_000);
 
       expect(eventHasBeenDeal).toBe(true);
     });

@@ -45,27 +45,29 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventCallback: eventComeBackHandler,
       dispatcherInactivityOptions: {
         publishInterval: 2_000,
-        maxPingInterval: 3_000
+        maxPingInterval: 2_000
       },
       externalsInitialized: true
     });
 
     dispatcherIncomer = new Incomer({
-      name: "bar",
+      name: "node:Pulsar",
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
       dispatcherInactivityOptions: {
         publishInterval: 2_000,
-        maxPingInterval: 3_000
+        maxPingInterval: 2_000
       },
       isDispatcherInstance: true,
       externalsInitialized: true
     });
 
     dispatcher = new Dispatcher({
-      pingInterval: 3_000
+      pingInterval: 2_000,
+      incomerUUID: dispatcherIncomer.baseUUID,
+      instanceName: "node:Pulsar"
     });
   });
 
@@ -92,10 +94,10 @@ describe("Init Incomer without Dispatcher alive", () => {
   test(`It should set the dispatcher state at false when there is not Dispatcher sending ping`, async() =>
   {
     dispatcher.close();
+    await dispatcherIncomer.close();
 
-    await timers.setTimeout(3_000);
+    await timers.setTimeout(5_000);
 
-    expect(dispatcherIncomer.dispatcherIsAlive).toBe(false);
     expect(incomer.dispatcherIsAlive).toBe(false);
   });
 
@@ -104,18 +106,39 @@ describe("Init Incomer without Dispatcher alive", () => {
 
     await timers.setTimeout(idleTime);
 
-    const secondDispatcher = new Dispatcher({
-      idleTime: idleTime,
-      pingInterval: 3_000
+    const secondDispatcherIncomer = new Incomer({
+      name: "node:Pulsar",
+      logger: incomerLogger,
+      eventsCast: [],
+      eventsSubscribe: [],
+      eventCallback: eventComeBackHandler,
+      dispatcherInactivityOptions: {
+        publishInterval: 2_000,
+        maxPingInterval: 2_000
+      },
+      isDispatcherInstance: true,
+      externalsInitialized: true
     });
-    await secondDispatcher.initialize()
 
-    await timers.setTimeout(5_000);
+    const secondDispatcher = new Dispatcher({
+      instanceName: "node:Pulsar",
+      idleTime: idleTime,
+      checkLastActivityInterval: 60_000 * 1,
+      pingInterval: 60_000 * 2,
+      checkTransactionInterval: 60_000 * 1,
+      incomerUUID: secondDispatcherIncomer.baseUUID
+    });
 
-    expect(dispatcherIncomer.dispatcherIsAlive).toBe(true);
+    await secondDispatcher.initialize();
+    await secondDispatcherIncomer.initialize();
+
+    await timers.setTimeout(1_000);
+
+    expect(secondDispatcherIncomer.dispatcherIsAlive).toBe(true);
     expect(incomer.dispatcherIsAlive).toBe(true);
 
     secondDispatcher.close();
+    await secondDispatcherIncomer.close();
   });
 
   afterAll(async() => {

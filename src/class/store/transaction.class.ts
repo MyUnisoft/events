@@ -117,6 +117,24 @@ export class TransactionStore<
     return elements;
   }
 
+  async getAllTransactions(): Promise<Transactions<T>> {
+    const mappedTransactions = new Map();
+
+    const [, transactionKeys] = await this.redis.scan(0, "MATCH", `${this.key}-*`);
+
+    const transactions = await Promise.all(transactionKeys.map(
+      (transactionKey) => this.getValue(transactionKey)
+    ));
+
+    for (const transaction of transactions) {
+      if (transaction !== null) {
+        mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
+      }
+    }
+
+    return mappedTransactions;
+  }
+
   async getTransactions(): Promise<Transactions<T>> {
     const mappedTransactions: Transactions<T> = new Map();
 
@@ -164,7 +182,7 @@ export class TransactionStore<
     return await this.getValue(`${this.key}-${transactionId}`);
   }
 
-  async deleteTransaction(transactionId: string) {
+  async deleteTransaction(transactionId: string): Promise<void> {
     await this.deleteValue(`${this.key}-${transactionId}`);
   }
 }
