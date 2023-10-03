@@ -95,44 +95,25 @@ export class TransactionStore<
   }
 
   async* transactionLazyFetch() {
-    let index = 0;
-    const count = 10;
+    const count = 1000;
     let cursor = 0;
     let lastResult = count;
 
-    while (lastResult !== 0 && index <= 10) {
+    do {
       const [lastCursor, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
 
       cursor = Number(lastCursor);
       lastResult = elements.length;
-      index++;
 
       yield elements;
 
       continue;
     }
+    while (lastResult !== 0 && cursor !== 0);
 
     const [, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
 
     return elements;
-  }
-
-  async getAllTransactions(): Promise<Transactions<T>> {
-    const mappedTransactions = new Map();
-
-    const [, transactionKeys] = await this.redis.scan(0, "MATCH", `${this.key}-*`);
-
-    const transactions = await Promise.all(transactionKeys.map(
-      (transactionKey) => this.getValue(transactionKey)
-    ));
-
-    for (const transaction of transactions) {
-      if (transaction !== null) {
-        mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
-      }
-    }
-
-    return mappedTransactions;
   }
 
   async getTransactions(): Promise<Transactions<T>> {

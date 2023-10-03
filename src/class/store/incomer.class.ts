@@ -46,12 +46,42 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     return providedUUID;
   }
 
-  async getIncomers(): Promise<Set<RegisteredIncomer>> {
-    const [, incomerKeys] = await this.redis.scan(0, "MATCH", `${this.key}-*`);
+  async* incomerLazyFetch() {
+    const count = 1000;
+    let cursor = 0;
+    let lastResult = count;
 
-    return new Set([...await Promise.all(incomerKeys.map(
-      (incomerKey) => this.getValue(incomerKey)
-    ))]);
+    do {
+      const [lastCursor, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
+
+      cursor = Number(lastCursor);
+      lastResult = incomerKeys.length;
+
+      yield incomerKeys;
+
+      continue;
+    }
+    while (lastResult !== 0 && cursor !== 0);
+
+    const [, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
+
+    return incomerKeys;
+  }
+
+  async getIncomers(): Promise<Set<RegisteredIncomer>> {
+    const incomers: Set<RegisteredIncomer> = new Set();
+
+    for await (const incomerKeys of this.incomerLazyFetch()) {
+      const foundIncomers = await Promise.all(incomerKeys.map(
+        (incomerKey) => this.getValue(incomerKey)
+      ));
+
+      for (const incomer of foundIncomers) {
+        incomers.add(incomer);
+      }
+    }
+
+    return incomers;
   }
 
   async updateIncomer(incomer: RegisteredIncomer) {
