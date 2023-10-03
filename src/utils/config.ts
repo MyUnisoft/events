@@ -1,6 +1,3 @@
-export const kIncomerStoreName = "incomer" as const;
-export const kTransactionStoreName = "transaction" as const;
-
 export const channels = {
   dispatcher: "dispatcher"
 };

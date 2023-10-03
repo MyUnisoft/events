@@ -1,5 +1,4 @@
 // Import Node.js Dependencies
-import { randomUUID } from "node:crypto";
 import timers from "timers/promises";
 
 // Import Third-party Dependencies
@@ -19,7 +18,7 @@ import {
   EventOptions,
   Events
 } from "../../../../src/index";
-import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
+import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
 import { validate } from "../../../../src/index";
 
 // Internal Dependencies Mocks
@@ -27,6 +26,20 @@ const incomerLogger = Logger.pino({
   level: "debug"
 });
 const mockedEventComeBackHandler = jest.fn();
+
+async function updateRegisterTransactionState(
+  publisherOldTransacStore: TransactionStore<"incomer">,
+  publisherRegistrationTransacId: string,
+  approvementTransactionId: string
+) {
+  const registerTransaction = await publisherOldTransacStore.getTransactionById(publisherRegistrationTransacId);
+
+  await publisherOldTransacStore.updateTransaction(publisherRegistrationTransacId, {
+    ...registerTransaction,
+    relatedTransaction: approvementTransactionId,
+    resolved: true
+  } as Transaction<"incomer">);
+}
 
 describe("Publishing/exploiting a custom event", () => {
   let dispatcher: Dispatcher<EventOptions<keyof Events>>;
@@ -263,6 +276,12 @@ describe("Publishing/exploiting a custom event", () => {
               name: data.uuid
             }));
 
+            await updateRegisterTransactionState(
+              publisher["incomerTransactionStore"],
+              publisher["registerTransactionId"]!,
+              message.redisMetadata.transactionId
+            );
+
             publisherTransactionStore = new TransactionStore({
               prefix: data.uuid,
               instance: "incomer"
@@ -284,6 +303,12 @@ describe("Publishing/exploiting a custom event", () => {
               name: data.uuid
             }));
 
+            await updateRegisterTransactionState(
+              concernedIncomer["incomerTransactionStore"],
+              concernedIncomer["registerTransactionId"]!,
+              message.redisMetadata.transactionId
+            );
+
             incomerTransactionStore = new TransactionStore({
               prefix: data.uuid,
               instance: "incomer"
@@ -304,6 +329,12 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
               name: data.uuid
             }));
+
+            await updateRegisterTransactionState(
+              secondConcernedIncomer["incomerTransactionStore"],
+              secondConcernedIncomer["registerTransactionId"]!,
+              message.redisMetadata.transactionId
+            );
 
             secondIncomerTransactionStore = new TransactionStore({
               prefix: data.uuid,
@@ -467,6 +498,12 @@ describe("Publishing/exploiting a custom event", () => {
               name: data.uuid
             }));
 
+            await updateRegisterTransactionState(
+              publisher["incomerTransactionStore"],
+              publisher["registerTransactionId"]!,
+              message.redisMetadata.transactionId
+            );
+
             publisherTransactionStore = new TransactionStore({
               prefix: data.uuid,
               instance: "incomer"
@@ -488,6 +525,12 @@ describe("Publishing/exploiting a custom event", () => {
               name: data.uuid
             }));
 
+            await updateRegisterTransactionState(
+              concernedIncomer["incomerTransactionStore"],
+              concernedIncomer["registerTransactionId"]!,
+              message.redisMetadata.transactionId
+            );
+
             incomerTransactionStore = new TransactionStore({
               prefix: data.uuid,
               instance: "incomer"
@@ -508,6 +551,12 @@ describe("Publishing/exploiting a custom event", () => {
             Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
               name: data.uuid
             }));
+
+            await updateRegisterTransactionState(
+              secondConcernedIncomer["incomerTransactionStore"],
+              secondConcernedIncomer["registerTransactionId"]!,
+              message.redisMetadata.transactionId
+            );
 
             secondIncomerTransactionStore = new TransactionStore({
               prefix: data.uuid,

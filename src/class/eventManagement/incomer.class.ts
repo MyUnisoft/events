@@ -19,7 +19,7 @@ import {
   PartialTransaction,
   Transaction,
   TransactionStore
-} from "./transaction.class";
+} from "../store/transaction.class";
 import {
   Prefix,
   EventCast,
@@ -145,14 +145,12 @@ export class Incomer <
     ) {
       this.externals = new Externals(options);
     }
+  }
 
-    this.checkTransactionsStateInterval = setInterval(async() => {
-      if (!this.lastPingDate || this.isDispatcherInstance) {
-        return;
-      }
-
-      await this.checkDispatcherState();
-    }, this.maxPingInterval).unref();
+  private logAbortError() {
+    // eslint-disable-next-line no-invalid-this
+    this.logger.warn({ error: kCancelTask.signal.reason });
+    kCancelTask.signal.removeEventListener("abort", this.logAbortError);
   }
 
   private async checkDispatcherState() {
@@ -164,9 +162,7 @@ export class Incomer <
 
     this.dispatcherIsAlive = true;
 
-    kCancelTask.signal.addEventListener("abort", () => {
-      this.logger.warn({ error: kCancelTask.signal.reason });
-    }, { once: true });
+    kCancelTask.signal.addEventListener("abort", this.logAbortError, { once: true });
 
     await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
   }
@@ -175,17 +171,7 @@ export class Incomer <
     return getRedis("subscriber");
   }
 
-  public async initialize() {
-    if (this.providedUUID) {
-      throw new Error("Cannot init multiple times.");
-    }
-
-    await this.externals?.initialize();
-
-    await this.subscriber.subscribe(this.dispatcherChannelName);
-
-    this.subscriber.on("message", (channel: string, message: string) => this.handleMessages(channel, message));
-
+  private async registrationAttempt() {
     const event = {
       name: "register" as const,
       data: {
@@ -244,17 +230,48 @@ export class Incomer <
           return;
         }
 
-        this.dispatcherIsAlive = true;
-
         clearInterval(this.checkRegistrationInterval);
+
+        this.checkTransactionsStateInterval = setInterval(async() => {
+          if (!this.lastPingDate || this.isDispatcherInstance) {
+            return;
+          }
+
+          await this.checkDispatcherState();
+        }, this.maxPingInterval).unref();
+
+        this.dispatcherIsAlive = true;
         this.checkRegistrationInterval = undefined;
+        this.logger.info("Incomer registered");
       }, this.publishInterval * 2).unref();
 
       return;
     }
 
+    this.checkTransactionsStateInterval = setInterval(async() => {
+      if (!this.lastPingDate || this.isDispatcherInstance) {
+        return;
+      }
+
+      await this.checkDispatcherState();
+    }, this.maxPingInterval).unref();
+
     this.dispatcherIsAlive = true;
     this.logger.info("Incomer registered");
+  }
+
+  public async initialize() {
+    if (this.providedUUID) {
+      throw new Error("Cannot init multiple times.");
+    }
+
+    await this.externals?.initialize();
+
+    await this.subscriber.subscribe(this.dispatcherChannelName);
+
+    this.subscriber.on("message", (channel: string, message: string) => this.handleMessages(channel, message));
+
+    await this.registrationAttempt();
   }
 
   public async close() {
@@ -319,6 +336,7 @@ export class Incomer <
     try {
       await timers.setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
       kCancelTask.abort("Dispatcher state check before publishing more..");
+      kCancelTask.signal.removeEventListener("abort", this.logAbortError);
     }
     catch {
       // Ignore
@@ -346,6 +364,7 @@ export class Incomer <
     }
     finally {
       kCancelTimeout.abort();
+      kCancelTask.signal.removeEventListener("abort", this.logAbortError);
     }
   }
 
@@ -505,6 +524,7 @@ export class Incomer <
 
     await this.incomerTransactionStore.updateTransaction(this.registerTransactionId, {
       ...registerTransaction,
+      relatedTransaction: message.redisMetadata.transactionId,
       resolved: true
     } as Transaction<"incomer">);
 

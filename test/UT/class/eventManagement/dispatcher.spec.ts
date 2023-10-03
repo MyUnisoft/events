@@ -16,7 +16,8 @@ import Ajv from "ajv";
 // Import Internal Dependencies
 import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
-import { TransactionStore } from "../../../../src/class/eventManagement/transaction.class";
+import { TransactionStore } from "../../../../src/class/store/transaction.class";
+import { IncomerStore } from "../../../../src/class/store/incomer.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
@@ -977,11 +978,11 @@ describe("Dispatcher", () => {
             }
           });
 
-          await timers.setTimeout(2_000);
+          await timers.setTimeout(5_000);
         });
 
         test("it should have distributed the event & resolve the main transaction", async() => {
-          await timers.setTimeout(3_000);
+          await timers.setTimeout(10_000);
 
           const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId);
 
@@ -1019,10 +1020,10 @@ describe("Dispatcher", () => {
         eventsValidation: {
           eventsValidationFn
         },
-        pingInterval: 2_000,
+        pingInterval: 20_000,
         checkLastActivityInterval: 6_000,
-        checkTransactionInterval: 4_000,
-        idleTime: 6_000,
+        checkTransactionInterval: 2_000,
+        idleTime: 60_000,
         prefix
       });
 
@@ -1092,6 +1093,10 @@ describe("Dispatcher", () => {
         let mainTransactionId;
         let secondIncomerTransactionId;
         let thirdIncomerTransactionId;
+
+        const incomerStore = new IncomerStore({
+          prefix
+        });
 
         beforeAll(async() => {
           await subscriber.subscribe(`${prefix}-dispatcher`);
@@ -1181,19 +1186,17 @@ describe("Dispatcher", () => {
               }
               else if (channel === `${prefix}-${thirdIncomerProvidedUUID}`) {
                 if (formattedMessage.name === "foo") {
-                  setTimeout(async() => {
-                    hasDistributedEvents[1] = true;
-                    thirdIncomerTransactionId = await thirdIncomerTransactionStore.setTransaction({
-                      ...formattedMessage,
-                      redisMetadata: {
-                        ...formattedMessage.redisMetadata,
-                        origin: formattedMessage.redisMetadata.to
-                      },
-                      mainTransaction: false,
-                      relatedTransaction: formattedMessage.redisMetadata.transactionId,
-                      resolved: true
-                    });
-                  }, 1600);
+                  hasDistributedEvents[1] = true;
+                  thirdIncomerTransactionId = await thirdIncomerTransactionStore.setTransaction({
+                    ...formattedMessage,
+                    redisMetadata: {
+                      ...formattedMessage.redisMetadata,
+                      origin: formattedMessage.redisMetadata.to
+                    },
+                    mainTransaction: false,
+                    relatedTransaction: formattedMessage.redisMetadata.transactionId,
+                    resolved: true
+                  });
                 }
               }
             }
@@ -1303,11 +1306,11 @@ describe("Dispatcher", () => {
             })
           ]);
 
-          await timers.setTimeout(2_000);
+          await timers.setTimeout(20_000);
         });
 
         test("it should have distributed the event & resolve the main transaction", async() => {
-          await timers.setTimeout(10_000);
+          await timers.setTimeout(25_000);
 
           const [mainTransaction, secondIncomerTransaction, thirdIncomerTransaction] = await Promise.all([
             firstIncomerTransactionStore.getTransactionById(mainTransactionId),
