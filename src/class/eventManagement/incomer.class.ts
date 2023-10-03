@@ -150,7 +150,7 @@ export class Incomer <
   private logAbortError() {
     // eslint-disable-next-line no-invalid-this
     this.logger.warn({ error: kCancelTask.signal.reason });
-    kCancelTask.signal.removeEventListener("abort", this.logAbortError);
+    kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
   }
 
   private async checkDispatcherState() {
@@ -162,7 +162,7 @@ export class Incomer <
 
     this.dispatcherIsAlive = true;
 
-    kCancelTask.signal.addEventListener("abort", this.logAbortError, { once: true });
+    kCancelTask.signal.addEventListener("abort", () => this.logAbortError(), { once: true });
 
     await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
   }
@@ -336,7 +336,7 @@ export class Incomer <
     try {
       await timers.setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
       kCancelTask.abort("Dispatcher state check before publishing more..");
-      kCancelTask.signal.removeEventListener("abort", this.logAbortError);
+      kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
     }
     catch {
       // Ignore
@@ -364,7 +364,7 @@ export class Incomer <
     }
     finally {
       kCancelTimeout.abort();
-      kCancelTask.signal.removeEventListener("abort", this.logAbortError);
+      kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
     }
   }
 

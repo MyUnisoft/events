@@ -473,8 +473,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         instance: "incomer"
       });
 
-      const transactions = await transactionStore.getAllTransactions();
-      const recentPingTransactionKeys = Object.keys(await transactionStore.getAllTransactions())
+      const transactions = await transactionStore.getTransactions();
+      const recentPingTransactionKeys = Object.keys(await transactionStore.getTransactions())
         .filter((transactionKey) => {
           const transaction = transactions.get(transactionKey);
 
