@@ -123,7 +123,8 @@ describe("Publishing/exploiting a custom event", () => {
         id: "1"
       },
       scope: {
-        schemaId: 1
+        schemaId: 1,
+        firmId: 1
       },
       metadata: {
         agent: "jest",
@@ -250,7 +251,8 @@ describe("Publishing/exploiting a custom event", () => {
         id: "1"
       },
       scope: {
-        schemaId: 1
+        schemaId: 1,
+        firmId: 1
       },
       metadata: {
         agent: "jest",
@@ -406,7 +408,8 @@ describe("Publishing/exploiting a custom event", () => {
         id: "1"
       },
       scope: {
-        schemaId: 1
+        schemaId: 1,
+        firmId: 1
       },
       metadata: {
         agent: "jest",
@@ -508,7 +511,7 @@ describe("Publishing/exploiting a custom event", () => {
         relatedTransaction: expect.anything()
       };
 
-      expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
+      expect(mockedPublisherSetTransaction).toHaveBeenNthCalledWith(1, {
         ...event,
         redisMetadata: expect.anything(),
         published: true,

@@ -13,7 +13,37 @@
       "enum": ["CREATE"]
     },
     "scope": {
-      "$ref": "Scope"
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number"
+        },
+        "firmSIRET": {
+            "type": "number",
+            "nullable": true
+          },
+        "accountingFolderId": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "persPhysiqueId": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "firmId"],
+      "additionalProperties": false
     },
     "data": {
       "type": "object",

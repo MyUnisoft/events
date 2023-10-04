@@ -36,8 +36,9 @@ describe("eventsValidationFn", () => {
       accountingFolder = eventsValidationFn.get("accountingFolder");
     });
 
-    test("connector should have a validation function for \"create\"", () => {
+    test("connector should have a validation function for \"create\" & \"scope\"", () => {
       expect(accountingFolder.has("create")).toBe(true);
+      expect(accountingFolder.has("scope")).toBe(true);
     });
 
     test("accountingFolder should not have a validation function for \"update\", \"delete\", \"void\"", () => {
