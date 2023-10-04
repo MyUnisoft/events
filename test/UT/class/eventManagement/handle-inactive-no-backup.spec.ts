@@ -102,7 +102,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         id: "1"
       },
       scope: {
-        schemaId: 1
+        schemaId: 1,
+        firmId: 1
       },
       metadata: {
         agent: "jest",

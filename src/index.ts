@@ -43,6 +43,14 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
   if (!scopeValidationFunction(scope)) {
     throw new Error(`scope: ${[...scopeValidationFunction.errors].map((error) => error.message)}`);
   }
+
+  if (event.has("scope")) {
+    const eventScopeValidationFn = event.get("scope");
+
+    if (!eventScopeValidationFn(scope)) {
+      throw new Error(`scope: ${[...scopeValidationFunction.errors].map((error) => error.message)}`);
+    }
+  }
 }
 
 export function isCreateOperation<T extends keyof Events>(
