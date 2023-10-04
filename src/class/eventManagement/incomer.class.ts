@@ -307,7 +307,7 @@ export class Incomer <
 
     const transactionId = await this.incomerTransactionStore.setTransaction({
       ...formattedEvent,
-      published: this.dispatcherIsAlive,
+      published: false,
       mainTransaction: true,
       relatedTransaction: null,
       resolved: false
@@ -349,16 +349,13 @@ export class Incomer <
 
       for (const [transactionId, transaction] of Object.entries(transactions)) {
         if (!transaction.published) {
-          await Promise.all([
-            this.incomerChannel.publish({
-              ...transaction,
-              redisMetadata: {
-                ...transaction.redisMetadata,
-                transactionId
-              }
-            }),
-            this.incomerTransactionStore.updateTransaction(transactionId, { ...transaction, published: true })
-          ]);
+          await this.incomerChannel.publish({
+            ...transaction,
+            redisMetadata: {
+              ...transaction.redisMetadata,
+              transactionId
+            }
+          });
         }
       }
     }
