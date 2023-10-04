@@ -1221,7 +1221,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       if (!relatedEvent.horizontalScale &&
         filteredConcernedIncomers.find(
           (filteredConcernedIncomer) => filteredConcernedIncomer.eventsSubscribe.find(
-            (subscribedEvent) => subscribedEvent.name === relatedEvent.name
+            (subscribedEvent) => subscribedEvent.name === relatedEvent.name && filteredConcernedIncomer.name === incomer.name
           )
         ) !== undefined
       ) {
