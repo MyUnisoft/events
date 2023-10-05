@@ -329,7 +329,12 @@ export class Incomer <
 
     await this.incomerChannel.publish(finalEvent);
 
-    this.logger.info(this.standardLogFn(finalEvent)("Published event"));
+    this.logger.info(this.standardLogFn({
+      ...finalEvent, redisMetadata: {
+        ...finalEvent.redisMetadata,
+        eventTransactionId: finalEvent.redisMetadata.transactionId
+      }
+    })("Published event"));
   }
 
   private async updateTransactionsStateTimeout() {
@@ -479,6 +484,7 @@ export class Incomer <
             origin: redisMetadata.to
           },
           mainTransaction: false,
+          eventTransactionId: redisMetadata.eventTransactionId,
           relatedTransaction: redisMetadata.transactionId,
           resolved: false
         };

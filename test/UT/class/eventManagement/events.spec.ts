@@ -357,6 +357,7 @@ describe("Publishing/exploiting a custom event", () => {
 
       const mockedEvent = {
         ...event,
+        eventTransactionId: expect.anything(),
         redisMetadata: expect.anything(),
         mainTransaction: false,
         resolved: false,
@@ -527,6 +528,7 @@ describe("Publishing/exploiting a custom event", () => {
 
       const mockedEvent = {
         ...event,
+        eventTransactionId: expect.anything(),
         redisMetadata: expect.anything(),
         mainTransaction: false,
         resolved: false,

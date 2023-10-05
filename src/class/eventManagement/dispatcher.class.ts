@@ -537,6 +537,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
+        eventTransactionId: relatedTransaction,
         transactionId
       }
     });
@@ -1178,6 +1179,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   ) {
     const { redisMetadata, ...event } = message;
     const { name } = event;
+    const { transactionId } = redisMetadata;
 
     const logData = {
       channel,
@@ -1189,7 +1191,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       instance: "incomer"
     });
 
-    const relatedTransaction = await senderTransactionStore.getTransactionById(redisMetadata.transactionId);
+    const relatedTransaction = await senderTransactionStore.getTransactionById(transactionId);
 
     if (!relatedTransaction) {
       this.logger.warn(this.standardLogFn(logData)("Couldn't find the related main transaction"));
@@ -1208,7 +1210,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
       else {
         await Promise.all([
-          senderTransactionStore.updateTransaction(redisMetadata.transactionId, {
+          senderTransactionStore.updateTransaction(transactionId, {
             ...relatedTransaction, published: true
           }),
           this.backupDispatcherTransactionStore.setTransaction({
@@ -1218,7 +1220,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               to: ""
             },
             mainTransaction: false,
-            relatedTransaction: redisMetadata.transactionId,
+            relatedTransaction: transactionId,
             resolved: false
           } as Transaction<"dispatcher">)
         ]);
@@ -1274,7 +1276,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         concernedChannel: concernedIncomerChannel,
         transactionMeta: {
           mainTransaction: false,
-          relatedTransaction: redisMetadata.transactionId,
+          relatedTransaction: transactionId,
           resolved: false
         },
         formattedEvent
@@ -1284,7 +1286,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await this.updateIncomerState(redisMetadata.origin);
     await Promise.all([
       ...toResolve,
-      senderTransactionStore.updateTransaction(redisMetadata.transactionId, {
+      senderTransactionStore.updateTransaction(transactionId, {
         ...relatedTransaction, published: true
       })
     ]);
@@ -1293,6 +1295,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       Object.assign({}, logData, {
         redisMetadata: {
           ...redisMetadata,
+          eventTransactionId: transactionId,
           to: `[${filteredConcernedIncomers.map((incomer) => incomer.providedUUID)}]`
         }
       })

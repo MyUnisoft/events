@@ -13,6 +13,9 @@
       },
       "transactionId": {
         "type": "string"
+      },
+      "eventTransactionId": {
+        "type": "string"
       }
     },
     "required": ["origin", "transactionId"],
