@@ -275,7 +275,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: expect.anything(),
-        published: true,
+        published: false,
         mainTransaction: true,
         resolved: false,
         relatedTransaction: null

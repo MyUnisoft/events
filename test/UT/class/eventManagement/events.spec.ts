@@ -349,7 +349,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: expect.anything(),
-        published: true,
+        published: false,
         mainTransaction: true,
         resolved: false,
         relatedTransaction: null
@@ -514,7 +514,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenNthCalledWith(1, {
         ...event,
         redisMetadata: expect.anything(),
-        published: true,
+        published: false,
         mainTransaction: true,
         resolved: false,
         relatedTransaction: null
