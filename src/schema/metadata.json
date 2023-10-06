@@ -16,8 +16,7 @@
             "enum": ["POST", "PATCH", "PUT", "DELETE"]
           },
           "requestId": {
-            "type": "string",
-            "pattern": "req-[A-Z,a-z,0-9]+"
+            "type": "string"
           }
         },
         "required": ["endpoint", "method"],
