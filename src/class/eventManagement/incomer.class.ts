@@ -307,7 +307,7 @@ export class Incomer <
 
     const transactionId = await this.incomerTransactionStore.setTransaction({
       ...formattedEvent,
-      published: this.dispatcherIsAlive,
+      published: false,
       mainTransaction: true,
       relatedTransaction: null,
       resolved: false
@@ -329,7 +329,12 @@ export class Incomer <
 
     await this.incomerChannel.publish(finalEvent);
 
-    this.logger.info(this.standardLogFn(finalEvent)("Published event"));
+    this.logger.info(this.standardLogFn({
+      ...finalEvent, redisMetadata: {
+        ...finalEvent.redisMetadata,
+        eventTransactionId: finalEvent.redisMetadata.transactionId
+      }
+    })("Published event"));
   }
 
   private async updateTransactionsStateTimeout() {
@@ -349,16 +354,13 @@ export class Incomer <
 
       for (const [transactionId, transaction] of Object.entries(transactions)) {
         if (!transaction.published) {
-          await Promise.all([
-            this.incomerChannel.publish({
-              ...transaction,
-              redisMetadata: {
-                ...transaction.redisMetadata,
-                transactionId
-              }
-            }),
-            this.incomerTransactionStore.updateTransaction(transactionId, { ...transaction, published: true })
-          ]);
+          await this.incomerChannel.publish({
+            ...transaction,
+            redisMetadata: {
+              ...transaction.redisMetadata,
+              transactionId
+            }
+          });
         }
       }
     }
@@ -482,6 +484,7 @@ export class Incomer <
             origin: redisMetadata.to
           },
           mainTransaction: false,
+          eventTransactionId: redisMetadata.eventTransactionId,
           relatedTransaction: redisMetadata.transactionId,
           resolved: false
         };

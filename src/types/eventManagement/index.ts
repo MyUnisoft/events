@@ -14,6 +14,7 @@ export interface DispatcherTransactionMetadata {
   origin: string;
   to: string;
   transactionId?: string;
+  eventTransactionId?: string;
 }
 
 export interface IncomerTransactionMetadata {

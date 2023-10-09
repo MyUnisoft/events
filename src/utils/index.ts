@@ -9,7 +9,8 @@ import { EventOptions, Events, GenericEvent } from "../types";
 const ajv = new Ajv();
 const kCustomKey = "scope";
 const kScopeKeys = Object.freeze({
-  transactionId: "id",
+  eventTransactionId: "event-id",
+  transactionId: "t-id",
   schemaId: "s",
   firmId: "f",
   accountingFolderId: "acf",
@@ -42,7 +43,7 @@ function logValueFallback(value: string): string {
 
 export function defaultStandardLog<
   T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { redisMetadata: { transactionId: string; origin?: string; to?: string } }) {
+>(event: T & { redisMetadata: { transactionId: string; origin?: string; to?: string, eventTransactionId?: string } }) {
   const logs = Array.from(mapped<T>(event)).join("|");
 
   // eslint-disable-next-line max-len
@@ -60,6 +61,12 @@ function* mapped<
 >(event: T & { redisMetadata: { transactionId: string } }) {
   for (const [key, formattedKey] of Object.entries(kScopeKeys)) {
     if (key === "transactionId") {
+      yield `${formattedKey}:${logValueFallback(event.redisMetadata[key])}`;
+
+      continue;
+    }
+
+    if (key === "eventTransactionId") {
       yield `${formattedKey}:${logValueFallback(event.redisMetadata[key])}`;
 
       continue;
