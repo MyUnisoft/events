@@ -357,7 +357,6 @@ describe("Publishing/exploiting a custom event", () => {
 
       const mockedEvent = {
         ...event,
-        eventTransactionId: expect.anything(),
         redisMetadata: expect.anything(),
         mainTransaction: false,
         resolved: false,
@@ -372,7 +371,8 @@ describe("Publishing/exploiting a custom event", () => {
 
       expect(mockedEventComeBackHandler).toHaveBeenCalledTimes(2);
       expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
-        ...event
+        ...event,
+        eventTransactionId: expect.anything()
       });
     });
 
@@ -528,7 +528,6 @@ describe("Publishing/exploiting a custom event", () => {
 
       const mockedEvent = {
         ...event,
-        eventTransactionId: expect.anything(),
         redisMetadata: expect.anything(),
         mainTransaction: false,
         resolved: false,
@@ -541,7 +540,8 @@ describe("Publishing/exploiting a custom event", () => {
 
       expect(mockedEventComeBackHandler).toHaveBeenCalledTimes(3);
       expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
-        ...event
+        ...event,
+        eventTransactionId: expect.anything()
       });
 
       await timers.setTimeout(2_400);

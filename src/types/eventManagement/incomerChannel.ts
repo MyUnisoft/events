@@ -17,6 +17,7 @@ export type CallBackEventMessage<
   T extends GenericEvent = GenericEvent
 > = T & {
   name: string;
+  eventTransactionId: string;
 };
 
 export type EventMessage<

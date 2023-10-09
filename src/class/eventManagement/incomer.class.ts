@@ -471,6 +471,7 @@ export class Incomer <
       .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => {
         const { message } = res;
         const { redisMetadata, ...event } = message;
+        const { eventTransactionId } = redisMetadata;
 
         const logData = {
           channel,
@@ -484,7 +485,6 @@ export class Incomer <
             origin: redisMetadata.to
           },
           mainTransaction: false,
-          eventTransactionId: redisMetadata.eventTransactionId,
           relatedTransaction: redisMetadata.transactionId,
           resolved: false
         };
@@ -492,10 +492,12 @@ export class Incomer <
         const transactionId = await this.incomerTransactionStore.setTransaction(transaction);
         const formattedTransaction = await this.incomerTransactionStore.getTransactionById(transactionId);
 
-        formattedTransaction.resolved = true;
         await Promise.all([
-          this.eventCallback(event as unknown as CallBackEventMessage<T>),
-          this.incomerTransactionStore.updateTransaction(transactionId, formattedTransaction as Transaction<"incomer">)
+          this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
+          this.incomerTransactionStore.updateTransaction(transactionId, {
+            ...formattedTransaction,
+            resolved: true
+          } as Transaction<"incomer">)
         ]);
 
         this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
