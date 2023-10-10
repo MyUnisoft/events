@@ -41,6 +41,8 @@ const kCancelTimeout = new AbortController();
 const kCancelTask = new AbortController();
 // Arbitrary value according to fastify default pluginTimeout
 const kDefaultStartTime = 8_000;
+const kExternalInit = process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL || false;
+const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
@@ -124,7 +126,7 @@ export class Incomer <
     this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? 60_000;
 
     this.logger = options.logger ?? pino({
-      level: "info",
+      level: kSilentLogger ? "silent" : "info",
       transport: {
         target: "pino-pretty"
       }
@@ -141,7 +143,9 @@ export class Incomer <
     });
 
     if (
-      (this.prefix === "test") && options.externalsInitialized === false
+      (this.prefix === "test") && (kExternalInit === false && (
+        options.externalsInitialized === false || options.externalsInitialized === undefined
+      ))
     ) {
       this.externals = new Externals(options);
     }
@@ -322,7 +326,12 @@ export class Incomer <
     } as IncomerChannelMessages<T>["IncomerMessages"];
 
     if (!this.dispatcherIsAlive) {
-      this.logger.info(this.standardLogFn(finalEvent)("Event Stored but not published"));
+      this.logger.info(this.standardLogFn({
+        ...finalEvent, redisMetadata: {
+          ...finalEvent.redisMetadata,
+          eventTransactionId: finalEvent.redisMetadata.transactionId
+        }
+      })("Event Stored but not published"));
 
       return;
     }
@@ -339,7 +348,7 @@ export class Incomer <
 
   private async updateTransactionsStateTimeout() {
     try {
-      await timers.setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
+      await timers.setTimeout(this.maxPingInterval, undefined, { signal: kCancelTimeout.signal });
       kCancelTask.abort("Dispatcher state check before publishing more..");
       kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
     }

@@ -45,6 +45,7 @@ const kCheckRelatedTransactionInterval = 60_000 * 3;
 const kBackupTransactionStoreName = "backup";
 const kCancelTimeout = new AbortController();
 const kCancelTask = new AbortController();
+const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 export const PING_INTERVAL = 60_000 * 5;
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
@@ -148,7 +149,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.logger = options.logger ?? pino({
       name: this.formattedPrefix + this.type,
-      level: "info",
+      level: kSilentLogger ? "silent" : "info",
       transport: {
         target: "pino-pretty"
       }
