@@ -18,9 +18,7 @@ export class Externals<T extends GenericEvent = GenericEvent> {
     this.incomer = new Incomer({
       ...options,
       eventsCast: options.eventsSubscribe.map((val) => val.name),
-      eventsSubscribe: Object.values(AVAILABLE_EVENTS).filter(
-        (event) => options.eventsCast.find((eventCast) => eventCast === event.name)
-      ),
+      eventsSubscribe: Object.values(AVAILABLE_EVENTS),
       externalsInitialized: true
     });
 

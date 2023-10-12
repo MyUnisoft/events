@@ -169,9 +169,9 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
     let handleIncomerMessagesIndex = 0;
     jest.spyOn(Incomer.prototype as any, "handleIncomerMessages")
-      .mockImplementation(async(message: any) => {
+      .mockImplementation(async(channel: any, message: any) => {
         if (message.name === "ping") {
-          return eventHasBeenDeal;
+          return;
         }
 
         if (handleIncomerMessagesIndex === 0) {
@@ -183,13 +183,17 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
         handleIncomerMessagesIndex++;
 
-        return eventHasBeenDeal;
+        return;
       });
 
     beforeAll(async() => {
       publisher = new Incomer({
         name: randomUUID(),
         eventsCast: ["accountingFolder"],
+        eventsValidation: {
+          eventsValidationFn,
+          validationCbFn: validate
+        },
         eventsSubscribe: [],
         eventCallback: mockedEventComeBackHandler
       });
@@ -199,6 +203,10 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         logger: incomerLogger,
         eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
+        eventsValidation: {
+          eventsValidationFn,
+          validationCbFn: validate
+        },
         eventCallback: mockedEventComeBackHandler
       });
 
@@ -220,21 +228,23 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     });
 
     test("event must have been share two times & dealed only once by the second incomer when the first one become inactive", async() => {
-      await secondConcernedIncomer.initialize();
-      await timers.setTimeout(2_500);
-
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
-        redisMetadata: expect.anything(),
-        published: false,
-        mainTransaction: true,
-        resolved: false,
-        relatedTransaction: null
+        redisMetadata: {
+          prefix: publisher.prefix,
+          origin: expect.any(String),
+          published: false,
+          mainTransaction: true,
+          resolved: false,
+          relatedTransaction: null
+        }
       });
 
       expect(eventHasBeenDeal).toBe(false);
 
-      await timers.setTimeout(5_000);
+      await secondConcernedIncomer.initialize();
+
+      await timers.setTimeout(10_000);
 
       expect(eventHasBeenDeal).toBe(true);
     });

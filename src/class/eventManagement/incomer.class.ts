@@ -33,14 +33,21 @@ import {
   EventMessage,
   GenericEvent
 } from "../../types/eventManagement/index";
-import { StandardLog, defaultStandardLog } from "../../utils/index";
+import {
+  CustomEventsValidationFunctions,
+  StandardLog,
+  defaultStandardLog
+} from "../../utils/index";
 import { Externals } from "./externals.class";
+import { ValidateFunction } from "ajv";
 
 // CONSTANTS
 const kCancelTimeout = new AbortController();
 const kCancelTask = new AbortController();
 // Arbitrary value according to fastify default pluginTimeout
 const kDefaultStartTime = 8_000;
+const kExternalInit = process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL || false;
+const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
@@ -69,6 +76,10 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
+  eventsValidation?: {
+    eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>
+    validationCbFn: (event: T) => void;
+  };
   eventCallback: (message: CallBackEventMessage<T>) => void;
   dispatcherInactivityOptions?: {
     /* max interval between received ping before considering dispatcher off */
@@ -109,6 +120,8 @@ export class Incomer <
   private checkTransactionsStateInterval: NodeJS.Timer;
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
+  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  private validationCbFn: (event: T) => void;
 
   public externals: Externals<T> | undefined;
 
@@ -123,8 +136,13 @@ export class Incomer <
     this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? 60_000;
     this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? 60_000;
 
+    if (options.eventsValidation) {
+      this.eventsValidationFn = options.eventsValidation.eventsValidationFn;
+      this.validationCbFn = options.eventsValidation.validationCbFn;
+    }
+
     this.logger = options.logger ?? pino({
-      level: "info",
+      level: kSilentLogger ? "silent" : "info",
       transport: {
         target: "pino-pretty"
       }
@@ -141,7 +159,9 @@ export class Incomer <
     });
 
     if (
-      (this.prefix === "test") && options.externalsInitialized === false
+      (this.prefix === "test") && (kExternalInit === false && (
+        options.externalsInitialized === false || options.externalsInitialized === undefined
+      ))
     ) {
       this.externals = new Externals(options);
     }
@@ -190,9 +210,12 @@ export class Incomer <
     try {
       this.registerTransactionId = await this.incomerTransactionStore.setTransaction({
         ...event,
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
+        redisMetadata: {
+          ...event.redisMetadata,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
+        }
       });
 
       await this.dispatcherChannel.publish({
@@ -291,26 +314,36 @@ export class Incomer <
     }
   }
 
-  public async publish<
-    K extends GenericEvent | null = null
-  >(
-    event: K extends null ? Omit<EventMessage<T>, "redisMetadata"> :
-    Omit<EventMessage<K>, "redisMetadata">
+  public async publish(
+    event: T
   ) {
-    const formattedEvent = {
+    const formattedEvent: EventMessage<T> = {
       ...event,
       redisMetadata: {
         origin: this.providedUUID,
         prefix: this.prefix
       }
-    } as (K extends null ? EventMessage<T> : EventMessage<K>);
+    };
+
+    if (this.eventsValidationFn) {
+      const eventValidationFn = this.eventsValidationFn.get(event.name);
+
+      if (!eventValidationFn) {
+        throw new Error(`Unknown Event ${event.name}`);
+      }
+
+      this.validationCbFn(event);
+    }
 
     const transactionId = await this.incomerTransactionStore.setTransaction({
       ...formattedEvent,
-      published: false,
-      mainTransaction: true,
-      relatedTransaction: null,
-      resolved: false
+      redisMetadata: {
+        ...formattedEvent.redisMetadata,
+        published: false,
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: false
+      }
     });
 
     const finalEvent = {
@@ -322,7 +355,12 @@ export class Incomer <
     } as IncomerChannelMessages<T>["IncomerMessages"];
 
     if (!this.dispatcherIsAlive) {
-      this.logger.info(this.standardLogFn(finalEvent)("Event Stored but not published"));
+      this.logger.info(this.standardLogFn({
+        ...finalEvent, redisMetadata: {
+          ...finalEvent.redisMetadata,
+          eventTransactionId: finalEvent.redisMetadata.transactionId
+        }
+      })("Event Stored but not published"));
 
       return;
     }
@@ -339,7 +377,7 @@ export class Incomer <
 
   private async updateTransactionsStateTimeout() {
     try {
-      await timers.setTimeout(this.publishInterval, undefined, { signal: kCancelTimeout.signal });
+      await timers.setTimeout(this.maxPingInterval, undefined, { signal: kCancelTimeout.signal });
       kCancelTask.abort("Dispatcher state check before publishing more..");
       kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
     }
@@ -459,11 +497,11 @@ export class Incomer <
           ...message,
           redisMetadata: {
             ...message.redisMetadata,
-            origin: message.redisMetadata.to
-          },
-          mainTransaction: false,
-          relatedTransaction: message.redisMetadata.transactionId,
-          resolved: true
+            origin: message.redisMetadata.to,
+            mainTransaction: false,
+            relatedTransaction: message.redisMetadata.transactionId,
+            resolved: true
+          }
         });
 
         this.logger.info(logData, "Resolved Ping event");
@@ -478,15 +516,26 @@ export class Incomer <
           ...message
         };
 
+        if (this.eventsValidationFn) {
+          const eventValidationFn = this.eventsValidationFn.get(event.name);
+
+          if (!eventValidationFn) {
+            throw new Error(`Unknown Event ${event.name}`);
+          }
+
+
+          this.validationCbFn(event as any);
+        }
+
         const transaction: PartialTransaction<"incomer"> = {
           ...message,
           redisMetadata: {
             ...redisMetadata,
-            origin: redisMetadata.to
-          },
-          mainTransaction: false,
-          relatedTransaction: redisMetadata.transactionId,
-          resolved: false
+            origin: redisMetadata.to,
+            mainTransaction: false,
+            relatedTransaction: redisMetadata.transactionId,
+            resolved: false
+          }
         };
 
         const transactionId = await this.incomerTransactionStore.setTransaction(transaction);
@@ -496,7 +545,10 @@ export class Incomer <
           this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
           this.incomerTransactionStore.updateTransaction(transactionId, {
             ...formattedTransaction,
-            resolved: true
+            redisMetadata: {
+              ...formattedTransaction.redisMetadata,
+              resolved: true
+            }
           } as Transaction<"incomer">)
         ]);
 
@@ -529,8 +581,11 @@ export class Incomer <
 
     await this.incomerTransactionStore.updateTransaction(this.registerTransactionId, {
       ...registerTransaction,
-      relatedTransaction: message.redisMetadata.transactionId,
-      resolved: true
+      redisMetadata: {
+        ...registerTransaction.redisMetadata,
+        relatedTransaction: message.redisMetadata.transactionId,
+        resolved: true
+      }
     } as Transaction<"incomer">);
 
     this.incomerTransactionStore = new TransactionStore({

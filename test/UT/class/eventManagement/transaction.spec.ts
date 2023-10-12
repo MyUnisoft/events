@@ -10,10 +10,12 @@ import { PartialTransaction, TransactionStore } from "../../../../src/class/stor
 let transactionStore: TransactionStore;
 
 beforeAll(async() => {
-  await initRedis({
+  const redis = await initRedis({
     port: process.env.REDIS_PORT,
     host: process.env.REDIS_HOST
   } as any);
+
+  await redis.flushall();
 });
 
 afterAll(async() => {
@@ -40,11 +42,11 @@ describe("Transaction options", () => {
         data: null,
         redisMetadata: {
           origin: "foo",
-          to: "foo"
+          to: "foo",
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
         },
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
       };
 
       transactionId = await transactionStore.setTransaction(transaction);
@@ -67,11 +69,11 @@ describe("Transaction options", () => {
         data: null,
         redisMetadata: {
           origin: "foo",
-          to: "foo"
+          to: "foo",
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
         },
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
       };
 
       const transactionId = await transactionStore.setTransaction(transaction);
@@ -90,11 +92,11 @@ describe("Transaction options", () => {
         data: null,
         redisMetadata: {
           origin: "foo",
-          to: "foo"
+          to: "foo",
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
         },
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
       };
 
       transactionId = await transactionStore.setTransaction(transaction);
@@ -118,11 +120,11 @@ describe("Transaction options", () => {
         data: null,
         redisMetadata: {
           origin: "foo",
-          to: "foo"
+          to: "foo",
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
         },
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
       };
 
       await transactionStore.setTransaction(transaction);

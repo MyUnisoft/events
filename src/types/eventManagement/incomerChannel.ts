@@ -9,21 +9,18 @@ export type DispatcherPingMessage = { name: "ping", data: null, redisMetadata: D
 export type DistributedEventMessage<
   T extends GenericEvent = GenericEvent
 > = T & {
-  name: string;
   redisMetadata: DispatcherTransactionMetadata;
 };
 
 export type CallBackEventMessage<
   T extends GenericEvent = GenericEvent
 > = T & {
-  name: string;
   eventTransactionId: string;
 };
 
 export type EventMessage<
   T extends GenericEvent = GenericEvent
 > = T & {
-  name: string;
   redisMetadata: IncomerTransactionMetadata;
 };
 
