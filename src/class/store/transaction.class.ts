@@ -19,43 +19,49 @@ import {
 export type Instance = "dispatcher" | "incomer";
 
 type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "dispatcher" ?
-  Omit<DispatcherTransactionMetadata, "to" | "transactionId"> & { to?: string } :
-  Omit<IncomerTransactionMetadata, "transactionId">;
+  Omit<DispatcherTransactionMetadata, "to" | "transactionId"> & { to?: string } & (MainTransaction | SpreadTransaction) :
+  Omit<IncomerTransactionMetadata, "transactionId"> & (MainTransaction | HandlerTransaction);
 
 type MainTransaction = {
   published?: boolean;
   mainTransaction: true;
   relatedTransaction: null;
-  resolved: false;
+  resolved: boolean;
 };
 
-type SpreedTransaction = {
+type SpreadTransaction = {
+  published?: boolean;
   mainTransaction: false;
   relatedTransaction: string;
   resolved: boolean;
 };
 
 type HandlerTransaction = {
+  published?: boolean;
   mainTransaction: false;
   relatedTransaction: string;
   resolved: boolean;
 };
 
-type DispatcherTransaction = (SpreedTransaction | MainTransaction) & (
-  (
-    DispatcherChannelMessages["DispatcherMessages"] | IncomerChannelMessages["DispatcherMessages"]
-  ) | (
-    IncomerChannelMessages["IncomerMessages"] & {
-      redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
-    }
-  )
+type DispatcherTransaction = (
+  DispatcherChannelMessages["DispatcherMessages"] & {
+    redisMetadata: DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction)
+  } | IncomerChannelMessages["DispatcherMessages"] & {
+    redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction)
+  }
+) | (
+  IncomerChannelMessages["IncomerMessages"] & {
+    redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction);
+  }
 );
 
-type IncomerTransaction = (
-  HandlerTransaction | MainTransaction
-) & (
-  DispatcherChannelMessages["IncomerMessages"] | IncomerChannelMessages["IncomerMessages"] | DispatcherPingMessage
-);
+type IncomerTransaction = DispatcherChannelMessages["IncomerMessages"] & {
+  redisMetadata: DispatcherChannelMessages["IncomerMessages"]["redisMetadata"] & (HandlerTransaction | MainTransaction)
+} | IncomerChannelMessages["IncomerMessages"] & {
+  redisMetadata: IncomerChannelMessages["IncomerMessages"]["redisMetadata"] & (HandlerTransaction | MainTransaction)
+} | DispatcherPingMessage & {
+  redisMetadata: DispatcherPingMessage["redisMetadata"] & (HandlerTransaction | MainTransaction)
+};
 
 export type Transaction<
   T extends Instance = Instance
@@ -146,7 +152,7 @@ export class TransactionStore<
         transactionId
       },
       aliveSince: Date.now()
-    } as Transaction<T>;
+    } as unknown as Transaction<T>;
 
     this.setValue({ key: transactionKey, value: formattedTransaction });
 

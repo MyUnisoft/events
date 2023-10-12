@@ -56,7 +56,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   eventsValidation?: {
     eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
     validationCbFn?: (event: T) => void;
-  },
+  };
   pingInterval?: number;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
@@ -529,9 +529,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const transactionId = await concernedStore.setTransaction({
       ...formattedEvent,
-      mainTransaction,
-      relatedTransaction,
-      resolved
+      redisMetadata: {
+        ...formattedEvent.redisMetadata,
+        mainTransaction,
+        relatedTransaction,
+        resolved
+      }
     });
 
     await concernedChannel.publish({
@@ -566,17 +569,17 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       if (incomerTransaction.name === "ping") {
         await Promise.all([
           incomerTransactionStore.deleteTransaction(incomerTransactionId),
-          this.dispatcherTransactionStore.deleteTransaction(incomerTransaction.relatedTransaction)
+          this.dispatcherTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.relatedTransaction)
         ]);
 
         continue;
       }
 
-      if (incomerTransaction.mainTransaction) {
+      if (incomerTransaction.redisMetadata.mainTransaction) {
         if (incomerTransaction.name === "register") {
           const relatedDispatcherTransactionId = Object.keys(dispatcherTransactions)
             .find(
-              (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].relatedTransaction ===
+              (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].redisMetadata.relatedTransaction ===
                 incomerTransactionId
             );
 
@@ -627,14 +630,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         continue;
       }
 
-      if (incomerTransaction.relatedTransaction) {
+      if (incomerTransaction.redisMetadata.relatedTransaction) {
         const concernedRelatedTransactionIncomer = [...incomers].find(
           (incomer) => incomer.eventsSubscribe.find(
             (subscribedEvent) => subscribedEvent.name === incomerTransaction.name
           )
         );
 
-        if (!concernedRelatedTransactionIncomer || incomerTransaction.resolved) {
+        if (!concernedRelatedTransactionIncomer || incomerTransaction.redisMetadata.resolved) {
           await Promise.all([
             incomerTransactionStore.deleteTransaction(incomerTransactionId),
             this.backupIncomerTransactionStore.setTransaction({
@@ -662,9 +665,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.publishEvent({
             concernedChannel: concernedIncomerChannel,
             transactionMeta: {
-              mainTransaction: incomerTransaction.mainTransaction,
-              relatedTransaction: incomerTransaction.relatedTransaction,
-              resolved: incomerTransaction.resolved
+              mainTransaction: incomerTransaction.redisMetadata.mainTransaction,
+              relatedTransaction: incomerTransaction.redisMetadata.relatedTransaction,
+              resolved: incomerTransaction.redisMetadata.resolved
             },
             formattedEvent: {
               ...incomerTransaction,
@@ -691,7 +694,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           continue;
         }
 
-        if (dispatcherTransaction.relatedTransaction) {
+        if (dispatcherTransaction.redisMetadata.relatedTransaction) {
           const concernedIncomer = [...incomers].find(
             (incomer) => incomer.eventsSubscribe.find(
               (eventSubscribe) => eventSubscribe.name === dispatcherTransaction.name
@@ -699,7 +702,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           );
 
           if (!concernedIncomer) {
-            delete dispatcherTransaction.redisMetadata;
+            delete dispatcherTransaction.redisMetadata.origin;
+            delete dispatcherTransaction.redisMetadata.to;
+            delete dispatcherTransaction.redisMetadata.transactionId;
             delete dispatcherTransaction.aliveSince;
 
             await Promise.all([
@@ -727,9 +732,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             this.publishEvent({
               concernedChannel: concernedIncomerChannel,
               transactionMeta: {
-                mainTransaction: dispatcherTransaction.mainTransaction,
-                relatedTransaction: dispatcherTransaction.relatedTransaction,
-                resolved: dispatcherTransaction.resolved
+                mainTransaction: dispatcherTransaction.redisMetadata.mainTransaction,
+                relatedTransaction: dispatcherTransaction.redisMetadata.relatedTransaction,
+                resolved: dispatcherTransaction.redisMetadata.resolved
               },
               formattedEvent: {
                 ...dispatcherTransaction,
@@ -754,7 +759,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const incomers = await this.incomerStore.getIncomers();
 
     for (const [backedUpTransactionId, backedUpTransaction] of backedUpIncomerTransactions.entries()) {
-      if (backedUpTransaction.mainTransaction) {
+      if (backedUpTransaction.redisMetadata.mainTransaction) {
         const concernedIncomer = [...incomers].find(
           (incomer) => incomer.eventsCast.find(
             (castedEvent) => castedEvent === backedUpTransaction.name
@@ -782,7 +787,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         );
       }
 
-      if (backedUpTransaction.relatedTransaction && !backedUpTransaction.resolved) {
+      if (backedUpTransaction.redisMetadata.relatedTransaction && !backedUpTransaction.redisMetadata.resolved) {
         const concernedIncomer = [...incomers].find(
           (incomer) => incomer.eventsSubscribe.find(
             (subscribedEvent) => subscribedEvent.name === backedUpTransaction.name
@@ -810,9 +815,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.publishEvent({
             concernedChannel: concernedIncomerChannel,
             transactionMeta: {
-              mainTransaction: backedUpTransaction.mainTransaction,
-              relatedTransaction: backedUpTransaction.relatedTransaction,
-              resolved: backedUpTransaction.resolved
+              mainTransaction: backedUpTransaction.redisMetadata.mainTransaction,
+              relatedTransaction: backedUpTransaction.redisMetadata.relatedTransaction,
+              resolved: backedUpTransaction.redisMetadata.resolved
             },
             formattedEvent: {
               ...backedUpTransaction,
@@ -864,9 +869,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         this.publishEvent({
           concernedChannel: concernedIncomerChannel,
           transactionMeta: {
-            mainTransaction: backedUpDispatcherTransaction.mainTransaction,
-            relatedTransaction: backedUpDispatcherTransaction.relatedTransaction,
-            resolved: backedUpDispatcherTransaction.resolved
+            mainTransaction: backedUpDispatcherTransaction.redisMetadata.mainTransaction,
+            relatedTransaction: backedUpDispatcherTransaction.redisMetadata.relatedTransaction,
+            resolved: backedUpDispatcherTransaction.redisMetadata.resolved
           },
           formattedEvent: {
             ...backedUpDispatcherTransaction,
@@ -916,7 +921,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       const relatedIncomerTransactionId = [...relatedIncomerTransactions.keys()].find(((relatedIncomerTransactionId) => {
         const incomerTransaction = relatedIncomerTransactions.get(relatedIncomerTransactionId);
-        const { relatedTransaction, resolved } = incomerTransaction;
+        const { relatedTransaction, resolved } = incomerTransaction.redisMetadata;
 
         return relatedTransaction === dispatcherTransactionId && resolved;
       }));
@@ -926,7 +931,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         continue;
       }
 
-      if (dispatcherTransaction.mainTransaction) {
+      if (dispatcherTransaction.redisMetadata.mainTransaction) {
         // Only in case of ping event
         incomerStateToUpdate.add(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin);
         toResolve.push(Promise.all([
@@ -940,7 +945,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       if (dispatcherTransaction.name === "approvement") {
         const transaction = relatedIncomerTransactions.get(relatedIncomerTransactionId);
 
-        if (!transaction || !transaction.resolved) {
+        if (!transaction || !transaction.redisMetadata.resolved) {
           continue;
         }
 
@@ -952,7 +957,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         continue;
       }
 
-      dispatcherTransaction.resolved = true;
+      dispatcherTransaction.redisMetadata.resolved = true;
       incomerStateToUpdate.add(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin);
       toResolve.push(Promise.all([
         relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
@@ -986,12 +991,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const incomerTransactions = await incomerStore.getTransactions();
 
       for (const [incomerTransactionId, incomerTransaction] of incomerTransactions.entries()) {
-        if (!incomerTransaction.mainTransaction) {
+        if (!incomerTransaction.redisMetadata.mainTransaction) {
           continue;
         }
 
         const relatedDispatcherTransactionsId = [...dispatcherTransactions.keys()].filter(
-          (dispatcherTransactionId) => dispatcherTransactions.get(dispatcherTransactionId).relatedTransaction ===
+          (dispatcherTransactionId) => dispatcherTransactions.get(dispatcherTransactionId).redisMetadata.relatedTransaction ===
             incomerTransactionId
         );
 
@@ -1001,7 +1006,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
 
         const unResolvedRelatedTransactions = relatedDispatcherTransactionsId.filter(
-          (transactionId) => !dispatcherTransactions.get(transactionId).resolved
+          (transactionId) => !dispatcherTransactions.get(transactionId).redisMetadata.resolved
         );
 
         // Event not resolved yet by the different incomers
@@ -1011,7 +1016,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
         for (const relatedDispatcherTransactionId of relatedDispatcherTransactionsId) {
           incomerStateToUpdate.add(incomerTransactions.get(
-            dispatcherTransactions.get(relatedDispatcherTransactionId).relatedTransaction
+            dispatcherTransactions.get(relatedDispatcherTransactionId).redisMetadata.relatedTransaction
           ).redisMetadata.origin);
 
           toResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId));
@@ -1077,11 +1082,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const redisMetadataValidationFn = this.eventsValidationFn.get("redisMetadata") as ValidateFunction<Record<string, any>>;
 
     if (!eventValidations) {
-      throw new Error("Unknown Event");
+      throw new Error(`Unknown Event ${event.name}`);
     }
 
     if (!redisMetadataValidationFn(redisMetadata)) {
-      throw new Error("Malformed message");
+      throw new Error("Malformed redis metadata");
     }
 
     if (this.validationCbFn && isIncomerChannelMessage(message) && event.name !== "ping") {
@@ -1212,17 +1217,21 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       else {
         await Promise.all([
           senderTransactionStore.updateTransaction(transactionId, {
-            ...relatedTransaction, published: true
+            ...relatedTransaction,
+            redisMetadata: {
+              ...relatedTransaction.redisMetadata,
+              published: true
+            }
           }),
           this.backupDispatcherTransactionStore.setTransaction({
             ...event,
             redisMetadata: {
               origin: this.privateUUID,
-              to: ""
-            },
-            mainTransaction: false,
-            relatedTransaction: transactionId,
-            resolved: false
+              to: "",
+              mainTransaction: false,
+              relatedTransaction: transactionId,
+              resolved: false
+            }
           } as Transaction<"dispatcher">)
         ]);
 
@@ -1288,7 +1297,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await Promise.all([
       ...toResolve,
       senderTransactionStore.updateTransaction(transactionId, {
-        ...relatedTransaction, published: true
+        ...relatedTransaction,
+        redisMetadata: {
+          ...relatedTransaction.redisMetadata,
+          published: true
+        }
       })
     ]);
 
