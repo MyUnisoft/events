@@ -274,37 +274,46 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     test("event must have been share only once & backedUp", async() => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
-        redisMetadata: expect.anything(),
-        published: false,
-        mainTransaction: true,
-        resolved: false,
-        relatedTransaction: null
+        redisMetadata:{
+          published: false,
+          mainTransaction: true,
+          resolved: false,
+          relatedTransaction: null,
+          origin: expect.any(String),
+          prefix: publisher.prefix
+        }
       });
 
       expect(eventHasBeenDeal).toBe(false);
 
       await timers.setTimeout(3_000);
 
-      expect(mockedBackedUpSetTransaction).toHaveBeenCalledTimes(2);
+      expect(mockedBackedUpSetTransaction).toHaveBeenCalledTimes(1);
       expect(mockedBackedUpSetTransaction).toHaveBeenCalledWith({
         ...event,
-        redisMetadata: expect.anything(),
+        redisMetadata: {
+          published: true,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false,
+          transactionId: expect.any(String),
+          origin: expect.any(String),
+          prefix: publisher.prefix
+        },
         aliveSince: expect.anything(),
-        published: true,
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
       });
       expect(eventHasBeenDeal).toBe(false);
 
-      Reflect.set(dispatcher, "idleTime", 10_000);
+      Reflect.set(dispatcher, "idleTime", 5_000);
       await secondConcernedIncomer.initialize();
       await secondPublisher.initialize();
       await timers.setTimeout(2_000);
 
-      const backupIncomerTransactions = await backupIncomerTransactionStore.getTransactions();
-
       expect(eventHasBeenDeal).toBe(true);
+
+      await timers.setTimeout(2_000);
+
+      const backupIncomerTransactions = await backupIncomerTransactionStore.getTransactions();
       expect([...backupIncomerTransactions.entries()].length).toBe(0);
     });
   });

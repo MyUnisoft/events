@@ -36,8 +36,11 @@ async function updateRegisterTransactionState(
 
   await publisherOldTransacStore.updateTransaction(publisherRegistrationTransacId, {
     ...registerTransaction,
-    relatedTransaction: approvementTransactionId,
-    resolved: true
+    redisMetadata: {
+      ...registerTransaction!.redisMetadata,
+      relatedTransaction: approvementTransactionId,
+      resolved: true
+    }
   } as Transaction<"incomer">);
 }
 
@@ -344,23 +347,32 @@ describe("Publishing/exploiting a custom event", () => {
     });
 
     test("callback function must have been call & both incomers should have create the relating transaction", async() => {
-      await timers.setTimeout(1_600);
-
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
-        redisMetadata: expect.anything(),
-        published: false,
-        mainTransaction: true,
-        resolved: false,
-        relatedTransaction: null
+        redisMetadata: {
+          origin: expect.any(String),
+          prefix: publisher.prefix,
+          published: false,
+          mainTransaction: true,
+          resolved: false,
+          relatedTransaction: null
+        }
       });
+
+      await timers.setTimeout(1_600);
 
       const mockedEvent = {
         ...event,
-        redisMetadata: expect.anything(),
-        mainTransaction: false,
-        resolved: false,
-        relatedTransaction: expect.anything()
+        redisMetadata: {
+          eventTransactionId: expect.any(String),
+          origin: expect.any(String),
+          prefix: publisher.prefix,
+          mainTransaction: false,
+          resolved: false,
+          to: expect.any(String),
+          relatedTransaction: expect.any(String),
+          transactionId: expect.any(String)
+        },
       };
 
       if (mockedIncomerSetTransaction.mock.calls.length === 1) {
@@ -504,34 +516,29 @@ describe("Publishing/exploiting a custom event", () => {
     test("callback function must have been call & every incomers should have create the relating transaction", async() => {
       expect(mockedPublisherSetTransaction).toHaveBeenNthCalledWith(1, {
         ...event,
-        redisMetadata: expect.anything(),
-        published: false,
-        mainTransaction: true,
-        resolved: false,
-        relatedTransaction: null
-      });
-
-      await timers.setTimeout(1_000);
-
-      let publisherTransactions = await publisherTransactionStore.getTransactions();
-      expect(publisherTransactions.values()).toContainEqual({
-        ...event,
-        redisMetadata: expect.anything(),
-        published: true,
-        aliveSince: expect.anything(),
-        relatedTransaction: null,
-        mainTransaction: true,
-        resolved: false
+        redisMetadata: {
+          origin: expect.any(String),
+          prefix: publisher.prefix,
+          published: false,
+          mainTransaction: true,
+          resolved: false,
+          relatedTransaction: null
+        }
       });
 
       await timers.setTimeout(5_000);
 
       const mockedEvent = {
         ...event,
-        redisMetadata: expect.anything(),
-        mainTransaction: false,
-        resolved: false,
-        relatedTransaction: expect.anything()
+        redisMetadata: {
+          eventTransactionId: expect.any(String),
+          origin: expect.any(String),
+          to: expect.any(String),
+          transactionId: expect.any(String),
+          mainTransaction: false,
+          resolved: false,
+          relatedTransaction: expect.any(String)
+        }
       };
 
       expect(mockedIncomerSetTransaction).toHaveBeenCalledWith(mockedEvent);
@@ -546,8 +553,8 @@ describe("Publishing/exploiting a custom event", () => {
 
       await timers.setTimeout(2_400);
 
-      publisherTransactions = await publisherTransactionStore.getTransactions();
-      expect(publisherTransactions.values()).not.toContainEqual({
+      const SecondPublisherTransactions = await publisherTransactionStore.getTransactions();
+      expect(SecondPublisherTransactions.values()).not.toContainEqual({
         ...event,
         redisMetadata: expect.anything(),
         published: true,
