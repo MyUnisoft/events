@@ -48,7 +48,7 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
     const eventScopeValidationFn = event.get("scope");
 
     if (!eventScopeValidationFn(scope)) {
-      throw new Error(`scope: ${[...scopeValidationFunction.errors].map((error) => error.message)}`);
+      throw new Error(`scope: ${[...eventScopeValidationFn.errors].map((error) => error.message)}`);
     }
   }
 }
