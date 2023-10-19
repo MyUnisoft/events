@@ -288,6 +288,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         this.checkDispatcherStateInterval = undefined;
       }
 
+      for (const { providedUUID, prefix } of incomers) {
+        await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
+      }
+
       this.logger.info(`Dispatcher ${this.selfProvidedUUID} took relay on ${toRemove?.baseUUID}`);
     }));
   }
