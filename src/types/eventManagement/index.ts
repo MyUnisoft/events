@@ -13,6 +13,7 @@ export type EventSubscribe<T extends string | keyof Events = string> = {
 export interface DispatcherTransactionMetadata {
   origin: string;
   to: string;
+  prefix?: Prefix;
   transactionId?: string;
   eventTransactionId?: string;
 }
