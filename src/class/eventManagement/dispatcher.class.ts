@@ -443,7 +443,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         toHandle.push(Promise.all([
           this.incomerStore.deleteIncomer(inactive.providedUUID),
           this.InactiveIncomerTransactionsResolution({
-            incomerUUID: inactive.providedUUID,
+            incomerToRemove: inactive,
             incomerTransactionStore: transactionStore
           })
         ]));
@@ -552,12 +552,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async InactiveIncomerTransactionsResolution(options: {
-    incomerUUID: string,
+    incomerToRemove: RegisteredIncomer,
     incomerTransactionStore: TransactionStore<"incomer">
   }
   ) {
     const {
-      incomerUUID,
+      incomerToRemove,
       incomerTransactionStore
     } = options;
 
@@ -597,7 +597,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
 
         const concernedMainTransactionIncomer = [...incomers].find(
-          (incomer) => incomer.eventsCast.find(
+          (incomer) => incomer.name === incomerToRemove.name && incomer.eventsCast.find(
             (eventCast) => eventCast === incomerTransaction.name
           )
         );
@@ -609,6 +609,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               ...incomerTransaction
             })
           ]);
+
+          // MUST ADD INCOMER NAME SO WE CAN MATCH UP LATER WHEN THE TRANSACTION CAN BE DISPATCH AGAIN
 
           continue;
         }
@@ -752,7 +754,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           ]);
         }
 
-        this.logger.warn(this.standardLogFn(dispatcherTransaction as T)("Redistributed unresolved injected event to an Incomer"));
+        // this.logger.warn(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
+        //   ...dispatcherTransaction.redisMetadata,
+        //   origin: this.privateUUID,
+        //   to: concernedIncomer.providedUUID
+        // } } as unknown as T)("Redistributed unresolved injected event to an Incomer"));
       }
     }
   }
