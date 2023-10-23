@@ -389,16 +389,18 @@ export class Incomer <
   private async updateTransactionsState() {
     try {
       const transactions = await this.incomerTransactionStore.getTransactions();
-
-      for (const [transactionId, transaction] of Object.entries(transactions)) {
-        if (!transaction.published) {
-          await this.incomerChannel.publish({
+      for (const [transactionId, transaction] of transactions.entries()) {
+        if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
+          const event = {
             ...transaction,
             redisMetadata: {
-              ...transaction.redisMetadata,
-              transactionId
+              transactionId,
+              origin: transaction.redisMetadata.origin,
+              prefix: transaction.redisMetadata.prefix
             }
-          });
+          } as unknown as IncomerChannelMessages<T>["IncomerMessages"];
+
+          await this.incomerChannel.publish(event);
         }
       }
     }
