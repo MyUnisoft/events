@@ -16,7 +16,7 @@ import Ajv from "ajv";
 // Import Internal Dependencies
 import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
-import { TransactionStore } from "../../../../src/class/store/transaction.class";
+import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
 import { IncomerStore } from "../../../../src/class/store/incomer.class";
 
 // Internal Dependencies Mocks
@@ -159,20 +159,19 @@ describe("Dispatcher", () => {
             name: "dispatcher"
           });
 
-          // jest.clearAllMocks();
-
           incomerTransactionStore = new TransactionStore({
             prefix: uuid,
             instance: "incomer"
           });
 
-          const transactionId = await incomerTransactionStore.setTransaction({
+          const transaction = await incomerTransactionStore.setTransaction({
             ...event,
             redisMetadata: {
               ...event.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName
             }
           });
 
@@ -180,7 +179,7 @@ describe("Dispatcher", () => {
             ...event,
             redisMetadata: {
               ...event.redisMetadata,
-              transactionId
+              transactionId: transaction.redisMetadata.transactionId
             }
           });
 
@@ -196,13 +195,14 @@ describe("Dispatcher", () => {
         });
 
         test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
-          const transactionId = await incomerTransactionStore.setTransaction({
+          const transaction = await incomerTransactionStore.setTransaction({
             ...event,
             redisMetadata: {
               ...event.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName
             }
           });
 
@@ -210,7 +210,7 @@ describe("Dispatcher", () => {
             ...event,
             redisMetadata: {
               ...event.redisMetadata,
-              transactionId
+              transactionId: transaction.redisMetadata.transactionId
             }
           });
 
@@ -223,7 +223,7 @@ describe("Dispatcher", () => {
               ...event,
               redisMetadata: {
                 ...event.redisMetadata,
-                transactionId
+                transactionId: transaction.redisMetadata.transactionId
               }
             },
             error: "Forbidden multiple registration for a same instance"
@@ -235,7 +235,7 @@ describe("Dispatcher", () => {
     describe("Handling a ping event", () => {
       let incomerName = "foo";
       let uuid = randomUUID();
-      let pongTransactionId: string;
+      let pongTransaction: Transaction<"incomer">;
       let pingTransactionId: string;
       let incomerTransactionStore: TransactionStore<"incomer">;
       let dispatcherTransactionStore: TransactionStore<"dispatcher">
@@ -262,7 +262,7 @@ describe("Dispatcher", () => {
           }
           else if (formattedMessage.name === "ping" && index === 0) {
             pingTransactionId = formattedMessage.redisMetadata.transactionId;
-            pongTransactionId = await incomerTransactionStore.setTransaction({
+            pongTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
               redisMetadata: {
                 ...formattedMessage.redisMetadata,
@@ -302,13 +302,14 @@ describe("Dispatcher", () => {
           instance: "incomer"
         });
 
-        const transactionId = await incomerTransactionStore.setTransaction({
+        const transaction = await incomerTransactionStore.setTransaction({
           ...event,
           redisMetadata: {
             ...event.redisMetadata,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: false
+            resolved: false,
+            incomerName
           }
         });
 
@@ -321,7 +322,7 @@ describe("Dispatcher", () => {
           },
           redisMetadata: {
             origin: uuid,
-            transactionId
+            transactionId: transaction.redisMetadata.transactionId
           }
         });
       });
@@ -330,16 +331,16 @@ describe("Dispatcher", () => {
         await timers.setTimeout(2_000);
 
         expect(mockedPing).toHaveBeenCalled();
-        expect(pongTransactionId).toBeDefined();
+        expect(pongTransaction).toBeDefined();
       });
 
       test("It should have update the update the incomer last activity", async () => {
         await timers.setTimeout(4_000);
 
-        const pongTransaction = await incomerTransactionStore.getTransactionById(pongTransactionId);
+        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
 
-        expect(pongTransaction).toBeNull();
+        expect(pongTransactionToRetrieve).toBeNull();
         expect(pingTransaction).toBeNull();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
         expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
@@ -430,13 +431,14 @@ describe("Dispatcher", () => {
             instance: "incomer"
           });
 
-          const transactionId = await incomerTransactionStore.setTransaction({
+          const transaction = await incomerTransactionStore.setTransaction({
             ...event,
             redisMetadata: {
               ...event.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName
             }
           });
 
@@ -446,7 +448,7 @@ describe("Dispatcher", () => {
             redisMetadata: {
               origin: uuid,
               prefix,
-              transactionId
+              transactionId: transaction.redisMetadata.transactionId
             }
           });
         });
@@ -469,7 +471,7 @@ describe("Dispatcher", () => {
     describe("Handling a ping event", () => {
       let incomerName = "foo";
       let uuid = randomUUID();
-      let pingResponseTransaction: string;
+      let pongTransaction: Transaction<"incomer">;
       let incomerTransactionStore: TransactionStore<"incomer">;
 
       beforeAll(async() => {
@@ -494,7 +496,7 @@ describe("Dispatcher", () => {
             await subscriber.subscribe(`${prefix}-${providedUUid}`);
           }
           else if (formattedMessage.name === "ping" && index === 0) {
-            pingResponseTransaction = await incomerTransactionStore.setTransaction({
+            pongTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
               redisMetadata: {
                 ...formattedMessage.redisMetadata,
@@ -533,13 +535,14 @@ describe("Dispatcher", () => {
           instance: "incomer"
         });
 
-        const transactionId = await incomerTransactionStore.setTransaction({
+        const transaction = await incomerTransactionStore.setTransaction({
           ...event,
           redisMetadata: {
             ...event.redisMetadata,
             mainTransaction: true,
             relatedTransaction: null,
-            resolved: false
+            resolved: false,
+            incomerName
           }
         });
 
@@ -553,7 +556,7 @@ describe("Dispatcher", () => {
           redisMetadata: {
             origin: uuid,
             prefix,
-            transactionId
+            transactionId: transaction.redisMetadata.transactionId
           }
         });
 
@@ -564,13 +567,13 @@ describe("Dispatcher", () => {
         await timers.setTimeout(3_000);
 
         expect(mockedPing).toHaveBeenCalled();
-        expect(pingResponseTransaction).toBeDefined();
+        expect(pongTransaction).toBeDefined();
       });
 
       test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
         await timers.setTimeout(4_000);
 
-        const transaction = await incomerTransactionStore.getTransactionById(pingResponseTransaction);
+        const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
 
         expect(transaction).toBeNull();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
@@ -748,13 +751,14 @@ describe("Dispatcher", () => {
             instance: "incomer"
           });
 
-          const transactionId = await incomerTransactionStore.setTransaction({
+          const transaction = await incomerTransactionStore.setTransaction({
             ...event,
             redisMetadata: {
               ...event.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName
             }
           });
 
@@ -762,7 +766,7 @@ describe("Dispatcher", () => {
             ...event,
             redisMetadata: {
               origin: uuid,
-              transactionId
+              transactionId: transaction.redisMetadata.transactionId
             }
           });
         });
@@ -883,15 +887,17 @@ describe("Dispatcher", () => {
                     }
                   }
 
-                  mainTransactionId = await firstIncomerTransactionStore.setTransaction({
+                  const mainTransaction = await firstIncomerTransactionStore.setTransaction({
                     ...event,
                     redisMetadata: {
                       ...event.redisMetadata,
                       mainTransaction: true,
                       relatedTransaction: null,
-                      resolved: false
+                      resolved: false,
+                      incomerName: firstIncomerName
                     }
                   });
+                  mainTransactionId = mainTransaction.redisMetadata.transactionId;
 
                   await exclusiveChannel.publish({
                     ...event,
@@ -969,23 +975,25 @@ describe("Dispatcher", () => {
             instance: "incomer"
           });
 
-          const firstTransactionId = await firstIncomerTransactionStore.setTransaction({
+          const firstTransaction = await firstIncomerTransactionStore.setTransaction({
             ...firstEvent,
             redisMetadata: {
               ...firstEvent.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName: firstIncomerName
             }
           });
 
-          const secondTransactionId = await secondIncomerTransactionStore.setTransaction({
+          const secondTransaction = await secondIncomerTransactionStore.setTransaction({
             ...secondEvent,
             redisMetadata: {
               ...secondEvent.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName: secondIncomerName
             }
           });
 
@@ -993,7 +1001,7 @@ describe("Dispatcher", () => {
             ...firstEvent,
             redisMetadata: {
               ...firstEvent.redisMetadata,
-              transactionId: firstTransactionId
+              transactionId: firstTransaction.redisMetadata.transactionId
             }
           });
 
@@ -1001,7 +1009,7 @@ describe("Dispatcher", () => {
             ...secondEvent,
             redisMetadata: {
               ...secondEvent.redisMetadata,
-              transactionId: secondTransactionId
+              transactionId: secondTransaction.redisMetadata.transactionId
             }
           });
 
@@ -1121,10 +1129,6 @@ describe("Dispatcher", () => {
         let secondIncomerTransactionId;
         let thirdIncomerTransactionId;
 
-        const incomerStore = new IncomerStore({
-          prefix
-        });
-
         beforeAll(async() => {
           await subscriber.subscribe(`${prefix}-dispatcher`);
 
@@ -1159,15 +1163,17 @@ describe("Dispatcher", () => {
                     }
                   }
 
-                  mainTransactionId = await firstIncomerTransactionStore.setTransaction({
+                  const mainTransaction = await firstIncomerTransactionStore.setTransaction({
                     ...event,
                     redisMetadata: {
                       ...event.redisMetadata,
                       mainTransaction: true,
                       relatedTransaction: null,
-                      resolved: false
+                      resolved: false,
+                      incomerName: firstIncomerName
                     }
                   });
+                  mainTransactionId = mainTransaction.redisMetadata.transactionId;
 
                   await exclusiveChannel.publish({
                     ...event,
@@ -1202,7 +1208,7 @@ describe("Dispatcher", () => {
               if (channel === `${prefix}-${secondIncomerProvidedUUID}`) {
                 if (formattedMessage.name === "foo") {
                   hasDistributedEvents[0] = true;
-                  secondIncomerTransactionId = await secondIncomerTransactionStore.setTransaction({
+                  const secondIncomerTransaction = await secondIncomerTransactionStore.setTransaction({
                     ...formattedMessage,
                     redisMetadata: {
                       ...formattedMessage.redisMetadata,
@@ -1212,12 +1218,13 @@ describe("Dispatcher", () => {
                       resolved: true
                     },
                   });
+                  secondIncomerTransactionId = secondIncomerTransaction.redisMetadata.transactionId;
                 }
               }
               else if (channel === `${prefix}-${thirdIncomerProvidedUUID}`) {
                 if (formattedMessage.name === "foo") {
                   hasDistributedEvents[1] = true;
-                  thirdIncomerTransactionId = await thirdIncomerTransactionStore.setTransaction({
+                  const secondIncomerTransaction = await thirdIncomerTransactionStore.setTransaction({
                     ...formattedMessage,
                     redisMetadata: {
                       ...formattedMessage.redisMetadata,
@@ -1227,6 +1234,7 @@ describe("Dispatcher", () => {
                       resolved: true
                     },
                   });
+                  thirdIncomerTransactionId = secondIncomerTransaction.redisMetadata.transactionId;
                 }
               }
             }
@@ -1291,33 +1299,36 @@ describe("Dispatcher", () => {
             instance: "incomer"
           });
 
-          const firstTransactionId = await firstIncomerTransactionStore.setTransaction({
+          const firstTransaction = await firstIncomerTransactionStore.setTransaction({
             ...firstEvent,
             redisMetadata: {
               ...firstEvent.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName: firstIncomerName
             }
           });
 
-          const secondTransactionId = await secondIncomerTransactionStore.setTransaction({
+          const secondTransaction = await secondIncomerTransactionStore.setTransaction({
             ...secondEvent,
             redisMetadata: {
               ...secondEvent.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName: secondIncomerName
             }
           });
 
-          const thirdTransactionId = await thirdIncomerTransactionStore.setTransaction({
+          const thirdTransaction = await thirdIncomerTransactionStore.setTransaction({
             ...thirdEvent,
             redisMetadata: {
               ...thirdEvent.redisMetadata,
               mainTransaction: true,
               relatedTransaction: null,
-              resolved: false
+              resolved: false,
+              incomerName: thirdIncomerName
             }
           });
 
@@ -1326,21 +1337,21 @@ describe("Dispatcher", () => {
               ...firstEvent,
               redisMetadata: {
                 ...firstEvent.redisMetadata,
-                transactionId: firstTransactionId
+                transactionId: firstTransaction.redisMetadata.transactionId
               }
             }),
             channel.publish({
               ...secondEvent,
               redisMetadata: {
                 ...secondEvent.redisMetadata,
-                transactionId: secondTransactionId
+                transactionId: secondTransaction.redisMetadata.transactionId
               }
             }),
             channel.publish({
               ...thirdEvent,
               redisMetadata: {
                 ...thirdEvent.redisMetadata,
-                transactionId: thirdTransactionId
+                transactionId: thirdTransaction.redisMetadata.transactionId
               }
             })
           ]);

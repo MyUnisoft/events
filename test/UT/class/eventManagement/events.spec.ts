@@ -350,6 +350,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: {
+          incomerName: publisher.name,
           origin: expect.any(String),
           prefix: publisher.prefix,
           published: false,
@@ -517,6 +518,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenNthCalledWith(1, {
         ...event,
         redisMetadata: {
+          incomerName: publisher.name,
           origin: expect.any(String),
           prefix: publisher.prefix,
           published: false,

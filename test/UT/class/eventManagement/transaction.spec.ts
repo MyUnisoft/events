@@ -5,9 +5,9 @@ import {
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import { PartialTransaction, TransactionStore } from "../../../../src/class/store/transaction.class";
+import { PartialTransaction, Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
 
-let transactionStore: TransactionStore;
+let transactionStore: TransactionStore<"dispatcher">;
 
 beforeAll(async() => {
   const redis = await initRedis({
@@ -24,7 +24,7 @@ afterAll(async() => {
 
 describe("Transaction options", () => {
   beforeAll(async() => {
-    transactionStore = new TransactionStore({
+    transactionStore = new TransactionStore<"dispatcher">({
       instance: "dispatcher"
     });
   });
@@ -34,10 +34,10 @@ describe("Transaction options", () => {
   });
 
   describe("deleteTransaction", () => {
-    let transactionId: string;
+    let transaction: Transaction<"dispatcher">;
 
     beforeAll(async() => {
-      const transaction: PartialTransaction<"dispatcher"> = {
+      const partialTransaction: PartialTransaction<"dispatcher"> = {
         name: "ping",
         data: null,
         redisMetadata: {
@@ -45,18 +45,19 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
-          resolved: false
-        },
+          resolved: false,
+          incomerName: "foo"
+        }
       };
 
-      transactionId = await transactionStore.setTransaction(transaction);
+      transaction = await transactionStore.setTransaction(partialTransaction);
     });
 
 
     test("calling deleteTransaction, it should delete the transaction & return null", async() => {
-      await transactionStore.deleteTransaction(transactionId);
+      await transactionStore.deleteTransaction(transaction.redisMetadata.transactionId);
 
-      const result = await transactionStore.getTransactionById(transactionId);
+      const result = await transactionStore.getTransactionById(transaction.redisMetadata.transactionId);
 
       expect(result).toBeNull();
     });
@@ -64,7 +65,7 @@ describe("Transaction options", () => {
 
   describe("setTransaction", () => {
     test("calling setTransaction, it should add a new transaction to the transaction tree", async() => {
-      const transaction: PartialTransaction<"dispatcher"> = {
+      const partialTransaction: PartialTransaction<"dispatcher"> = {
         name: "ping",
         data: null,
         redisMetadata: {
@@ -72,22 +73,23 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
-          resolved: false
+          resolved: false,
+          incomerName: "foo"
         },
       };
 
-      const transactionId = await transactionStore.setTransaction(transaction);
-      await transactionStore.deleteTransaction(transactionId);
+      const transaction = await transactionStore.setTransaction(partialTransaction);
+      await transactionStore.deleteTransaction(transaction.redisMetadata.transactionId);
 
-      expect(transactionId).toBeDefined();
+      expect(transaction).toBeDefined();
     });
   });
 
   describe("getTransactionById", () => {
-    let transactionId: string;
+    let transaction: Transaction<"dispatcher">;
 
     beforeAll(async() => {
-      const transaction: PartialTransaction<"dispatcher"> = {
+      const partialTransaction: PartialTransaction<"dispatcher"> = {
         name: "ping",
         data: null,
         redisMetadata: {
@@ -95,19 +97,20 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
-          resolved: false
+          resolved: false,
+          incomerName: "foo"
         },
       };
 
-      transactionId = await transactionStore.setTransaction(transaction);
+      transaction = await transactionStore.setTransaction(partialTransaction);
     });
 
     afterAll(async() => {
-      await transactionStore.deleteTransaction(transactionId);
+      await transactionStore.deleteTransaction(transaction.redisMetadata.transactionId);
     });
 
     test("calling getTransactionById, it should return the according transaction", async() => {
-      const finalTransaction = await transactionStore.getTransactionById(transactionId);
+      const finalTransaction = await transactionStore.getTransactionById(transaction.redisMetadata.transactionId);
 
       expect(finalTransaction).toBeDefined();
     });
@@ -123,7 +126,8 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
-          resolved: false
+          resolved: false,
+          incomerName: "foo"
         },
       };
 
