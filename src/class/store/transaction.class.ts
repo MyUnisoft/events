@@ -140,7 +140,7 @@ export class TransactionStore<
     return mappedTransactions;
   }
 
-  async setTransaction(transaction: PartialTransaction<T>): Promise<string> {
+  async setTransaction(transaction: PartialTransaction<T>): Promise<Transaction<T>> {
     const transactionId = randomUUID();
 
     const transactionKey = `${this.key}-${transactionId}`;
@@ -156,7 +156,7 @@ export class TransactionStore<
 
     this.setValue({ key: transactionKey, value: formattedTransaction });
 
-    return transactionId;
+    return formattedTransaction;
   }
 
   async updateTransaction(transactionId: string, transaction: Transaction<T>): Promise<void> {
