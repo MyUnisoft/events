@@ -18,6 +18,7 @@ import {
   channels
 } from "../../utils/config";
 import {
+  PartialTransaction,
   Transaction,
   Transactions,
   TransactionStore
@@ -402,11 +403,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           prefix: incomer.prefix
         });
 
-      const event: DispatcherPingMessage = {
+      const event: Omit<DispatcherPingMessage, "redisMetadata"> & {
+        redisMetadata: Omit<DispatcherPingMessage["redisMetadata"], "transactionId">
+      } = {
         name: "ping",
         data: null,
         redisMetadata: {
           origin: this.privateUUID,
+          incomerName: "dispatcher",
           to: uuid
         }
       };
@@ -531,7 +535,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const concernedStore = options.concernedStore ?? this.dispatcherTransactionStore;
 
-    const transactionId = await concernedStore.setTransaction({
+    const transaction = await concernedStore.setTransaction({
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
@@ -546,7 +550,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       redisMetadata: {
         ...formattedEvent.redisMetadata,
         eventTransactionId: relatedTransaction,
-        transactionId
+        transactionId: transaction.redisMetadata.transactionId
       }
     });
   }
@@ -581,17 +585,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       if (incomerTransaction.redisMetadata.mainTransaction) {
         if (incomerTransaction.name === "register") {
-          const relatedDispatcherTransactionId = Object.keys(dispatcherTransactions)
+          const approvementRelatedTransaction = Object.keys(dispatcherTransactions)
             .find(
               (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].redisMetadata.relatedTransaction ===
                 incomerTransactionId
             );
 
-          if (relatedDispatcherTransactionId) {
-            await this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId);
-          }
 
-          await incomerTransactionStore.deleteTransaction(incomerTransactionId);
+          await Promise.all([
+            typeof approvementRelatedTransaction === "undefined" ? () => void 0 :
+              this.dispatcherTransactionStore.deleteTransaction(approvementRelatedTransaction),
+            incomerTransactionStore.deleteTransaction(incomerTransactionId)
+          ]);
 
           continue;
         }
@@ -609,8 +614,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               ...incomerTransaction
             })
           ]);
-
-          // MUST ADD INCOMER NAME SO WE CAN MATCH UP LATER WHEN THE TRANSACTION CAN BE DISPATCH AGAIN
 
           continue;
         }
@@ -638,12 +641,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       if (incomerTransaction.redisMetadata.relatedTransaction) {
         const concernedRelatedTransactionIncomer = [...incomers].find(
-          (incomer) => incomer.eventsSubscribe.find(
+          (incomer) => incomer.name === incomerTransaction.redisMetadata.incomerName && incomer.eventsSubscribe.find(
             (subscribedEvent) => subscribedEvent.name === incomerTransaction.name
           )
         );
 
-        if (!concernedRelatedTransactionIncomer || incomerTransaction.redisMetadata.resolved) {
+        if (!concernedRelatedTransactionIncomer) {
           await Promise.all([
             incomerTransactionStore.deleteTransaction(incomerTransactionId),
             this.backupIncomerTransactionStore.setTransaction({
@@ -689,11 +692,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         continue;
       }
 
-      this.logger.warn(this.standardLogFn(incomerTransaction as T)("Redistributed injected event to an Incomer"));
+      this.logger.warn(this.standardLogFn(incomerTransaction as any)("Redistributed injected event to an Incomer"));
     }
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
-      if (dispatcherTransaction.redisMetadata.to === incomerUUID) {
+      if (dispatcherTransaction.redisMetadata.to === incomerToRemove.providedUUID) {
         if (dispatcherTransaction.name === "ping" || dispatcherTransaction.name === "approvement") {
           await this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
 
@@ -702,7 +705,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
         if (dispatcherTransaction.redisMetadata.relatedTransaction) {
           const concernedIncomer = [...incomers].find(
-            (incomer) => incomer.eventsSubscribe.find(
+            (incomer) => dispatcherTransaction.redisMetadata.incomerName === incomer.name && incomer.eventsSubscribe.find(
               (eventSubscribe) => eventSubscribe.name === dispatcherTransaction.name
             )
           );
@@ -752,26 +755,28 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             }),
             this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
           ]);
-        }
 
-        // this.logger.warn(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
-        //   ...dispatcherTransaction.redisMetadata,
-        //   origin: this.privateUUID,
-        //   to: concernedIncomer.providedUUID
-        // } } as unknown as T)("Redistributed unresolved injected event to an Incomer"));
+          this.logger.warn(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
+            ...dispatcherTransaction.redisMetadata,
+            origin: this.privateUUID,
+            to: concernedIncomer.providedUUID
+          } } as unknown as T)("Redistributed unresolved injected event to an Incomer"));
+        }
       }
     }
   }
 
-  private async checkForDistributableIncomerTransactions(backedUpIncomerTransactions: Transactions<"incomer">) {
+  private async checkForDistributableIncomerTransactions(
+    backedUpIncomerTransactions: Transactions<"incomer">,
+    backedUpDispatcherTransactions: Transactions<"dispatcher">,
+    incomers: Set<RegisteredIncomer>
+  ) {
     const toResolve = [];
-
-    const incomers = await this.incomerStore.getIncomers();
 
     for (const [backedUpTransactionId, backedUpTransaction] of backedUpIncomerTransactions.entries()) {
       if (backedUpTransaction.redisMetadata.mainTransaction) {
         const concernedIncomer = [...incomers].find(
-          (incomer) => incomer.eventsCast.find(
+          (incomer) => incomer.name === backedUpTransaction.redisMetadata.incomerName && incomer.eventsCast.find(
             (castedEvent) => castedEvent === backedUpTransaction.name
           )
         );
@@ -795,16 +800,27 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           }),
           this.backupIncomerTransactionStore.deleteTransaction(backedUpTransactionId)
         );
+
+        continue;
       }
 
-      if (backedUpTransaction.redisMetadata.relatedTransaction && !backedUpTransaction.redisMetadata.resolved) {
+      if (backedUpTransaction.redisMetadata.relatedTransaction) {
         const concernedIncomer = [...incomers].find(
-          (incomer) => incomer.eventsSubscribe.find(
+          (incomer) => incomer.name === backedUpTransaction.redisMetadata.incomerName && incomer.eventsSubscribe.find(
             (subscribedEvent) => subscribedEvent.name === backedUpTransaction.name
           )
         );
 
         if (!concernedIncomer) {
+          continue;
+        }
+
+        const relatedDispatcherTransactionId = [...backedUpDispatcherTransactions.keys()]
+          .find((dispatcherTransactionId) => dispatcherTransactionId === backedUpTransaction.redisMetadata.relatedTransaction);
+
+        if (!relatedDispatcherTransactionId) {
+          this.logger.warn("Okay");
+
           continue;
         }
 
@@ -837,62 +853,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               }
             }
           }),
-          this.backupIncomerTransactionStore.deleteTransaction(backedUpTransactionId)
+          this.backupIncomerTransactionStore.deleteTransaction(backedUpTransactionId),
+          this.backupDispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId)
         ]);
       }
-    }
-
-    await Promise.all(toResolve);
-  }
-
-  private async checkForDistributableDispatcherTransactions(
-    backedUpDispatcherTransactions: Transactions<"dispatcher">,
-    incomers: Set<RegisteredIncomer>
-  ) {
-    const toResolve = [];
-    for (const [backedUpDispatcherTransactionId, backedUpDispatcherTransaction] of backedUpDispatcherTransactions.entries()) {
-      const concernedIncomer = [...incomers].find(
-        (incomer) => incomer.eventsSubscribe.find(
-          (eventSubscribe) => eventSubscribe.name === backedUpDispatcherTransaction.name
-        )
-      );
-
-      if (!concernedIncomer) {
-        // Edge case when dispatcher disconnect, the one that take relay, must deal with older transactions
-        continue;
-      }
-
-      const { providedUUID, prefix } = concernedIncomer;
-
-      let concernedIncomerChannel = this.incomerChannels.get(concernedIncomer.providedUUID);
-
-      if (!concernedIncomerChannel) {
-        concernedIncomerChannel = new Channel({
-          name: providedUUID,
-          prefix
-        });
-
-        this.incomerChannels.set(providedUUID, concernedIncomerChannel);
-      }
-
-      toResolve.push(Promise.all([
-        this.publishEvent({
-          concernedChannel: concernedIncomerChannel,
-          transactionMeta: {
-            mainTransaction: backedUpDispatcherTransaction.redisMetadata.mainTransaction,
-            relatedTransaction: backedUpDispatcherTransaction.redisMetadata.relatedTransaction,
-            resolved: backedUpDispatcherTransaction.redisMetadata.resolved
-          },
-          formattedEvent: {
-            ...backedUpDispatcherTransaction,
-            redisMetadata: {
-              origin: this.privateUUID,
-              to: concernedIncomer.providedUUID
-            }
-          }
-        }),
-        this.backupDispatcherTransactionStore.deleteTransaction(backedUpDispatcherTransactionId)
-      ]));
     }
 
     await Promise.all(toResolve);
@@ -906,8 +870,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const incomers = await this.incomerStore.getIncomers();
 
-    await this.checkForDistributableIncomerTransactions(backedUpIncomerTransactions);
-    await this.checkForDistributableDispatcherTransactions(backedUpDispatcherTransactions, incomers);
+    await this.checkForDistributableIncomerTransactions(backedUpIncomerTransactions, backedUpDispatcherTransactions, incomers);
 
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();
@@ -1096,7 +1059,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     if (!redisMetadataValidationFn(redisMetadata)) {
-      throw new Error("Malformed redis metadata");
+      throw new Error(
+        // eslint-disable-next-line max-len
+        `Malformed redis metadata: [${[...redisMetadataValidationFn.errors].map((error) => `${error.instancePath}: ${error.message}`).join("|")}]`
+      );
     }
 
     if (this.validationCbFn && isIncomerChannelMessage(message) && event.name !== "ping") {
@@ -1106,7 +1072,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     if (!eventValidations(event)) {
-      throw new Error("Malformed message");
+      throw new Error(
+        `Malformed event: [${[...eventValidations.errors].map((error) => `${error.instancePath}: ${error.message}`).join("|")}]`
+      );
     }
   }
 
@@ -1210,7 +1178,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const relatedTransaction = await senderTransactionStore.getTransactionById(transactionId);
 
     if (!relatedTransaction) {
-      this.logger.warn(this.standardLogFn(logData)("Couldn't find the related main transaction"));
+      throw new Error(`${this.standardLogFn(logData)} Couldn't find the related main transaction for: ${transactionId}`);
     }
 
     const incomers = await this.incomerStore.getIncomers();
@@ -1242,7 +1210,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               relatedTransaction: transactionId,
               resolved: false
             }
-          } as Transaction<"dispatcher">)
+          } as unknown as PartialTransaction<"dispatcher">)
         ]);
 
         this.logger.warn(this.standardLogFn(logData)("Backed-up event"));
@@ -1374,13 +1342,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
 
-    const event: DispatcherRegistrationMessage = {
+    const event: Omit<DispatcherRegistrationMessage, "redisMetadata"> & {
+      redisMetadata: Omit<DispatcherRegistrationMessage["redisMetadata"], "transactionId">
+    } = {
       name: "approvement",
       data: {
         uuid: providedUUID
       },
       redisMetadata: {
         origin: this.privateUUID,
+        incomerName: "dispatcher",
         to: redisMetadata.origin
       }
     };

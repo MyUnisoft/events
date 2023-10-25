@@ -201,6 +201,7 @@ export class Incomer <
       },
       redisMetadata: {
         origin: this.baseUUID,
+        incomerName: this.name,
         prefix: this.prefix
       }
     };
@@ -208,7 +209,7 @@ export class Incomer <
     this.logger.info("Registering as a new incomer on dispatcher");
 
     try {
-      this.registerTransactionId = await this.incomerTransactionStore.setTransaction({
+      const transaction = await this.incomerTransactionStore.setTransaction({
         ...event,
         redisMetadata: {
           ...event.redisMetadata,
@@ -217,6 +218,8 @@ export class Incomer <
           resolved: false
         }
       });
+
+      this.registerTransactionId = transaction.redisMetadata.transactionId;
 
       await this.dispatcherChannel.publish({
         ...event,
@@ -317,12 +320,15 @@ export class Incomer <
   public async publish(
     event: T
   ) {
-    const formattedEvent: EventMessage<T> = {
+    const formattedEvent = {
       ...event,
       redisMetadata: {
         origin: this.providedUUID,
+        incomerName: this.name,
         prefix: this.prefix
       }
+    } as unknown as Omit<EventMessage<T>, "redisMetadata"> & {
+      redisMetadata: Omit<EventMessage<T>["redisMetadata"], "transactionId">
     };
 
     if (this.eventsValidationFn) {
@@ -335,7 +341,7 @@ export class Incomer <
       this.validationCbFn(event);
     }
 
-    const transactionId = await this.incomerTransactionStore.setTransaction({
+    const transaction = await this.incomerTransactionStore.setTransaction({
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
@@ -344,15 +350,15 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    });
+    } as unknown as PartialTransaction<"incomer">);
 
     const finalEvent = {
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
-        transactionId
+        transactionId: transaction.redisMetadata.transactionId
       }
-    } as IncomerChannelMessages<T>["IncomerMessages"];
+    } as unknown as IncomerChannelMessages<T>["IncomerMessages"];
 
     if (!this.dispatcherIsAlive) {
       this.logger.info(this.standardLogFn({
@@ -508,54 +514,9 @@ export class Incomer <
 
         this.logger.info(logData, "Resolved Ping event");
       })
-      .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => {
-        const { message } = res;
-        const { redisMetadata, ...event } = message;
-        const { eventTransactionId } = redisMetadata;
-
-        const logData = {
-          channel,
-          ...message
-        };
-
-        if (this.eventsValidationFn) {
-          const eventValidationFn = this.eventsValidationFn.get(event.name);
-
-          if (!eventValidationFn) {
-            throw new Error(`Unknown Event ${event.name}`);
-          }
-
-
-          this.validationCbFn(event as any);
-        }
-
-        const transaction: PartialTransaction<"incomer"> = {
-          ...message,
-          redisMetadata: {
-            ...redisMetadata,
-            origin: redisMetadata.to,
-            mainTransaction: false,
-            relatedTransaction: redisMetadata.transactionId,
-            resolved: false
-          }
-        };
-
-        const transactionId = await this.incomerTransactionStore.setTransaction(transaction);
-        const formattedTransaction = await this.incomerTransactionStore.getTransactionById(transactionId);
-
-        await Promise.all([
-          this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
-          this.incomerTransactionStore.updateTransaction(transactionId, {
-            ...formattedTransaction,
-            redisMetadata: {
-              ...formattedTransaction.redisMetadata,
-              resolved: true
-            }
-          } as Transaction<"incomer">)
-        ]);
-
-        this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
-      })
+      .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
+        ...res, channel
+      }))
       .exhaustive()
       .catch((error) => {
         this.logger.error({
@@ -564,6 +525,53 @@ export class Incomer <
           message
         });
       });
+  }
+
+  private async customEvent(opts: { name: string, channel: string, message: DistributedEventMessage<T> }) {
+    const { message, channel } = opts;
+    const { redisMetadata, ...event } = message;
+    const { eventTransactionId } = redisMetadata;
+
+    const logData = {
+      channel,
+      ...message
+    };
+
+    if (this.eventsValidationFn) {
+      const eventValidationFn = this.eventsValidationFn.get(event.name);
+
+      if (!eventValidationFn) {
+        throw new Error(`Unknown Event ${event.name}`);
+      }
+
+      this.validationCbFn(event as unknown as T);
+    }
+
+    const transaction: PartialTransaction<"incomer"> = {
+      ...message,
+      redisMetadata: {
+        ...redisMetadata,
+        origin: redisMetadata.to,
+        mainTransaction: false,
+        relatedTransaction: redisMetadata.transactionId,
+        resolved: false
+      }
+    };
+
+    const formattedTransaction = await this.incomerTransactionStore.setTransaction(transaction);
+
+    await Promise.all([
+      this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
+      this.incomerTransactionStore.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+        ...formattedTransaction,
+        redisMetadata: {
+          ...formattedTransaction.redisMetadata,
+          resolved: true
+        }
+      } as Transaction<"incomer">)
+    ]);
+
+    this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
   }
 
   private async handleApprovement(message: DispatcherRegistrationMessage) {
