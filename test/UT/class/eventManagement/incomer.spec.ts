@@ -93,7 +93,7 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   test(`It should set the dispatcher state at false when there is not Dispatcher sending ping`, async() =>
   {
-    dispatcher.close();
+    await dispatcher.close();
     await dispatcherIncomer.close();
 
     await timers.setTimeout(5_000);
@@ -137,7 +137,7 @@ describe("Init Incomer without Dispatcher alive", () => {
     expect(secondDispatcherIncomer.dispatcherIsAlive).toBe(true);
     expect(incomer.dispatcherIsAlive).toBe(true);
 
-    secondDispatcher.close();
+    await secondDispatcher.close();
     await secondDispatcherIncomer.close();
   });
 

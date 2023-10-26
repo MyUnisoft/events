@@ -51,7 +51,7 @@ describe("Registration", () => {
   });
 
   afterAll(async() => {
-    dispatcher.close();
+    await dispatcher.close();
     await closeAllRedis();
   });
 

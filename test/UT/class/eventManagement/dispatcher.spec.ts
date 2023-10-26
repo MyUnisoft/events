@@ -75,7 +75,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
-      dispatcher.close();
+      await dispatcher.close();
       await closeRedis("subscriber");
     });
 
@@ -379,7 +379,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
-      dispatcher.close();
+      await dispatcher.close();
       await closeRedis("subscriber");
     });
 
@@ -624,7 +624,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
-      dispatcher.close();
+      await dispatcher.close();
       await closeRedis("subscriber");
     });
 
@@ -1068,7 +1068,7 @@ describe("Dispatcher", () => {
     });
 
     afterAll(async() => {
-      dispatcher.close();
+      await dispatcher.close();
       await closeRedis("subscriber");
     });
 

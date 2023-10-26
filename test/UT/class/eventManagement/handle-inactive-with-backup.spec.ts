@@ -26,9 +26,6 @@ import { TransactionStore } from "../../../../src/class/store/transaction.class"
 const dispatcherLogger = Logger.pino({
   level: "debug"
 });
-const incomerLogger = Logger.pino({
-  level: "debug"
-});
 const mockedEventComeBackHandler = jest.fn();
 
 describe("Publishing/exploiting a custom event & inactive incomer", () => {
@@ -47,10 +44,10 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
     dispatcher = new Dispatcher({
       logger: dispatcherLogger,
-      pingInterval: 10_000,
-      checkLastActivityInterval: 2_600,
-      checkTransactionInterval: 10_000,
-      idleTime: 3_000,
+      pingInterval: 2_000,
+      checkLastActivityInterval: 2_000,
+      checkTransactionInterval: 5_000,
+      idleTime: 5_000,
       eventsValidation: {
         eventsValidationFn,
         validationCbFn: validate
@@ -63,7 +60,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   });
 
   afterAll(async() => {
-    dispatcher.close();
+    await dispatcher.close();
     await closeAllRedis();
   });
 
@@ -73,14 +70,11 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   });
 
   describe("Inactive incomer with back-up available", () => {
-    let publisher: Incomer;
     let concernedIncomer: Incomer;
     let secondConcernedIncomer: Incomer;
-    let publisherTransactionStore: TransactionStore<"incomer">;
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
-    let mockedPublisherSetTransaction;
-    let eventHasBeenDeal = false;
+    let handlerTransaction;
 
     // Constants
     const event: EventOptions<"accountingFolder"> = {
@@ -105,27 +99,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         const { data } = message;
 
         if (handleApprovementIndex === 0) {
-          Reflect.set(publisher, "incomerChannelName", data.uuid);
-          Reflect.set(publisher, "providedUUID", data.uuid);
-
-          publisher["subscriber"]!.subscribe(data.uuid);
-
-          Reflect.set(publisher, "incomerChannel", new Channel({
-            name: data.uuid
-          }));
-
-          publisherTransactionStore = new TransactionStore({
-            prefix: data.uuid,
-            instance: "incomer"
-          });
-
-          mockedPublisherSetTransaction = jest.spyOn(publisherTransactionStore, "setTransaction");
-
-          Reflect.set(publisher, "incomerTransactionStore", publisherTransactionStore);
-
-          publisher.emit("registered");
-        }
-        else if (handleApprovementIndex === 1) {
           Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
           Reflect.set(concernedIncomer, "providedUUID", data.uuid);
 
@@ -142,7 +115,10 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(concernedIncomer, "incomerTransactionStore", firstIncomerTransactionStore);
 
+          concernedIncomer["lastPingDate"] = Date.now();
           concernedIncomer.emit("registered");
+
+          handleApprovementIndex++;
         }
         else {
           Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
@@ -161,47 +137,15 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(secondConcernedIncomer, "incomerTransactionStore", secondIncomerTransactionStore);
 
+          secondConcernedIncomer["lastPingDate"] = Date.now();
           secondConcernedIncomer.emit("registered");
         }
-
-        handleApprovementIndex++;
-      });
-
-    let handleIncomerMessagesIndex = 0;
-    jest.spyOn(Incomer.prototype as any, "handleIncomerMessages")
-      .mockImplementation(async(channel: any, message: any) => {
-        if (message.name === "ping") {
-          return;
-        }
-
-        if (handleIncomerMessagesIndex === 0) {
-          eventHasBeenDeal = false;
-        }
-        else {
-          eventHasBeenDeal = true;
-        }
-
-        handleIncomerMessagesIndex++;
-
-        return;
       });
 
     beforeAll(async() => {
-      publisher = new Incomer({
-        name: randomUUID(),
-        eventsCast: ["accountingFolder"],
-        eventsValidation: {
-          eventsValidationFn,
-          validationCbFn: validate
-        },
-        eventsSubscribe: [],
-        eventCallback: mockedEventComeBackHandler
-      });
-
       concernedIncomer = new Incomer({
-        name: randomUUID(),
-        logger: incomerLogger,
-        eventsCast: [],
+        name: "foo",
+        eventsCast: ["accountingFolder"],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventsValidation: {
           eventsValidationFn,
@@ -209,44 +153,114 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         },
         eventCallback: mockedEventComeBackHandler
       });
+
+      jest.spyOn(concernedIncomer as any, "customEvent")
+        .mockImplementation(async(opts: any) => {
+          handlerTransaction = await concernedIncomer["incomerTransactionStore"].setTransaction({
+            ...event,
+            redisMetadata: {
+              ...opts.message.redisMetadata,
+              incomerName: concernedIncomer.name,
+              origin: opts.message.redisMetadata.to,
+              mainTransaction: false,
+              relatedTransaction: opts.message.redisMetadata.transactionId,
+              resolved: false
+            }
+          });
+        });
 
       secondConcernedIncomer = new Incomer({
-        name: randomUUID(),
-        eventsCast: [],
+        name: "foo",
+        eventsCast: ["accountingFolder"],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
       });
 
-      await publisher.initialize();
       await concernedIncomer.initialize();
 
-      await timers.setTimeout(1_600);
+      await concernedIncomer.publish(event);
 
-      await publisher.publish(event);
-
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(1_000);
     });
 
-    test("event must have been share two times & dealed only once by the second incomer when the first one become inactive", async() => {
-      expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
-        ...event,
-        redisMetadata: {
-          prefix: publisher.prefix,
-          origin: expect.any(String),
-          published: false,
-          mainTransaction: true,
-          resolved: false,
-          relatedTransaction: null
-        }
-      });
+    test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
+      expect(handlerTransaction).toBeDefined();
 
-      expect(eventHasBeenDeal).toBe(false);
+      await concernedIncomer.close();
+
+      await timers.setTimeout(1_000);
 
       await secondConcernedIncomer.initialize();
 
+      await timers.setTimeout(5_000);
+
+      let incomerTransactions = await secondConcernedIncomer["incomerTransactionStore"].getTransactions();
+
+      expect([...incomerTransactions.values()]).toEqual(expect.arrayContaining([
+        {
+          ...event,
+          redisMetadata: {
+            origin: expect.anything(),
+            transactionId: expect.anything(),
+            incomerName: concernedIncomer.name,
+            mainTransaction: true,
+            published: true,
+            relatedTransaction: null,
+            resolved: expect.anything()
+          },
+          aliveSince: expect.anything()
+        },
+        {
+          ...event,
+          redisMetadata: {
+            origin: expect.anything(),
+            to: expect.anything(),
+            eventTransactionId: expect.anything(),
+            transactionId: expect.anything(),
+            incomerName: concernedIncomer.name,
+            mainTransaction: false,
+            relatedTransaction: expect.anything(),
+            resolved: expect.anything()
+          },
+          aliveSince: expect.anything()
+        }
+      ]));
+
       await timers.setTimeout(10_000);
 
-      expect(eventHasBeenDeal).toBe(true);
+      incomerTransactions = await secondConcernedIncomer["incomerTransactionStore"].getTransactions();
+
+      expect([...incomerTransactions.values()]).not.toEqual(expect.arrayContaining([
+        {
+          ...event,
+          redisMetadata: {
+            origin: expect.anything(),
+            transactionId: expect.anything(),
+            incomerName: concernedIncomer.name,
+            mainTransaction: true,
+            published: true,
+            relatedTransaction: null,
+            resolved: false
+          },
+          aliveSince: expect.anything()
+        },
+        {
+          ...event,
+          redisMetadata: {
+            origin: expect.anything(),
+            to: expect.anything(),
+            eventTransactionId: expect.anything(),
+            transactionId: expect.anything(),
+            incomerName: concernedIncomer.name,
+            mainTransaction: false,
+            relatedTransaction: expect.anything(),
+            resolved: false
+          },
+          aliveSince: expect.anything()
+        }
+      ]));
+
+      await secondConcernedIncomer.close();
     });
   });
 });
