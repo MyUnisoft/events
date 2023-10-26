@@ -315,6 +315,8 @@ export class Incomer <
       clearTimeout(this.checkDispatcherStateTimeout);
       this.checkDispatcherStateTimeout = undefined;
     }
+
+    await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
   }
 
   public async publish(
@@ -505,7 +507,7 @@ export class Incomer <
           ...message,
           redisMetadata: {
             ...message.redisMetadata,
-            origin: message.redisMetadata.to,
+            incomerName: this.name,
             mainTransaction: false,
             relatedTransaction: message.redisMetadata.transactionId,
             resolved: true
@@ -551,7 +553,7 @@ export class Incomer <
       ...message,
       redisMetadata: {
         ...redisMetadata,
-        origin: redisMetadata.to,
+        incomerName: this.name,
         mainTransaction: false,
         relatedTransaction: redisMetadata.transactionId,
         resolved: false
