@@ -18,7 +18,7 @@ const dispatcher = new Dispatcher();
 
 await dispatcher.initialize();
 
-dispatcher.close();
+await dispatcher.close();
 ```
 
 ## Types
