@@ -96,13 +96,13 @@ export class Incomer <
 > extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
-  readonly isDispatcherInstance?: boolean;
   readonly eventCallback: (message: CallBackEventMessage<T>) => void;
 
   public dispatcherIsAlive = false;
   public baseUUID = randomUUID();
 
   private prefixedName: string;
+  private isDispatcherInstance?: boolean;
   private registerTransactionId: string | null;
   private eventsCast: EventCast[];
   private eventsSubscribe: EventSubscribe[];
@@ -176,6 +176,7 @@ export class Incomer <
   private async checkDispatcherState() {
     if (this.lastPingDate + this.maxPingInterval < Date.now()) {
       this.dispatcherIsAlive = false;
+      this.isDispatcherInstance = false;
 
       return;
     }
@@ -268,7 +269,7 @@ export class Incomer <
 
         this.dispatcherIsAlive = true;
         this.checkRegistrationInterval = undefined;
-        this.logger.info("Incomer registered");
+        this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
       }, this.publishInterval * 2).unref();
 
       return;
@@ -283,7 +284,7 @@ export class Incomer <
     }, this.maxPingInterval).unref();
 
     this.dispatcherIsAlive = true;
-    this.logger.info("Incomer registered");
+    this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
   }
 
   public async initialize() {
@@ -507,6 +508,7 @@ export class Incomer <
           ...message,
           redisMetadata: {
             ...message.redisMetadata,
+            origin: message.redisMetadata.to,
             incomerName: this.name,
             mainTransaction: false,
             relatedTransaction: message.redisMetadata.transactionId,

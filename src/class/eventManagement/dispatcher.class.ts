@@ -19,7 +19,6 @@ import {
 } from "../../utils/config";
 import {
   PartialTransaction,
-  Transaction,
   Transactions,
   TransactionStore
 } from "../store/transaction.class";
@@ -320,7 +319,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.isWorking = true;
 
-    await this.ping();
+    try {
+      await this.ping();
+    }
+    catch (error) {
+      this.logger.error(error);
+    }
   }
 
   public async close() {
@@ -344,6 +348,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     await this.subscriber.unsubscribe(this.dispatcherChannelName, ...this.incomerChannels.keys());
+
+    this.isWorking = false;
   }
 
   private checkLastActivityIntervalFn() {
@@ -356,7 +362,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         await this.checkLastActivity();
       }
       catch (error) {
-        this.logger.error(error.message);
+        this.logger.error(error);
       }
     }, this.checkLastActivityInterval).unref();
   }
@@ -394,7 +400,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const { providedUUID: uuid } = incomer;
 
       if (incomer.baseUUID === this.selfProvidedUUID) {
-        pingToResolve.push(this.updateIncomerState(incomer.providedUUID));
+        pingToResolve.push(this.updateIncomerState(uuid));
 
         continue;
       }
@@ -459,10 +465,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       await Promise.all(toHandle);
     }
     catch (error) {
-      this.logger.error(
-        { uuids: [...inactiveIncomers.map((incomer) => incomer?.providedUUID)].join(",") },
-        "Failed to remove nonactives incomers"
-      );
+      throw new Error(`
+        ${{ uuids: [...inactiveIncomers.map((incomer) => incomer?.providedUUID)].join(",") }}, Failed to remove nonactives incomers
+      `);
     }
   }
 
@@ -577,17 +582,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     delete incomers[incomerToRemove.providedUUID];
 
-    const mainTransaction = new Map([...incomerTransactions.entries()]
+    const mainTransactions = new Map([...incomerTransactions.entries()]
       .filter(([, transaction]) => transaction.redisMetadata.mainTransaction));
 
-    for (const [transactionId, transaction] of mainTransaction.entries()) {
-      if (transaction.name === "register") {
+    for (const [transactionId, mainTransaction] of mainTransactions.entries()) {
+      if (mainTransaction.name === "register") {
         const approvementRelatedTransaction = Object.keys(dispatcherTransactions)
           .find(
             (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].redisMetadata.relatedTransaction ===
             transactionId
           );
-
 
         await Promise.all([
           typeof approvementRelatedTransaction === "undefined" ? () => void 0 :
@@ -600,15 +604,19 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       const concernedMainTransactionIncomer = [...incomers].find(
         (incomer) => incomer.name === incomerToRemove.name && incomer.eventsCast.find(
-          (eventCast) => eventCast === transaction.name
+          (eventCast) => eventCast === mainTransaction.name
         )
       );
 
       if (!concernedMainTransactionIncomer) {
-        await Promise.all([
+        const [, newlyTransaction] = await Promise.all([
           incomerTransactionStore.deleteTransaction(transactionId),
-          this.backupIncomerTransactionStore.setTransaction(transaction)
+          this.backupIncomerTransactionStore.setTransaction({
+            ...mainTransaction
+          })
         ]);
+
+        this.logger.warn(this.standardLogFn(newlyTransaction as any)("Main transaction has been backup"));
 
         continue;
       }
@@ -622,9 +630,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       const [newlyIncomerTransaction] = await Promise.all([
         concernedIncomerStore.setTransaction({
-          ...transaction,
+          ...mainTransaction,
           redisMetadata: {
-            ...transaction.redisMetadata,
+            ...mainTransaction.redisMetadata,
             origin: providedUUID
           }
         }),
@@ -634,7 +642,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const relatedDispatcherTransactions = [...dispatcherTransactions.values()]
         .filter(
           (dispatcherTransaction) => dispatcherTransaction.redisMetadata.relatedTransaction ===
-          transaction.redisMetadata.transactionId
+          mainTransaction.redisMetadata.transactionId
         );
 
       await Promise.all(relatedDispatcherTransactions.map(
@@ -652,7 +660,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         )
       ));
 
-      this.logger.warn(this.standardLogFn(newlyIncomerTransaction as any)("Redistributed main event to an Incomer"));
+      this.logger.warn(this.standardLogFn(newlyIncomerTransaction as any)("Main transaction redistributed  to an Incomer"));
     }
 
     dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
@@ -680,12 +688,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         );
 
         if (!concernedRelatedTransactionIncomer) {
-          await Promise.all([
+          const [, newlyTransaction] = await Promise.all([
             incomerTransactionStore.deleteTransaction(incomerTransactionId),
             this.backupIncomerTransactionStore.setTransaction({
               ...incomerTransaction
             })
           ]);
+
+          this.logger.warn(this.standardLogFn(newlyTransaction as any)("Spread transaction has been backup"));
 
           continue;
         }
@@ -732,7 +742,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransaction.redisMetadata.transactionId)
         ]);
 
-        this.logger.warn(this.standardLogFn(incomerTransaction as any)("Redistributed injected event to an Incomer"));
+        this.logger.warn(this.standardLogFn(incomerTransaction as any)("Spread transaction redistributed to an Incomer"));
 
         continue;
       }
@@ -821,6 +831,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         } } as unknown as T)("Redistributed unresolved injected event to an Incomer"));
       }
     }
+
+    const foobar = await this.backupIncomerTransactionStore.getTransactions();
   }
 
   private async checkForDistributableTransactions(
@@ -832,7 +844,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     for (const [backedUpTransactionId, backedUpTransaction] of backedUpIncomerTransactions.entries()) {
       if (backedUpTransaction.redisMetadata.mainTransaction) {
-        const concernedIncomer = [...incomers].find(
+        const concernedIncomer = [...incomers.values()].find(
           (incomer) => incomer.name === backedUpTransaction.redisMetadata.incomerName && incomer.eventsCast.find(
             (castedEvent) => castedEvent === backedUpTransaction.name
           )
@@ -989,7 +1001,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       dispatcherTransaction.redisMetadata.resolved = true;
-      incomerStateToUpdate.add(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.origin);
+      incomerStateToUpdate.add(relatedIncomerTransactions.get(relatedIncomerTransactionId).redisMetadata.to);
       toResolve.push(Promise.all([
         relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
         this.dispatcherTransactionStore.updateTransaction(
@@ -1064,22 +1076,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await Promise.all(toResolve);
   }
 
-  private async updateIncomerState(origin: string, isDispatcherInstance = false) {
-    let incomerId = origin;
+  private async updateIncomerState(origin: string) {
     try {
-      if (isDispatcherInstance) {
-        const incomers = await this.incomerStore.getIncomers();
-
-        const { baseUUID } = [...incomers].find((incomer) => incomer.baseUUID === origin);
-
-        incomerId = baseUUID;
-
-        if (!incomerId) {
-          throw new Error(`Couldn't find the related incomer ${origin}`);
-        }
-      }
-
-      await this.incomerStore.updateIncomerState(incomerId);
+      await this.incomerStore.updateIncomerState(origin);
     }
     catch (error) {
       this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
@@ -1098,7 +1097,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           });
         }
         catch (error) {
-          this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
+          this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state while taking relay");
         }
 
         break;
