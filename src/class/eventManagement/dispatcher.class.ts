@@ -888,44 +888,62 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           .find((dispatcherTransactionId) => dispatcherTransactionId === backedUpTransaction.redisMetadata.relatedTransaction);
 
         if (!relatedDispatcherTransactionId) {
-          this.logger.warn("Okay");
+          continue;
+        }
+
+        if (!backedUpTransaction.redisMetadata.resolved) {
+          const { providedUUID, prefix } = concernedIncomer;
+
+          let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+          if (!concernedIncomerChannel) {
+            concernedIncomerChannel = new Channel({
+              name: providedUUID,
+              prefix
+            });
+
+            this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+          }
+
+          toResolve.push([
+            this.publishEvent({
+              concernedChannel: concernedIncomerChannel,
+              transactionMeta: {
+                mainTransaction: backedUpTransaction.redisMetadata.mainTransaction,
+                relatedTransaction: backedUpTransaction.redisMetadata.relatedTransaction,
+                eventTransactionId: null,
+                resolved: backedUpTransaction.redisMetadata.resolved
+              },
+              formattedEvent: {
+                ...backedUpTransaction,
+                redisMetadata: {
+                  origin: this.privateUUID,
+                  to: concernedIncomer.providedUUID
+                }
+              }
+            }),
+            this.backupIncomerTransactionStore.deleteTransaction(backedUpTransactionId),
+            this.backupDispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId)
+          ]);
 
           continue;
         }
 
-        const { providedUUID, prefix } = concernedIncomer;
+        const concernedIncomerStore = new TransactionStore({
+          prefix: `${concernedIncomer.prefix ? `${concernedIncomer.prefix}-` : ""}${concernedIncomer.providedUUID}`,
+          instance: "incomer"
+        });
 
-        let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
-
-        if (!concernedIncomerChannel) {
-          concernedIncomerChannel = new Channel({
-            name: providedUUID,
-            prefix
-          });
-
-          this.incomerChannels.set(providedUUID, concernedIncomerChannel);
-        }
-
-        toResolve.push([
-          this.publishEvent({
-            concernedChannel: concernedIncomerChannel,
-            transactionMeta: {
-              mainTransaction: backedUpTransaction.redisMetadata.mainTransaction,
-              relatedTransaction: backedUpTransaction.redisMetadata.relatedTransaction,
-              eventTransactionId: null,
-              resolved: backedUpTransaction.redisMetadata.resolved
-            },
-            formattedEvent: {
-              ...backedUpTransaction,
-              redisMetadata: {
-                origin: this.privateUUID,
-                to: concernedIncomer.providedUUID
-              }
+        toResolve.push(
+          concernedIncomerStore.setTransaction({
+            ...backedUpTransaction,
+            redisMetadata: {
+              ...backedUpTransaction.redisMetadata,
+              origin: concernedIncomer.providedUUID
             }
           }),
-          this.backupIncomerTransactionStore.deleteTransaction(backedUpTransactionId),
-          this.backupDispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId)
-        ]);
+          this.backupIncomerTransactionStore.deleteTransaction(backedUpTransactionId)
+        );
       }
     }
 
