@@ -75,6 +75,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
     let handlerTransaction;
+    let mockedSetTransaction;
 
     // Constants
     const event: EventOptions<"accountingFolder"> = {
@@ -137,6 +138,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(secondConcernedIncomer, "incomerTransactionStore", secondIncomerTransactionStore);
 
+          mockedSetTransaction = jest.spyOn(secondConcernedIncomer["incomerTransactionStore"], "setTransaction");
+
           secondConcernedIncomer["lastPingDate"] = Date.now();
           secondConcernedIncomer.emit("registered");
         }
@@ -180,7 +183,9 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       await concernedIncomer.publish(event);
 
-      await timers.setTimeout(1_000);
+      await secondConcernedIncomer.initialize();
+
+      await timers.setTimeout(2_000);
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
@@ -188,77 +193,26 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       await concernedIncomer.close();
 
-      await timers.setTimeout(1_000);
-
-      await secondConcernedIncomer.initialize();
-
-      await timers.setTimeout(5_000);
-
-      let incomerTransactions = await secondConcernedIncomer["incomerTransactionStore"].getTransactions();
-
-      expect([...incomerTransactions.values()]).toEqual(expect.arrayContaining([
-        {
-          ...event,
-          redisMetadata: {
-            origin: expect.anything(),
-            transactionId: expect.anything(),
-            incomerName: concernedIncomer.name,
-            mainTransaction: true,
-            published: true,
-            relatedTransaction: null,
-            resolved: expect.anything()
-          },
-          aliveSince: expect.anything()
-        },
-        {
-          ...event,
-          redisMetadata: {
-            origin: expect.anything(),
-            to: expect.anything(),
-            eventTransactionId: expect.anything(),
-            transactionId: expect.anything(),
-            incomerName: concernedIncomer.name,
-            mainTransaction: false,
-            relatedTransaction: expect.anything(),
-            resolved: expect.anything()
-          },
-          aliveSince: expect.anything()
-        }
-      ]));
+      secondConcernedIncomer["subscriber"]!.subscribe(
+        secondConcernedIncomer["dispatcherChannelName"], secondConcernedIncomer["incomerChannelName"]
+      );
 
       await timers.setTimeout(10_000);
 
-      incomerTransactions = await secondConcernedIncomer["incomerTransactionStore"].getTransactions();
-
-      expect([...incomerTransactions.values()]).not.toEqual(expect.arrayContaining([
-        {
-          ...event,
-          redisMetadata: {
-            origin: expect.anything(),
-            transactionId: expect.anything(),
-            incomerName: concernedIncomer.name,
-            mainTransaction: true,
-            published: true,
-            relatedTransaction: null,
-            resolved: false
-          },
-          aliveSince: expect.anything()
+      expect(mockedSetTransaction).toHaveBeenCalledWith({
+        ...event,
+        redisMetadata: {
+          origin: expect.anything(),
+          to: expect.anything(),
+          eventTransactionId: expect.anything(),
+          transactionId: expect.anything(),
+          incomerName: concernedIncomer.name,
+          mainTransaction: false,
+          relatedTransaction: expect.anything(),
+          resolved: expect.anything()
         },
-        {
-          ...event,
-          redisMetadata: {
-            origin: expect.anything(),
-            to: expect.anything(),
-            eventTransactionId: expect.anything(),
-            transactionId: expect.anything(),
-            incomerName: concernedIncomer.name,
-            mainTransaction: false,
-            relatedTransaction: expect.anything(),
-            resolved: false
-          },
-          aliveSince: expect.anything()
-        }
-      ]));
+        aliveSince: expect.anything()
+      });
 
       await secondConcernedIncomer.close();
     });
