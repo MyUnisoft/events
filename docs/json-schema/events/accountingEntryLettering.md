@@ -23,13 +23,13 @@
           "pattern": "^[0-9]+"
         },
         "piece2": {
-          "type": "number"
+          "type": "string"
         },
         "paymentType": {
           "type": "string"
         },
         "piece1": {
-          "type": "number"
+          "type": "string"
         }
       },
       "required": ["id", "piece2", "paymentType"],

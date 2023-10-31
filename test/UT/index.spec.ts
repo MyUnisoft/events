@@ -86,7 +86,21 @@ describe("validate", () => {
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow(`"event": ${event.name} | "operation": ${event.operation}: must have required property 'id'`);
+      .toThrow(`data: [must have required property 'id']`);
+  });
+
+  test("Given a wrong property, it should throw", () => {
+    const event = {
+      name: "connector",
+      operation: "CREATE",
+      data: {
+        id: "foo",
+        code: "bar"
+      }
+    };
+
+    expect(() => MyEvents.validate(event as any))
+      .toThrow(`data: [/id: must match pattern \"^[0-9]+\"]`);
   });
 
   test("Given a wrong metadata, it should throw", () => {
@@ -110,7 +124,7 @@ describe("validate", () => {
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow("metadata: must have required property 'agent'");
+      .toThrow("metadata: [must have required property 'agent']");
   });
 
   test("Given a wrong scope, it should throw", () => {
@@ -135,7 +149,7 @@ describe("validate", () => {
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow("scope: must have required property 'schemaId'");
+      .toThrow("scope: [must have required property 'schemaId']");
   });
 });
 

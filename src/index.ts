@@ -32,23 +32,26 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
 
   const operationValidationFunction = event.get(operation?.toLocaleLowerCase());
   if (!operationValidationFunction(data)) {
-    throw new Error(`"event": ${name} | "operation": ${operation}: ${[...operationValidationFunction.errors]
-      .map((error) => error.message)}`);
+    throw new Error(`data: [${[...operationValidationFunction.errors]
+      .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
   }
 
   if (!metadataValidationFunction(metadata)) {
-    throw new Error(`metadata: ${[...metadataValidationFunction.errors].map((error) => error.message)}`);
+    throw new Error(`metadata: [${[...metadataValidationFunction.errors]
+      .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
   }
 
   if (!scopeValidationFunction(scope)) {
-    throw new Error(`scope: ${[...scopeValidationFunction.errors].map((error) => error.message)}`);
+    throw new Error(`scope: [${[...scopeValidationFunction.errors]
+      .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
   }
 
   if (event.has("scope")) {
     const eventScopeValidationFn = event.get("scope");
 
     if (!eventScopeValidationFn(scope)) {
-      throw new Error(`scope: ${[...eventScopeValidationFn.errors].map((error) => error.message)}`);
+      throw new Error(`scope: [${[...eventScopeValidationFn.errors]
+        .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
     }
   }
 }
