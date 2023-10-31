@@ -1136,7 +1136,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     if (!redisMetadataValidationFn(redisMetadata)) {
       throw new Error(
         `Malformed redis metadata: [${[...redisMetadataValidationFn.errors]
-          .map((error) => `${error.instancePath}: ${error.message}`).join("|")}]`
+          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
       );
     }
 
@@ -1148,7 +1148,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     if (!eventValidations(event)) {
       throw new Error(
-        `Malformed event: [${[...eventValidations.errors].map((error) => `${error.instancePath}: ${error.message}`).join("|")}]`
+        `Malformed event: [${[...eventValidations.errors]
+          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
       );
     }
   }
