@@ -1,5 +1,4 @@
 // Import Node.js Dependencies
-import { randomUUID } from "node:crypto";
 import timers from "timers/promises";
 
 // Import Third-party Dependencies
@@ -26,16 +25,10 @@ import { TransactionStore } from "../../../../src/class/store/transaction.class"
 const dispatcherLogger = Logger.pino({
   level: "debug"
 });
-const incomerLogger = Logger.pino({
-  level: "debug"
-});
 const mockedEventComeBackHandler = jest.fn();
 
 describe("Publishing/exploiting a custom event & inactive incomer", () => {
   let dispatcher: Dispatcher<EventOptions<keyof Events>>;
-  let backupIncomerTransactionStore;
-  let mockedBackedUpSetTransaction;
-  let subscriber;
 
   beforeAll(async() => {
     await initRedis({
@@ -43,38 +36,30 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       host: process.env.REDIS_HOST
     } as any);
 
-    subscriber = await initRedis({
+    await initRedis({
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
       logger: dispatcherLogger,
-      pingInterval: 10_000,
-      checkLastActivityInterval: 2_600,
-      checkTransactionInterval: 6_500,
-      idleTime: 3_000,
+      pingInterval: 2_000,
+      checkLastActivityInterval: 2_000,
+      checkTransactionInterval: 5_000,
+      idleTime: 5_000,
       eventsValidation: {
         eventsValidationFn,
         validationCbFn: validate
       }
      });
 
-    backupIncomerTransactionStore = new TransactionStore({
-      prefix: "backup",
-      instance: "incomer"
-    });
-
-    mockedBackedUpSetTransaction = jest.spyOn(backupIncomerTransactionStore, "setTransaction");
-
-    Reflect.set(dispatcher, "backupIncomerTransactionStore", backupIncomerTransactionStore);
     Reflect.set(dispatcher, "logger", dispatcherLogger);
 
     await dispatcher.initialize();
   });
 
   afterAll(async() => {
-    dispatcher.close();
+    await dispatcher.close();
     await closeAllRedis();
   });
 
@@ -84,15 +69,12 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   });
 
   describe("Inactive incomer with back-up available", () => {
-    let publisher: Incomer;
-    let secondPublisher: Incomer;
     let concernedIncomer: Incomer;
     let secondConcernedIncomer: Incomer;
-    let publisherTransactionStore: TransactionStore<"incomer">;
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
-    let mockedPublisherSetTransaction;
-    let eventHasBeenDeal;
+    let handlerTransaction;
+    let mockedSetTransaction;
 
     // Constants
     const event: EventOptions<"accountingFolder"> = {
@@ -117,27 +99,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         const { data } = message;
 
         if (handleApprovementIndex === 0) {
-          Reflect.set(publisher, "incomerChannelName", data.uuid);
-          Reflect.set(publisher, "providedUUID", data.uuid);
-
-          publisher["subscriber"]!.subscribe(data.uuid);
-
-          Reflect.set(publisher, "incomerChannel", new Channel({
-            name: data.uuid
-          }));
-
-          publisherTransactionStore = new TransactionStore({
-            prefix: data.uuid,
-            instance: "incomer"
-          });
-
-          mockedPublisherSetTransaction = jest.spyOn(publisherTransactionStore, "setTransaction");
-
-          Reflect.set(publisher, "incomerTransactionStore", publisherTransactionStore);
-
-          publisher.emit("registered");
-        }
-        else if (handleApprovementIndex === 1) {
           Reflect.set(concernedIncomer, "incomerChannelName", data.uuid);
           Reflect.set(concernedIncomer, "providedUUID", data.uuid);
 
@@ -154,9 +115,12 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(concernedIncomer, "incomerTransactionStore", firstIncomerTransactionStore);
 
+          concernedIncomer["lastPingDate"] = Date.now();
           concernedIncomer.emit("registered");
+
+          handleApprovementIndex++;
         }
-        else if (handleApprovementIndex === 2) {
+        else {
           Reflect.set(secondConcernedIncomer, "incomerChannelName", data.uuid);
           Reflect.set(secondConcernedIncomer, "providedUUID", data.uuid);
 
@@ -173,148 +137,85 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(secondConcernedIncomer, "incomerTransactionStore", secondIncomerTransactionStore);
 
+          mockedSetTransaction = jest.spyOn(secondConcernedIncomer["incomerTransactionStore"] as any, "setTransaction");
+
+          secondConcernedIncomer["lastPingDate"] = Date.now();
           secondConcernedIncomer.emit("registered");
         }
-        else {
-          Reflect.set(secondPublisher, "incomerChannelName", data.uuid);
-          Reflect.set(secondPublisher, "providedUUID", data.uuid);
-
-          secondPublisher["subscriber"]!.subscribe(data.uuid);
-
-          Reflect.set(secondPublisher, "incomerChannel", new Channel({
-            name: data.uuid
-          }));
-
-          const secondPublisherTransactionStore = new TransactionStore({
-            prefix: data.uuid,
-            instance: "incomer"
-          });
-
-          Reflect.set(secondPublisher, "incomerTransactionStore", secondPublisherTransactionStore);
-
-          secondPublisher.emit("registered");
-        }
-
-        handleApprovementIndex++;
-      });
-
-    let handleIncomerMessagesIndex = 0;
-    jest.spyOn(Incomer.prototype as any, "handleIncomerMessages")
-      .mockImplementation(async(channel, message: any) => {
-        if (message.name === "ping") {
-          return eventHasBeenDeal;
-        }
-
-        if (handleIncomerMessagesIndex === 0) {
-          eventHasBeenDeal = false;
-
-          await firstIncomerTransactionStore.setTransaction({
-            ...message,
-            mainTransaction: false,
-            relatedTransaction: message.redisMetadata.transactionId,
-            resolved: false,
-          });
-        }
-        else {
-          eventHasBeenDeal = true;
-
-          await secondIncomerTransactionStore.setTransaction({
-            ...message,
-            mainTransaction: false,
-            relatedTransaction: message.redisMetadata.transactionId,
-            resolved: true,
-          });
-        }
-
-        handleIncomerMessagesIndex++;
-
-        return eventHasBeenDeal;
       });
 
     beforeAll(async() => {
-      publisher = new Incomer({
+      concernedIncomer = new Incomer({
         name: "foo",
         eventsCast: ["accountingFolder"],
-        eventsSubscribe: [],
-        eventCallback: mockedEventComeBackHandler
-      });
-
-      secondPublisher = new Incomer({
-        name: "bar",
-        eventsCast: ["accountingFolder"],
-        eventsSubscribe: [],
-        eventCallback: mockedEventComeBackHandler
-      });
-
-      concernedIncomer = new Incomer({
-        name: "foo-bar",
-        logger: incomerLogger,
-        eventsCast: [],
         eventsSubscribe: [{ name: "accountingFolder" }],
+        eventsValidation: {
+          eventsValidationFn,
+          validationCbFn: validate
+        },
         eventCallback: mockedEventComeBackHandler
       });
+
+      jest.spyOn(concernedIncomer as any, "customEvent")
+        .mockImplementation(async(opts: any) => {
+          handlerTransaction = await concernedIncomer["incomerTransactionStore"].setTransaction({
+            ...event,
+            redisMetadata: {
+              ...opts.message.redisMetadata,
+              incomerName: concernedIncomer.name,
+              origin: opts.message.redisMetadata.to,
+              mainTransaction: false,
+              relatedTransaction: opts.message.redisMetadata.transactionId,
+              resolved: false
+            }
+          });
+        });
 
       secondConcernedIncomer = new Incomer({
-        name: "foo-bar-foo",
-        eventsCast: [],
+        name: "foo",
+        eventsCast: ["accountingFolder"],
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventCallback: mockedEventComeBackHandler
       });
 
-      await publisher.initialize();
       await concernedIncomer.initialize();
 
-      await timers.setTimeout(1_000)
+      await concernedIncomer.publish(event);
 
-      await publisher.publish(event);
+      await timers.setTimeout(1_000);
 
-      await timers.setTimeout(2_000);
+      expect(handlerTransaction).toBeDefined();
+
+      await concernedIncomer.close();
+
+      await secondConcernedIncomer.initialize();
+
+      await timers.setTimeout(10_000);
     });
 
-    test("event must have been share only once & backedUp", async() => {
-      expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
-        ...event,
-        redisMetadata:{
-          published: false,
-          mainTransaction: true,
-          resolved: false,
-          relatedTransaction: null,
-          origin: expect.any(String),
-          prefix: publisher.prefix
-        }
-      });
+    test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
+      await timers.setTimeout(10_000);
 
-      expect(eventHasBeenDeal).toBe(false);
+      const foo = await secondConcernedIncomer["incomerTransactionStore"].getTransactions();
 
-      await timers.setTimeout(3_000);
-
-      expect(mockedBackedUpSetTransaction).toHaveBeenCalledTimes(1);
-      expect(mockedBackedUpSetTransaction).toHaveBeenCalledWith({
+      expect(mockedSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: {
-          published: true,
-          mainTransaction: true,
-          relatedTransaction: null,
-          resolved: false,
-          transactionId: expect.any(String),
-          origin: expect.any(String),
-          prefix: publisher.prefix
+          origin: expect.anything(),
+          to: expect.anything(),
+          eventTransactionId: expect.anything(),
+          transactionId: expect.anything(),
+          incomerName: concernedIncomer.name,
+          mainTransaction: false,
+          relatedTransaction: expect.anything(),
+          resolved: expect.anything()
         },
-        aliveSince: expect.anything(),
+        aliveSince: expect.anything()
       });
-      expect(eventHasBeenDeal).toBe(false);
 
-      Reflect.set(dispatcher, "idleTime", 5_000);
-      await secondConcernedIncomer.initialize();
-      await secondPublisher.initialize();
-      await timers.setTimeout(2_000);
 
-      expect(eventHasBeenDeal).toBe(true);
-
-      await timers.setTimeout(2_000);
-
-      const backupIncomerTransactions = await backupIncomerTransactionStore.getTransactions();
-      expect([...backupIncomerTransactions.entries()].length).toBe(0);
+      await secondConcernedIncomer.close();
     });
   });
 });
+

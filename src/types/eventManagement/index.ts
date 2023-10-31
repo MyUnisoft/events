@@ -14,18 +14,24 @@ export interface DispatcherTransactionMetadata {
   origin: string;
   to: string;
   prefix?: Prefix;
-  transactionId?: string;
+  incomerName: string;
+  transactionId: string;
   eventTransactionId?: string;
 }
 
 export interface IncomerTransactionMetadata {
   origin: string;
+  incomerName: string;
   to?: string;
   prefix?: Prefix;
-  transactionId?: string;
+  transactionId: string;
 }
 
-export type GenericEvent = Record<string, any> & { name: string; data: Record<string, any> };
+export type GenericEvent = {
+  name: string;
+  data: Record<string, any>;
+  [key: string]: any;
+};
 
 export * from "./dispatcherChannel";
 export * from "./incomerChannel";

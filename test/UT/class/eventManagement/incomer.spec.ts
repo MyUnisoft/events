@@ -1,5 +1,4 @@
 // Import Node.js Dependencies
-import { randomUUID } from "node:crypto";
 import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
@@ -7,7 +6,6 @@ import {
   initRedis,
   closeAllRedis
 } from "@myunisoft/redis";
-import * as Logger from "pino";
 
 // Import Internal Dependencies
 import { Dispatcher, Incomer } from "../../../../src/index";
@@ -15,16 +13,14 @@ import { Dispatcher, Incomer } from "../../../../src/index";
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
 
-const incomerLogger = Logger.pino({
-  level: "debug"
-});
+const kIdleTime = 4_000;
 
 describe("Init Incomer without Dispatcher alive", () => {
   const eventComeBackHandler = () => void 0;
 
   let incomer: Incomer;
   let dispatcherIncomer: Incomer;
-  let dispatcher: Dispatcher;
+  let dispatcher: Dispatcher | undefined;
 
   beforeAll(async() => {
     await initRedis({
@@ -39,7 +35,6 @@ describe("Init Incomer without Dispatcher alive", () => {
 
     incomer = new Incomer({
       name: "foo",
-      logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
@@ -52,7 +47,6 @@ describe("Init Incomer without Dispatcher alive", () => {
 
     dispatcherIncomer = new Incomer({
       name: "node:Pulsar",
-      logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
@@ -66,6 +60,7 @@ describe("Init Incomer without Dispatcher alive", () => {
 
     dispatcher = new Dispatcher({
       pingInterval: 2_000,
+      idleTime: kIdleTime,
       incomerUUID: dispatcherIncomer.baseUUID,
       instanceName: "node:Pulsar"
     });
@@ -82,7 +77,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   test("It should register when a Dispatcher is alive", async() => {
-    await dispatcher.initialize();
+    await dispatcher!.initialize();
 
     await timers.setTimeout(3_000);
 
@@ -93,8 +88,10 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   test(`It should set the dispatcher state at false when there is not Dispatcher sending ping`, async() =>
   {
-    dispatcher.close();
+    await dispatcher!.close();
     await dispatcherIncomer.close();
+    
+    incomer["subscriber"]!.subscribe(incomer["dispatcherChannelName"], incomer["incomerChannelName"]);
 
     await timers.setTimeout(5_000);
 
@@ -102,13 +99,10 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   test("It should set the dispatcher state at true when there is a Dispatcher sending ping", async() => {
-    const idleTime = 2_000;
-
-    await timers.setTimeout(idleTime);
+    await timers.setTimeout(kIdleTime + 2_000);
 
     const secondDispatcherIncomer = new Incomer({
       name: "node:Pulsar",
-      logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
@@ -122,9 +116,9 @@ describe("Init Incomer without Dispatcher alive", () => {
 
     const secondDispatcher = new Dispatcher({
       instanceName: "node:Pulsar",
-      idleTime: idleTime,
+      idleTime: kIdleTime,
       checkLastActivityInterval: 60_000 * 1,
-      pingInterval: 60_000 * 2,
+      pingInterval: 2_000,
       checkTransactionInterval: 60_000 * 1,
       incomerUUID: secondDispatcherIncomer.baseUUID
     });
@@ -132,12 +126,12 @@ describe("Init Incomer without Dispatcher alive", () => {
     await secondDispatcher.initialize();
     await secondDispatcherIncomer.initialize();
 
-    await timers.setTimeout(1_000);
+    await timers.setTimeout(10_000);
 
     expect(secondDispatcherIncomer.dispatcherIsAlive).toBe(true);
     expect(incomer.dispatcherIsAlive).toBe(true);
 
-    secondDispatcher.close();
+    await secondDispatcher.close();
     await secondDispatcherIncomer.close();
   });
 

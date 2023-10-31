@@ -101,7 +101,7 @@ describe("Publishing/exploiting a custom event", () => {
   });
 
   afterAll(async() => {
-    dispatcher.close();
+    await dispatcher.close();
     await closeAllRedis();
   });
 
@@ -350,6 +350,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: {
+          incomerName: publisher.name,
           origin: expect.any(String),
           prefix: publisher.prefix,
           published: false,
@@ -365,6 +366,7 @@ describe("Publishing/exploiting a custom event", () => {
         ...event,
         redisMetadata: {
           eventTransactionId: expect.any(String),
+          incomerName: expect.any(String),
           origin: expect.any(String),
           prefix: publisher.prefix,
           mainTransaction: false,
@@ -517,6 +519,7 @@ describe("Publishing/exploiting a custom event", () => {
       expect(mockedPublisherSetTransaction).toHaveBeenNthCalledWith(1, {
         ...event,
         redisMetadata: {
+          incomerName: publisher.name,
           origin: expect.any(String),
           prefix: publisher.prefix,
           published: false,
@@ -533,6 +536,7 @@ describe("Publishing/exploiting a custom event", () => {
         redisMetadata: {
           eventTransactionId: expect.any(String),
           origin: expect.any(String),
+          incomerName: expect.any(String),
           to: expect.any(String),
           transactionId: expect.any(String),
           mainTransaction: false,

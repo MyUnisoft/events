@@ -64,7 +64,7 @@ describe("Ping", () => {
   });
 
   afterAll(async() => {
-    dispatcher.close();
+    await dispatcher.close();
     await incomer.close();
     await closeAllRedis();
   });
