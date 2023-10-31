@@ -179,9 +179,9 @@ export interface AccountingEntryLettering {
   operation: AccountingEntryLetteringOperation;
   data: {
     id: string;
-    piece2: number;
+    piece2: string;
     paymentType: string;
-    piece1?: number;
+    piece1?: string;
   }
 }
 ```
