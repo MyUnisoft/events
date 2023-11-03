@@ -19,6 +19,26 @@
       },
       "required": ["id", "piece2", "paymentType"],
       "additionalProperties": false
+    },
+    "delete": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "piece2": {
+          "type": "string"
+        },
+        "paymentType": {
+          "type": "string"
+        },
+        "piece1": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "piece2", "paymentType"],
+      "additionalProperties": false
     }
   }
 }

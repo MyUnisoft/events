@@ -137,7 +137,7 @@ export interface ThirdParty {
 }
 
 export type AccountingEntryLetteringOperation = Operation[
-  keyof Pick<Operation, "create">
+  keyof Pick<Operation, "create" | "delete">
 ];
 
 export type AccountingEntryLetteringScope = Scope;

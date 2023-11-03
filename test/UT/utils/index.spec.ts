@@ -157,13 +157,13 @@ describe("eventsValidationFn", () => {
       accountingEntryLettering = eventsValidationFn.get("accountingEntryLettering");
     });
 
-    test("thirdParty should have a validation function for \"create\", \"update\", \"delete\"", () => {
+    test("accountingEntryLettering should have a validation function for \"create\", \"delete\"", () => {
       expect(accountingEntryLettering.has("create")).toBe(true);
+      expect(accountingEntryLettering.has("delete")).toBe(true);
     });
 
-    test("thirdParty should not have a validation function for \"update\", \"delete\", \"void\"", () => {
+    test("accountingEntryLettering should not have a validation function for \"update\", \"void\"", () => {
       expect(accountingEntryLettering.has("update")).toBe(false);
-      expect(accountingEntryLettering.has("delete")).toBe(false);
       expect(accountingEntryLettering.has("void")).toBe(false);
     });
   });
