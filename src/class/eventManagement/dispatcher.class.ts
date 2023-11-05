@@ -19,6 +19,7 @@ import {
 } from "../../utils/config";
 import {
   PartialTransaction,
+  Transaction,
   Transactions,
   TransactionStore
 } from "../store/transaction.class";
@@ -201,12 +202,17 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
 
         const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
+        const backupDispatcherTransactions = await this.backupDispatcherTransactionStore.getTransactions();
 
-        // Resolve Dispatcher transactions
-        await this.resolveDispatcherTransactions(dispatcherTransactions);
+        await this.resolveDispatcherTransactions(
+          dispatcherTransactions,
+          backupDispatcherTransactions
+        );
 
-        // Resolve main transactions
-        await this.resolveIncomerMainTransactions(dispatcherTransactions);
+        await this.resolveIncomerMainTransactions(
+          dispatcherTransactions,
+          backupDispatcherTransactions
+        );
       }
       catch (error) {
         this.logger.error(error.message);
@@ -272,9 +278,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       this.resetCheckLastActivityTimeout = setTimeout(async() => {
         try {
           const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
+          const backupDispatcherTransactions = await this.backupDispatcherTransactionStore.getTransactions();
 
-          // Resolve Dispatcher transactions
-          await this.resolveDispatcherTransactions(dispatcherTransactions);
+          await this.resolveDispatcherTransactions(
+            dispatcherTransactions,
+            backupDispatcherTransactions
+          );
 
           this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
         }
@@ -582,10 +591,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     delete incomers[incomerToRemove.providedUUID];
 
-    const mainTransactions = new Map([...incomerTransactions.entries()]
+    const incomerMainTransactions = new Map([...incomerTransactions.entries()]
       .filter(([, transaction]) => transaction.redisMetadata.mainTransaction));
 
-    for (const [transactionId, mainTransaction] of mainTransactions.entries()) {
+    for (const [transactionId, mainTransaction] of incomerMainTransactions.entries()) {
       if (mainTransaction.name === "register") {
         const approvementRelatedTransaction = Object.keys(dispatcherTransactions)
           .find(
@@ -616,7 +625,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           })
         ]);
 
-        this.logger.warn(this.standardLogFn(newlyTransaction as any)("Main transaction has been backup"));
+        this.logger.info(this.standardLogFn(newlyTransaction as any)("Main transaction has been backup"));
 
         continue;
       }
@@ -660,7 +669,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         )
       ));
 
-      this.logger.warn(this.standardLogFn(newlyIncomerTransaction as any)("Main transaction redistributed  to an Incomer"));
+      this.logger.info(this.standardLogFn(newlyIncomerTransaction as any)("Main transaction redistributed  to an Incomer"));
     }
 
     dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
@@ -688,6 +697,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         );
 
         if (!concernedRelatedTransactionIncomer) {
+          if (incomerTransaction.redisMetadata.resolved) {
+            await incomerTransactionStore.deleteTransaction(incomerTransactionId);
+
+            continue;
+          }
+
           const [, newlyTransaction] = await Promise.all([
             incomerTransactionStore.deleteTransaction(incomerTransactionId),
             this.backupIncomerTransactionStore.setTransaction({
@@ -695,7 +710,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             })
           ]);
 
-          this.logger.warn(this.standardLogFn(newlyTransaction as any)("Spread transaction has been backup"));
+          this.logger.info(this.standardLogFn(newlyTransaction as any)("Spread transaction has been backup"));
 
           continue;
         }
@@ -716,7 +731,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         const relatedDispatcherTransaction = dispatcherTransactions.get(incomerTransaction.redisMetadata.relatedTransaction);
 
         if (!relatedDispatcherTransaction) {
-          this.logger.warn(this.standardLogFn(incomerTransaction as any)("Couldn't find the related Dispatcher transaction"));
+          this.logger.info(this.standardLogFn(incomerTransaction as any)("Couldn't find the related Dispatcher transaction"));
 
           continue;
         }
@@ -733,7 +748,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             formattedEvent: {
               ...incomerTransaction,
               redisMetadata: {
-                origin: this.privateUUID,
+                origin: relatedDispatcherTransaction.redisMetadata.origin,
                 to: providedUUID
               }
             }
@@ -742,7 +757,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransaction.redisMetadata.transactionId)
         ]);
 
-        this.logger.warn(this.standardLogFn(incomerTransaction as any)("Spread transaction redistributed to an Incomer"));
+        this.logger.info(this.standardLogFn(incomerTransaction as any)("Spread transaction redistributed to an Incomer"));
 
         continue;
       }
@@ -809,7 +824,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             concernedChannel: concernedIncomerChannel,
             transactionMeta: {
               mainTransaction: dispatcherTransaction.redisMetadata.mainTransaction,
-              relatedTransaction: dispatcherTransaction.redisMetadata.transactionId,
+              relatedTransaction: dispatcherTransaction.redisMetadata.relatedTransaction,
               eventTransactionId: dispatcherTransaction.redisMetadata.relatedTransaction,
               resolved: dispatcherTransaction.redisMetadata.resolved
             },
@@ -824,15 +839,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
         ]);
 
-        this.logger.warn(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
+        this.logger.info(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
           ...dispatcherTransaction.redisMetadata,
           origin: this.privateUUID,
           to: concernedIncomer.providedUUID
         } } as unknown as T)("Redistributed unresolved injected event to an Incomer"));
       }
     }
-
-    const foobar = await this.backupIncomerTransactionStore.getTransactions();
   }
 
   private async checkForDistributableTransactions(
@@ -842,11 +855,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   ) {
     const toResolve = [];
 
-    for (const [backedUpTransactionId, backedUpTransaction] of backedUpIncomerTransactions.entries()) {
-      if (backedUpTransaction.redisMetadata.mainTransaction) {
+    for (const [backedUpTransactionId, backupIncomerTransaction] of backedUpIncomerTransactions.entries()) {
+      if (backupIncomerTransaction.redisMetadata.mainTransaction) {
         const concernedIncomer = [...incomers.values()].find(
-          (incomer) => incomer.name === backedUpTransaction.redisMetadata.incomerName && incomer.eventsCast.find(
-            (castedEvent) => castedEvent === backedUpTransaction.name
+          (incomer) => incomer.name === backupIncomerTransaction.redisMetadata.incomerName && incomer.eventsCast.find(
+            (castedEvent) => castedEvent === backupIncomerTransaction.name
           )
         );
 
@@ -861,9 +874,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
         toResolve.push(
           concernedIncomerStore.setTransaction({
-            ...backedUpTransaction,
+            ...backupIncomerTransaction,
             redisMetadata: {
-              ...backedUpTransaction.redisMetadata,
+              ...backupIncomerTransaction.redisMetadata,
               origin: concernedIncomer.providedUUID
             }
           }),
@@ -873,10 +886,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         continue;
       }
 
-      if (backedUpTransaction.redisMetadata.relatedTransaction) {
+      if (backupIncomerTransaction.redisMetadata.relatedTransaction) {
         const concernedIncomer = [...incomers].find(
-          (incomer) => incomer.name === backedUpTransaction.redisMetadata.incomerName && incomer.eventsSubscribe.find(
-            (subscribedEvent) => subscribedEvent.name === backedUpTransaction.name
+          (incomer) => incomer.name === backupIncomerTransaction.redisMetadata.incomerName && incomer.eventsSubscribe.find(
+            (subscribedEvent) => subscribedEvent.name === backupIncomerTransaction.name
           )
         );
 
@@ -885,13 +898,15 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
 
         const relatedDispatcherTransactionId = [...backedUpDispatcherTransactions.keys()]
-          .find((dispatcherTransactionId) => dispatcherTransactionId === backedUpTransaction.redisMetadata.relatedTransaction);
+          .find(
+            (dispatcherTransactionId) => dispatcherTransactionId === backupIncomerTransaction.redisMetadata.relatedTransaction
+          );
 
         if (!relatedDispatcherTransactionId) {
           continue;
         }
 
-        if (!backedUpTransaction.redisMetadata.resolved) {
+        if (!backupIncomerTransaction.redisMetadata.resolved) {
           const { providedUUID, prefix } = concernedIncomer;
 
           let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
@@ -909,13 +924,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             this.publishEvent({
               concernedChannel: concernedIncomerChannel,
               transactionMeta: {
-                mainTransaction: backedUpTransaction.redisMetadata.mainTransaction,
-                relatedTransaction: backedUpTransaction.redisMetadata.relatedTransaction,
+                mainTransaction: backupIncomerTransaction.redisMetadata.mainTransaction,
+                relatedTransaction: backupIncomerTransaction.redisMetadata.relatedTransaction,
                 eventTransactionId: null,
-                resolved: backedUpTransaction.redisMetadata.resolved
+                resolved: backupIncomerTransaction.redisMetadata.resolved
               },
               formattedEvent: {
-                ...backedUpTransaction,
+                ...backupIncomerTransaction,
                 redisMetadata: {
                   origin: this.privateUUID,
                   to: concernedIncomer.providedUUID
@@ -936,9 +951,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
         toResolve.push(
           concernedIncomerStore.setTransaction({
-            ...backedUpTransaction,
+            ...backupIncomerTransaction,
             redisMetadata: {
-              ...backedUpTransaction.redisMetadata,
+              ...backupIncomerTransaction.redisMetadata,
               origin: concernedIncomer.providedUUID
             }
           }),
@@ -948,17 +963,68 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     await Promise.all(toResolve);
+    toResolve.length = 0;
+
+    const updatedBackupDispatcherTransactions = await this.backupIncomerTransactionStore.getTransactions();
+
+    for (const [transactionId, backupDispatcherTransaction] of updatedBackupDispatcherTransactions.entries()) {
+      const concernedIncomer = [...incomers].find(
+        (incomer) => incomer.name === backupDispatcherTransaction.redisMetadata.incomerName && incomer.eventsSubscribe.find(
+          (subscribedEvent) => subscribedEvent.name === backupDispatcherTransaction.name
+        )
+      );
+
+      if (!concernedIncomer) {
+        continue;
+      }
+
+      const { providedUUID, prefix } = concernedIncomer;
+
+      let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+      if (!concernedIncomerChannel) {
+        concernedIncomerChannel = new Channel({
+          name: providedUUID,
+          prefix
+        });
+
+        this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+      }
+
+      toResolve.push([
+        this.publishEvent({
+          concernedChannel: concernedIncomerChannel,
+          transactionMeta: {
+            mainTransaction: backupDispatcherTransaction.redisMetadata.mainTransaction,
+            relatedTransaction: backupDispatcherTransaction.redisMetadata.relatedTransaction,
+            eventTransactionId: backupDispatcherTransaction.redisMetadata.relatedTransaction,
+            resolved: backupDispatcherTransaction.redisMetadata.resolved
+          },
+          formattedEvent: {
+            ...backupDispatcherTransaction,
+            redisMetadata: {
+              origin: this.privateUUID,
+              to: concernedIncomer.providedUUID,
+              incomerName: concernedIncomer.name
+            }
+          }
+        }),
+        this.backupDispatcherTransactionStore.deleteTransaction(transactionId)
+      ]);
+    }
+
+    await Promise.all(toResolve);
   }
 
   private async resolveDispatcherTransactions(
-    dispatcherTransactions: Transactions<"dispatcher">
+    dispatcherTransactions: Transactions<"dispatcher">,
+    backupDispatcherTransactions: Transactions<"dispatcher">
   ) {
-    const backedUpIncomerTransactions = await this.backupIncomerTransactionStore.getTransactions();
-    const backedUpDispatcherTransactions = await this.backupDispatcherTransactionStore.getTransactions();
-
     const incomers = await this.incomerStore.getIncomers();
 
-    await this.checkForDistributableTransactions(backedUpIncomerTransactions, backedUpDispatcherTransactions, incomers);
+    const backupIncomerTransactions = await this.backupIncomerTransactionStore.getTransactions();
+
+    await this.checkForDistributableTransactions(backupIncomerTransactions, backupDispatcherTransactions, incomers);
 
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();
@@ -1037,7 +1103,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async resolveIncomerMainTransactions(
-    dispatcherTransactions: Transactions<"dispatcher">
+    dispatcherTransactions: Transactions<"dispatcher">,
+    backupDispatcherTransactions: Transactions<"dispatcher">
   ) {
     const incomers = await this.incomerStore.getIncomers();
 
@@ -1056,31 +1123,78 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           continue;
         }
 
-        const relatedDispatcherTransactionsId = [...dispatcherTransactions.keys()].filter(
-          (dispatcherTransactionId) => dispatcherTransactions.get(dispatcherTransactionId).redisMetadata.relatedTransaction ===
-            incomerTransactionId
+        const allRelatedDispatcherTransactions: Transaction<"dispatcher">[][] = [
+          [...dispatcherTransactions.values()], [...backupDispatcherTransactions.values()]
+        ].map(
+          (arr) => arr.filter((dispatcherTransaction) => dispatcherTransaction.redisMetadata.relatedTransaction ===
+            incomerTransactionId)
         );
+
+        const [relatedDispatcherTransactions, relatedBackupDispatcherTransactions] = allRelatedDispatcherTransactions;
 
         // Event not resolved yet by the dispatcher
-        if (relatedDispatcherTransactionsId.length === 0) {
+        if (relatedDispatcherTransactions.length === 0 && relatedBackupDispatcherTransactions.length === 0) {
           continue;
         }
 
-        const unResolvedRelatedTransactions = relatedDispatcherTransactionsId.filter(
-          (transactionId) => !dispatcherTransactions.get(transactionId).redisMetadata.resolved
+        const unResolvedRelatedTransactions = [...relatedDispatcherTransactions.values()].filter(
+          (dispatcherTransaction) => !dispatcherTransaction.redisMetadata.resolved
         );
 
+        for (const backupTransaction of relatedBackupDispatcherTransactions.values()) {
+          const relatedIncomer = [...incomers.values()]
+            .find((incomer) => incomer.name === backupTransaction.redisMetadata.incomerName &&
+              incomer.eventsSubscribe.find((event) => event.name === backupTransaction.name));
+
+          if (!relatedIncomer) {
+            continue;
+          }
+
+          const { providedUUID, prefix } = relatedIncomer;
+
+          let concernedIncomerChannel = this.incomerChannels.get(providedUUID);
+
+          if (!concernedIncomerChannel) {
+            concernedIncomerChannel = new Channel({
+              name: providedUUID,
+              prefix
+            });
+
+            this.incomerChannels.set(providedUUID, concernedIncomerChannel);
+          }
+
+          toResolve.push(Promise.all([
+            this.publishEvent({
+              concernedChannel: concernedIncomerChannel,
+              transactionMeta: {
+                mainTransaction: backupTransaction.redisMetadata.mainTransaction,
+                relatedTransaction: backupTransaction.redisMetadata.relatedTransaction,
+                eventTransactionId: backupTransaction.redisMetadata.relatedTransaction,
+                resolved: backupTransaction.redisMetadata.resolved
+              },
+              formattedEvent: {
+                ...incomerTransaction,
+                redisMetadata: {
+                  origin: backupTransaction.redisMetadata.origin,
+                  to: providedUUID
+                }
+              }
+            }),
+            this.backupDispatcherTransactionStore.deleteTransaction(backupTransaction.redisMetadata.transactionId)
+          ]));
+        }
+
         // Event not resolved yet by the different incomers
-        if (unResolvedRelatedTransactions.length > 0) {
+        if (unResolvedRelatedTransactions.length > 0 || relatedBackupDispatcherTransactions.length > 0) {
           continue;
         }
 
-        for (const relatedDispatcherTransactionId of relatedDispatcherTransactionsId) {
-          incomerStateToUpdate.add(incomerTransactions.get(
-            dispatcherTransactions.get(relatedDispatcherTransactionId).redisMetadata.relatedTransaction
-          ).redisMetadata.origin);
+        for (const relatedDispatcherTransaction of relatedDispatcherTransactions.values()) {
+          incomerStateToUpdate.add(relatedDispatcherTransaction.redisMetadata.to);
 
-          toResolve.push(this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId));
+          toResolve.push(
+            this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransaction.redisMetadata.transactionId)
+          );
         }
 
         toResolve.push(incomerStore.deleteTransaction(incomerTransactionId));
@@ -1332,7 +1446,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         ...message,
         redisMetadata: {
           origin: this.privateUUID,
-          to: providedUUID
+          to: providedUUID,
+          incomerName: incomer.name
         }
       };
 
