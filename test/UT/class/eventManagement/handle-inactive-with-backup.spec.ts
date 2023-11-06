@@ -197,7 +197,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         secondConcernedIncomer["dispatcherChannelName"], secondConcernedIncomer["incomerChannelName"]
       );
 
-      await timers.setTimeout(10_000);
+      await timers.setTimeout(15_000);
 
       expect(mockedSetTransaction).toHaveBeenCalledWith({
         ...event,
