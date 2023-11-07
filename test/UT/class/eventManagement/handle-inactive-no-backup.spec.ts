@@ -196,8 +196,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
       await timers.setTimeout(10_000);
 
-      const foo = await secondConcernedIncomer["incomerTransactionStore"].getTransactions();
-
       expect(mockedSetTransaction).toHaveBeenCalledWith({
         ...event,
         redisMetadata: {
@@ -212,7 +210,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         },
         aliveSince: expect.anything()
       });
-
 
       await secondConcernedIncomer.close();
     });
