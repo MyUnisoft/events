@@ -121,6 +121,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private checkDispatcherStateInterval: NodeJS.Timer;
   private resetCheckLastActivityTimeout: NodeJS.Timer;
   private idleTime: number;
+  private minTimeout = 500;
+  private maxTimeout = 60_000;
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
   private validationCbFn: (event: T) => void = null;
@@ -335,8 +337,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await Promise.race([
       this.updateDispatcherStateTimeout(),
       async() => {
-        await timers.setTimeout(Math.random() * 500);
+        await timers.setTimeout(this.randomIntFromRange());
         await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
+        kCancelTimeout.abort();
       }
     ]);
 
@@ -383,6 +386,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.isWorking = false;
   }
 
+  private randomIntFromRange() {
+    return Math.floor((Math.random() * (this.maxTimeout - this.minTimeout)) + this.minTimeout);
+  }
+
   private checkLastActivityIntervalFn() {
     return setInterval(async() => {
       try {
@@ -400,7 +407,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async updateDispatcherState() {
     try {
-      await timers.setTimeout(Math.random() * 500);
+      await timers.setTimeout(this.randomIntFromRange());
       await this.setAsActiveDispatcher();
       await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
     }
