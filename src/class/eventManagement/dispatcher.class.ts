@@ -121,7 +121,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private checkDispatcherStateInterval: NodeJS.Timer;
   private resetCheckLastActivityTimeout: NodeJS.Timer;
   private idleTime: number;
-  private minTimeout = 500;
+  private minTimeout = 0;
   private maxTimeout = 60_000;
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
