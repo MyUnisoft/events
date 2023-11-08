@@ -47,21 +47,19 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
   }
 
   async* incomerLazyFetch() {
-    const count = 1000;
+    const count = 5000;
     let cursor = 0;
-    let lastResult = count;
 
     do {
       const [lastCursor, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
 
       cursor = Number(lastCursor);
-      lastResult = incomerKeys.length;
 
       yield incomerKeys;
 
       continue;
     }
-    while (lastResult !== 0 && cursor !== 0);
+    while (cursor !== 0);
 
     const [, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
 
