@@ -310,45 +310,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
 
     const incomers = await this.incomerStore.getIncomers();
-
     const now = Date.now();
-
-    if ([...incomers.values()].length === 0) {
-      let aborted = false;
-
-      kCancelTask.signal.addEventListener("abort", () => {
-        this.logger.warn({ error: kCancelTask.signal.reason });
-
-        aborted = true;
-      }, { once: true });
-
-      await Promise.race([
-        this.updateDispatcherStateTimeout(),
-        async() => {
-          await timers.setTimeout(Math.random() * 500);
-          await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
-        }
-      ]);
-
-      setImmediate((async() => {
-        if (!aborted) {
-          this.isWorking = true;
-
-          try {
-            await this.ping();
-          }
-          catch (error) {
-            this.logger.error(error);
-          }
-
-          return;
-        }
-
-        this.checkDispatcherStateInterval = setInterval(async() => await this.takeRelay(), this.pingInterval).unref();
-      }));
-
-      return;
-    }
 
     for (const incomer of incomers) {
       if (
@@ -363,14 +325,37 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
     }
 
-    this.isWorking = true;
+    let aborted = false;
+    kCancelTask.signal.addEventListener("abort", () => {
+      this.logger.warn({ error: kCancelTask.signal.reason });
 
-    try {
-      await this.ping();
-    }
-    catch (error) {
-      this.logger.error(error);
-    }
+      aborted = true;
+    }, { once: true });
+
+    await Promise.race([
+      this.updateDispatcherStateTimeout(),
+      async() => {
+        await timers.setTimeout(Math.random() * 500);
+        await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
+      }
+    ]);
+
+    setImmediate((async() => {
+      if (!aborted) {
+        this.isWorking = true;
+
+        try {
+          await this.ping();
+        }
+        catch (error) {
+          this.logger.error(error);
+        }
+
+        return;
+      }
+
+      this.checkDispatcherStateInterval = setInterval(async() => await this.takeRelay(), this.pingInterval).unref();
+    }));
   }
 
   public async close() {
