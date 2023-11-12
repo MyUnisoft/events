@@ -49,6 +49,14 @@ const kCancelTask = new AbortController();
 const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 export const PING_INTERVAL = 60_000 * 5;
 
+type DefaultIncomersConfig = Array<{
+  name: string;
+  subscribedEvents: {
+    name: string;
+    horizontalScale?: boolean;
+  }[];
+}>
+
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
@@ -66,6 +74,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   incomerUUID?: string;
   /** Used as discriminant for dispatcher instance that scale */
   instanceName?: string;
+  defaultIncomerConfig?: DefaultIncomersConfig;
 };
 
 type DispatcherChannelEvents = { name: "register" };
@@ -124,7 +133,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private minTimeout = 0;
   private maxTimeout = 60_000;
 
+  private defaultEventConfig: Map<string, Pick<(DefaultIncomersConfig extends (infer U)[] ? U : T), "subscribedEvents">>;
+
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+
   private validationCbFn: (event: T) => void = null;
   private standardLogFn: StandardLog<T>;
 
@@ -142,6 +154,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.pingInterval = options.pingInterval ?? PING_INTERVAL;
     this.checkRelatedTransactionInterval = options.checkTransactionInterval ?? kCheckRelatedTransactionInterval;
     this.checkLastActivityInterval = options.checkLastActivityInterval ?? kCheckLastActivityInterval;
+    this.defaultEventConfig = options.defaultIncomerConfig ?
+      new Map(options.defaultIncomerConfig.map((eventConf) => [eventConf.name, eventConf]))
+      : new Map();
 
     this.eventsValidationFn = options?.eventsValidation?.eventsValidationFn ?? new Map();
     this.validationCbFn = options?.eventsValidation?.validationCbFn;
@@ -1588,6 +1603,33 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       },
       formattedEvent: event
     });
+
+    if (this.defaultEventConfig.has(incomer.name)) {
+      const currentConf = this.defaultEventConfig.get(incomer.name);
+
+      this.defaultEventConfig.set(incomer.name, {
+        subscribedEvents: [
+          ...incomer.eventsSubscribe,
+          ...currentConf.subscribedEvents
+            .filter((defaultEventSub) => !incomer.eventsSubscribe
+              .find((incomerEventSub) => incomerEventSub.name === defaultEventSub.name))
+        ]
+      });
+    }
+    else {
+      this.defaultEventConfig.set(incomer.name, {
+        subscribedEvents: incomer.eventsSubscribe.map((incomerEventSub) => {
+          return {
+            name: incomerEventSub.name,
+            horizontalScale: incomerEventSub.horizontalScale
+          };
+        })
+      });
+    }
+
+    // for (const [id, entry] of this.defaultEventConfig.entries()) {
+    //   console.log(id, entry, entry.subscribedEvents);
+    // }
 
     this.logger.info("Approved Incomer");
   }
