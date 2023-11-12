@@ -188,6 +188,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       await concernedIncomer.close();
 
+      dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
+
       await secondConcernedIncomer.initialize();
 
       await timers.setTimeout(10_000);

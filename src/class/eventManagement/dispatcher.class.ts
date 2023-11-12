@@ -44,8 +44,6 @@ const kIdleTime = 60_000 * 10;
 const kCheckLastActivityInterval = 60_000 * 2;
 const kCheckRelatedTransactionInterval = 60_000 * 3;
 const kBackupTransactionStoreName = "backup";
-const kCancelTimeout = new AbortController();
-const kCancelTask = new AbortController();
 const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 export const PING_INTERVAL = 60_000 * 5;
 
@@ -101,7 +99,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private instanceName: string | undefined;
   private isWorking = false;
   private dispatcherChannel: Channel<
-    DispatcherChannelMessages["DispatcherMessages"] | { name: "OK", redisMetadata: { origin: string } }
+    DispatcherChannelMessages["DispatcherMessages"] |
+    { name: "Abort_taking_lead", redisMetadata: { origin: string } } |
+    { name: "Abort_taking_lead_back", redisMetadata: { origin: string } }
   >;
   private incomerStore: IncomerStore;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -122,7 +122,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private resetCheckLastActivityTimeout: NodeJS.Timer;
   private idleTime: number;
   private minTimeout = 0;
-  private maxTimeout = 60_000;
+  // Arbitrary value according to fastify default pluginTimeout
+  // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
+  private maxTimeout = 3_500;
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
   private validationCbFn: (event: T) => void = null;
@@ -222,57 +224,121 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }, this.checkRelatedTransactionInterval).unref();
   }
 
+  get redis() {
+    return getRedis();
+  }
+
   get subscriber() {
     return getRedis("subscriber");
   }
 
-  private async takeRelay() {
+  public async initialize() {
+    await this.subscriber.subscribe(this.dispatcherChannelName);
+    this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
+
     const incomers = await this.incomerStore.getIncomers();
+    const dispatcherToRemove = [...incomers.values()]
+      .find((incomer) => (incomer.name === this.instanceName && incomer.baseUUID !== this.selfProvidedUUID) &&
+        !this.isIncomerActive(incomer));
 
-    const now = Date.now();
+    if (dispatcherToRemove) {
+      this.checkDispatcherStateInterval = setInterval(async() => await this.takeLeadBack(), this.pingInterval).unref();
 
-    let toRemove: RegisteredIncomer;
-    for (const incomer of incomers) {
-      if (
-        incomer.name === this.instanceName &&
-        incomer.baseUUID !== this.selfProvidedUUID &&
-        incomer.isDispatcherActiveInstance
-      ) {
-        if (now > incomer.lastActivity + this.idleTime) {
-          toRemove = incomer;
-        }
-        else {
-          return;
-        }
-      }
+      return;
     }
 
-    let aborted = false;
-    kCancelTask.signal.addEventListener("abort", () => {
-      this.logger.warn({ error: kCancelTask.signal.reason });
+    await this.takeLead();
+  }
 
-      aborted = true;
-    }, { once: true });
+  public async close() {
+    clearInterval(this.pingIntervalTimer);
+    this.pingIntervalTimer = undefined;
 
-    await Promise.race([
-      this.updateDispatcherStateTimeout(),
-      this.updateDispatcherState()
-    ]);
+    clearInterval(this.checkRelatedTransactionIntervalTimer);
+    this.checkRelatedTransactionIntervalTimer = undefined;
 
     clearInterval(this.checkLastActivityIntervalTimer);
+    this.checkLastActivityIntervalTimer = undefined;
 
-    setImmediate((async() => {
-      if (aborted) {
-        return;
-      }
+    if (this.resetCheckLastActivityTimeout) {
+      clearTimeout(this.resetCheckLastActivityTimeout);
+      this.resetCheckLastActivityTimeout = undefined;
+    }
 
+    if (this.checkDispatcherStateInterval) {
+      clearInterval(this.checkDispatcherStateInterval);
+      this.checkDispatcherStateInterval = undefined;
+    }
+
+    await this.subscriber.unsubscribe(this.dispatcherChannelName, ...this.incomerChannels.keys());
+
+    this.isWorking = false;
+  }
+
+  async takeLead() {
+    try {
+      await Promise.race([
+        once(this, "ABORT_TAKING_LEAD"),
+        // We want to reject if we reach the timer
+        new Promise((_, reject) => timers.setTimeout(this.randomIntFromRange()).then(() => reject(new Error())))
+      ]);
+
+      this.logger.warn("Dispatcher Timed out on taking lead");
+
+      this.checkDispatcherStateInterval = setInterval(async() => await this.takeLeadBack(), this.pingInterval).unref();
+    }
+    catch {
+      await this.dispatcherChannel.publish({
+        name: "Abort_taking_lead",
+        redisMetadata: {
+          origin: this.privateUUID
+        }
+      });
+
+      this.isWorking = true;
+      await this.ping();
+    }
+  }
+
+  private isIncomerActive(incomer: RegisteredIncomer) {
+    const now = Date.now();
+
+    return now > (incomer.lastActivity) + this.idleTime;
+  }
+
+  private async takeLeadBack() {
+    const incomers = await this.incomerStore.getIncomers();
+
+    const dispatcherToRemove = [...incomers.values()]
+      .find((incomer) => (incomer.name === this.instanceName &&
+      incomer.baseUUID !== this.selfProvidedUUID &&
+      incomer.isDispatcherActiveInstance) && this.isIncomerActive(incomer));
+
+    if (!dispatcherToRemove) {
+      return;
+    }
+
+    try {
+      await Promise.race([
+        once(this, "ABORT_TAKING_LEAD_BACK"),
+        // We want to reject if we reach the timer
+        new Promise((_, reject) => timers.setTimeout(this.randomIntFromRange()).then(() => reject(new Error())))
+      ]);
+
+      this.logger.warn("Dispatcher Timed out on taking back the lead");
+    }
+    catch {
+      await this.setAsActiveDispatcher();
+      await this.dispatcherChannel.publish({ name: "Abort_taking_lead_back", redisMetadata: { origin: this.privateUUID } });
+
+      clearInterval(this.checkLastActivityIntervalTimer);
       this.isWorking = true;
 
       try {
-        await Promise.all([this.ping(), toRemove && this.removeNonActives([toRemove])]);
+        await Promise.all([this.ping(), dispatcherToRemove && this.removeNonActives([dispatcherToRemove])]);
       }
       catch (error) {
-        this.logger.error(error.message);
+        this.logger.error({ error }, "failed while taking back the lead");
 
         return;
       }
@@ -303,87 +369,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
       }
 
-      this.logger.info(`Dispatcher ${this.selfProvidedUUID} took relay on ${toRemove?.baseUUID}`);
-    }));
-  }
-
-  public async initialize() {
-    await this.subscriber.subscribe(this.dispatcherChannelName);
-    this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
-
-    const incomers = await this.incomerStore.getIncomers();
-    const now = Date.now();
-
-    for (const incomer of incomers) {
-      if (
-        incomer.name === this.instanceName && (
-          incomer.baseUUID !== this.selfProvidedUUID
-        ) && !(
-          now > incomer.lastActivity + this.idleTime
-        )) {
-        this.checkDispatcherStateInterval = setInterval(async() => await this.takeRelay(), this.pingInterval).unref();
-
-        return;
-      }
+      this.logger.info(`Dispatcher ${this.selfProvidedUUID} took lead back on ${dispatcherToRemove.baseUUID}`);
     }
-
-    let aborted = false;
-    kCancelTask.signal.addEventListener("abort", () => {
-      this.logger.warn({ error: kCancelTask.signal.reason });
-
-      aborted = true;
-    }, { once: true });
-
-    await Promise.race([
-      this.updateDispatcherStateTimeout(),
-      async() => {
-        await timers.setTimeout(this.randomIntFromRange());
-        await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
-        kCancelTimeout.abort();
-      }
-    ]);
-
-    setImmediate((async() => {
-      if (!aborted) {
-        this.isWorking = true;
-
-        try {
-          await this.ping();
-        }
-        catch (error) {
-          this.logger.error(error);
-        }
-
-        return;
-      }
-
-      this.checkDispatcherStateInterval = setInterval(async() => await this.takeRelay(), this.pingInterval).unref();
-    }));
-  }
-
-  public async close() {
-    clearInterval(this.pingIntervalTimer);
-    this.pingIntervalTimer = undefined;
-
-    clearInterval(this.checkRelatedTransactionIntervalTimer);
-    this.checkRelatedTransactionIntervalTimer = undefined;
-
-    clearInterval(this.checkLastActivityIntervalTimer);
-    this.checkLastActivityIntervalTimer = undefined;
-
-    if (this.resetCheckLastActivityTimeout) {
-      clearTimeout(this.resetCheckLastActivityTimeout);
-      this.resetCheckLastActivityTimeout = undefined;
-    }
-
-    if (this.checkDispatcherStateInterval) {
-      clearInterval(this.checkDispatcherStateInterval);
-      this.checkDispatcherStateInterval = undefined;
-    }
-
-    await this.subscriber.unsubscribe(this.dispatcherChannelName, ...this.incomerChannels.keys());
-
-    this.isWorking = false;
   }
 
   private randomIntFromRange() {
@@ -403,27 +390,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         this.logger.error(error);
       }
     }, this.checkLastActivityInterval).unref();
-  }
-
-  private async updateDispatcherState() {
-    try {
-      await timers.setTimeout(this.randomIntFromRange());
-      await this.setAsActiveDispatcher();
-      await this.dispatcherChannel.publish({ name: "OK", redisMetadata: { origin: this.privateUUID } });
-    }
-    finally {
-      kCancelTimeout.abort();
-    }
-  }
-
-  private async updateDispatcherStateTimeout() {
-    try {
-      await once(this, "OK", { signal: kCancelTimeout.signal });
-      kCancelTask.abort("Timed out on dispatcher retake");
-    }
-    catch {
-      // Ignore
-    }
   }
 
   private async ping() {
@@ -503,9 +469,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       await Promise.all(toHandle);
     }
     catch (error) {
-      throw new Error(`
-        ${{ uuids: [...inactiveIncomers.map((incomer) => incomer?.providedUUID)].join(",") }}, Failed to remove nonactives incomers
-      `);
+      const uuids = [...inactiveIncomers.map((incomer) => incomer?.providedUUID)].join(",");
+
+      throw new Error(`${{ uuids }}, Failed to remove nonactives incomers`);
     }
   }
 
@@ -691,7 +657,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             redisMetadata: {
               ...dispatcherTransaction.redisMetadata,
               mainTransaction: false,
-              to: providedUUID,
               relatedTransaction: newlyIncomerTransaction.redisMetadata.transactionId
             }
           }
@@ -817,6 +782,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId),
             this.backupDispatcherTransactionStore.setTransaction({ ...dispatcherTransaction })
           ]);
+
+          this.logger.info(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
+            ...dispatcherTransaction.redisMetadata,
+            origin: this.privateUUID
+          } } as unknown as T)("Unresolved injected event has been backup"));
 
           continue;
         }
@@ -1306,8 +1276,19 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       IncomerChannelMessages<T>["IncomerMessages"] = JSON.parse(message);
 
     if (!this.isWorking) {
-      if (formattedMessage.name === "OK" && formattedMessage.redisMetadata.origin !== this.privateUUID) {
-        this.emit("OK");
+      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
+        return;
+      }
+
+      if (formattedMessage.name === "Abort_taking_lead") {
+        this.emit("ABORT_TAKING_LEAD");
+
+        return;
+      }
+
+      if (formattedMessage.name === "Abort_taking_lead_back") {
+        this.logger.info({ formattedMessage }, "New dispatcher that takes lead");
+        this.emit("ABORT_TAKING_LEAD_BACK");
 
         return;
       }
@@ -1316,7 +1297,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     if (this.isWorking) {
-      if (formattedMessage.name === "OK") {
+      if (
+        formattedMessage.name === "Abort_taking_lead" ||
+        formattedMessage.name === "Abort_taking_lead_back"
+      ) {
         return;
       }
     }
@@ -1327,7 +1311,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       // Avoid reacting to his own message
-      // Edge case when dispatcher is also an incomer and approve himself
       if (formattedMessage.redisMetadata.origin === this.privateUUID) {
         return;
       }

@@ -196,6 +196,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       secondConcernedIncomer["subscriber"]!.subscribe(
         secondConcernedIncomer["dispatcherChannelName"], secondConcernedIncomer["incomerChannelName"]
       );
+      dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
+      secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
 
       await timers.setTimeout(15_000);
 

@@ -303,6 +303,8 @@ describe("Publishing/exploiting a custom event", () => {
         eventCallback: mockedEventComeBackHandler
       });
 
+      dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
+
       let index = 0;
       jest.spyOn(Incomer.prototype as any, "handleApprovement")
         .mockImplementation(async(message: any) => {
@@ -471,6 +473,8 @@ describe("Publishing/exploiting a custom event", () => {
         eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
         eventCallback: mockedEventComeBackHandler
       });
+
+      dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
 
       let index = 0;
       jest.spyOn(Incomer.prototype as any, "handleApprovement")

@@ -18,6 +18,8 @@ const kIdleTime = 4_000;
 describe("Init Incomer without Dispatcher alive", () => {
   const eventComeBackHandler = () => void 0;
 
+  const pingInterval = 2_000;
+
   let incomer: Incomer;
   let dispatcherIncomer: Incomer;
   let dispatcher: Dispatcher | undefined;
@@ -39,8 +41,8 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
       dispatcherInactivityOptions: {
-        publishInterval: 2_000,
-        maxPingInterval: 2_000
+        publishInterval: pingInterval,
+        maxPingInterval: pingInterval
       },
       externalsInitialized: true
     });
@@ -51,15 +53,15 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
       dispatcherInactivityOptions: {
-        publishInterval: 2_000,
-        maxPingInterval: 2_000
+        publishInterval: pingInterval,
+        maxPingInterval: pingInterval
       },
       isDispatcherInstance: true,
       externalsInitialized: true
     });
 
     dispatcher = new Dispatcher({
-      pingInterval: 2_000,
+      pingInterval: pingInterval,
       idleTime: kIdleTime,
       incomerUUID: dispatcherIncomer.baseUUID,
       instanceName: "node:Pulsar"
@@ -79,7 +81,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("It should register when a Dispatcher is alive", async() => {
     await dispatcher!.initialize();
 
-    await timers.setTimeout(3_000);
+    await timers.setTimeout(5_000);
 
     expect(incomer.dispatcherIsAlive).toBe(true);
     expect(dispatcherIncomer.dispatcherIsAlive).toBe(true);
@@ -90,16 +92,17 @@ describe("Init Incomer without Dispatcher alive", () => {
   {
     await dispatcher!.close();
     await dispatcherIncomer.close();
-    
-    incomer["subscriber"]!.subscribe(incomer["dispatcherChannelName"], incomer["incomerChannelName"]);
 
-    await timers.setTimeout(5_000);
+    incomer["subscriber"]!.subscribe(incomer["dispatcherChannelName"], incomer["incomerChannelName"]);
+    incomer["subscriber"]!.on("message", (channel: string, message: string) => incomer["handleMessages"](channel, message));
+
+    await timers.setTimeout(pingInterval);
 
     expect(incomer.dispatcherIsAlive).toBe(false);
   });
 
   test("It should set the dispatcher state at true when there is a Dispatcher sending ping", async() => {
-    await timers.setTimeout(kIdleTime + 2_000);
+    await timers.setTimeout(kIdleTime + pingInterval);
 
     const secondDispatcherIncomer = new Incomer({
       name: "node:Pulsar",
@@ -107,8 +110,8 @@ describe("Init Incomer without Dispatcher alive", () => {
       eventsSubscribe: [],
       eventCallback: eventComeBackHandler,
       dispatcherInactivityOptions: {
-        publishInterval: 2_000,
-        maxPingInterval: 2_000
+        publishInterval: pingInterval,
+        maxPingInterval: pingInterval
       },
       isDispatcherInstance: true,
       externalsInitialized: true
@@ -118,7 +121,7 @@ describe("Init Incomer without Dispatcher alive", () => {
       instanceName: "node:Pulsar",
       idleTime: kIdleTime,
       checkLastActivityInterval: 60_000 * 1,
-      pingInterval: 2_000,
+      pingInterval: pingInterval,
       checkTransactionInterval: 60_000 * 1,
       incomerUUID: secondDispatcherIncomer.baseUUID
     });

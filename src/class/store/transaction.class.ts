@@ -113,10 +113,6 @@ export class TransactionStore<
       continue;
     }
     while (cursor !== 0);
-
-    const [, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
-
-    return elements;
   }
 
   async getTransactions(): Promise<Transactions<T>> {

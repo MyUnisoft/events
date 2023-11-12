@@ -45,7 +45,8 @@ import { ValidateFunction } from "ajv";
 const kCancelTimeout = new AbortController();
 const kCancelTask = new AbortController();
 // Arbitrary value according to fastify default pluginTimeout
-const kDefaultStartTime = 8_000;
+// Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
+const kDefaultStartTime = 3_500;
 const kExternalInit = process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL || false;
 const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 
@@ -168,9 +169,8 @@ export class Incomer <
   }
 
   private logAbortError() {
-    // eslint-disable-next-line no-invalid-this
     this.logger.warn({ error: kCancelTask.signal.reason });
-    kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
+    kCancelTask.signal.removeEventListener("abort", this.logAbortError);
   }
 
   private async checkDispatcherState() {
@@ -183,7 +183,7 @@ export class Incomer <
 
     this.dispatcherIsAlive = true;
 
-    kCancelTask.signal.addEventListener("abort", () => this.logAbortError(), { once: true });
+    kCancelTask.signal.addEventListener("abort", this.logAbortError, { once: true });
 
     await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
   }
@@ -318,6 +318,7 @@ export class Incomer <
     }
 
     await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
+    this.subscriber.removeAllListeners("message");
   }
 
   public async publish(
@@ -391,7 +392,7 @@ export class Incomer <
       kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
     }
     catch {
-      // Ignore
+      // Ignore catch
     }
   }
 
