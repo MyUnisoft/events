@@ -549,7 +549,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const concernedStore = options.concernedStore ?? this.dispatcherTransactionStore;
 
-    const transaction = await concernedStore.setTransaction({
+    const transaction = formattedEvent.name === "approvement" ? await concernedStore.setTransaction({
+      ...formattedEvent,
+      redisMetadata: {
+        ...formattedEvent.redisMetadata,
+        to: formattedEvent.data.uuid,
+        mainTransaction,
+        relatedTransaction,
+        resolved
+      }
+    }) : await concernedStore.setTransaction({
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
