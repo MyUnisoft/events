@@ -60,10 +60,6 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
       continue;
     }
     while (cursor !== 0);
-
-    const [, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
-
-    return incomerKeys;
   }
 
   async getIncomers(): Promise<Set<RegisteredIncomer>> {

@@ -42,10 +42,9 @@ import { Externals } from "./externals.class";
 import { ValidateFunction } from "ajv";
 
 // CONSTANTS
-const kCancelTimeout = new AbortController();
-const kCancelTask = new AbortController();
 // Arbitrary value according to fastify default pluginTimeout
-const kDefaultStartTime = 8_000;
+// Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
+const kDefaultStartTime = 3_500;
 const kExternalInit = process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL || false;
 const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
 
@@ -167,12 +166,6 @@ export class Incomer <
     }
   }
 
-  private logAbortError() {
-    // eslint-disable-next-line no-invalid-this
-    this.logger.warn({ error: kCancelTask.signal.reason });
-    kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
-  }
-
   private async checkDispatcherState() {
     if (this.lastPingDate + this.maxPingInterval < Date.now()) {
       this.dispatcherIsAlive = false;
@@ -183,9 +176,34 @@ export class Incomer <
 
     this.dispatcherIsAlive = true;
 
-    kCancelTask.signal.addEventListener("abort", () => this.logAbortError(), { once: true });
+    try {
+      for await (const transactionKeys of this.incomerTransactionStore.transactionLazyFetch()) {
+        const transactions = await Promise.all(transactionKeys.map(
+          (transactionKey) => this.incomerTransactionStore.getValue(transactionKey)
+        ));
 
-    await Promise.race([this.updateTransactionsStateTimeout(), this.updateTransactionsState()]);
+        await Promise.race([
+          transactions.map((transaction) => {
+            if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
+              return this.incomerChannel.publish({
+                ...transaction,
+                redisMetadata: {
+                  transactionId: transaction.redisMetadata.transactionId,
+                  origin: transaction.redisMetadata.origin,
+                  prefix: transaction.redisMetadata.prefix
+                }
+              } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
+            }
+
+            return void 0;
+          }),
+          new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
+        ]);
+      }
+    }
+    catch {
+      this.logger.warn("Failed while trying to publish events a new time");
+    }
   }
 
   get subscriber() {
@@ -193,6 +211,8 @@ export class Incomer <
   }
 
   private async registrationAttempt() {
+    this.logger.info("Registering as a new incomer on dispatcher");
+
     const event = {
       name: "register" as const,
       data: {
@@ -207,84 +227,91 @@ export class Incomer <
       }
     };
 
-    this.logger.info("Registering as a new incomer on dispatcher");
+    const transaction = await this.incomerTransactionStore.setTransaction({
+      ...event,
+      redisMetadata: {
+        ...event.redisMetadata,
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: false
+      }
+    });
+
+    this.registerTransactionId = transaction.redisMetadata.transactionId;
+
+    await this.dispatcherChannel.publish({
+      ...event,
+      redisMetadata: {
+        ...event.redisMetadata,
+        transactionId: this.registerTransactionId
+      }
+    });
 
     try {
-      const transaction = await this.incomerTransactionStore.setTransaction({
-        ...event,
-        redisMetadata: {
-          ...event.redisMetadata,
-          mainTransaction: true,
-          relatedTransaction: null,
-          resolved: false
+      await Promise.race([
+        once(this, "registered"),
+        new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
+      ]);
+
+      this.checkTransactionsStateInterval = setInterval(async() => {
+        if (!this.lastPingDate || this.isDispatcherInstance) {
+          return;
         }
-      });
 
-      this.registerTransactionId = transaction.redisMetadata.transactionId;
+        await this.checkDispatcherState();
+      }, this.maxPingInterval).unref();
 
-      await this.dispatcherChannel.publish({
-        ...event,
-        redisMetadata: {
-          ...event.redisMetadata,
-          transactionId: this.registerTransactionId
-        }
-      });
-
-      await once(this, "registered", { signal: AbortSignal.timeout(kDefaultStartTime) });
+      this.dispatcherIsAlive = true;
+      this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch {
+      this.logger.error("Failed to register in time.");
+      this.dispatcherIsAlive = false;
+
       this.checkRegistrationInterval = setInterval(async() => {
         if (this.dispatcherIsAlive) {
           return;
         }
 
-        try {
-          await this.dispatcherChannel.publish({
-            ...event,
-            redisMetadata: {
-              ...event.redisMetadata,
-              transactionId: this.registerTransactionId
-            }
-          });
+        await this.dispatcherChannel.publish({
+          ...event,
+          redisMetadata: {
+            ...event.redisMetadata,
+            transactionId: this.registerTransactionId
+          }
+        });
 
-          await once(this, "registered", { signal: AbortSignal.timeout(this.publishInterval) });
+        try {
+          await Promise.race([
+            once(this, "registered"),
+            new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
+          ]);
+
+          clearInterval(this.checkRegistrationInterval);
+
+          this.checkTransactionsStateInterval = setInterval(async() => {
+            if (!this.lastPingDate || this.isDispatcherInstance) {
+              return;
+            }
+
+            await this.checkDispatcherState();
+          }, this.maxPingInterval).unref();
+
+          this.dispatcherIsAlive = true;
+          this.checkRegistrationInterval = undefined;
+          this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
         }
-        catch (error) {
+        catch {
           this.logger.error("Failed to register in time.");
 
           this.dispatcherIsAlive = false;
 
           return;
         }
-
-        clearInterval(this.checkRegistrationInterval);
-
-        this.checkTransactionsStateInterval = setInterval(async() => {
-          if (!this.lastPingDate || this.isDispatcherInstance) {
-            return;
-          }
-
-          await this.checkDispatcherState();
-        }, this.maxPingInterval).unref();
-
-        this.dispatcherIsAlive = true;
-        this.checkRegistrationInterval = undefined;
-        this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
       }, this.publishInterval * 2).unref();
 
       return;
     }
-
-    this.checkTransactionsStateInterval = setInterval(async() => {
-      if (!this.lastPingDate || this.isDispatcherInstance) {
-        return;
-      }
-
-      await this.checkDispatcherState();
-    }, this.maxPingInterval).unref();
-
-    this.dispatcherIsAlive = true;
-    this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
   }
 
   public async initialize() {
@@ -318,6 +345,7 @@ export class Incomer <
     }
 
     await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
+    this.subscriber.removeAllListeners("message");
   }
 
   public async publish(
@@ -382,41 +410,6 @@ export class Incomer <
         eventTransactionId: finalEvent.redisMetadata.transactionId
       }
     })("Published event"));
-  }
-
-  private async updateTransactionsStateTimeout() {
-    try {
-      await timers.setTimeout(this.maxPingInterval, undefined, { signal: kCancelTimeout.signal });
-      kCancelTask.abort("Dispatcher state check before publishing more..");
-      kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
-    }
-    catch {
-      // Ignore
-    }
-  }
-
-  private async updateTransactionsState() {
-    try {
-      const transactions = await this.incomerTransactionStore.getTransactions();
-      for (const [transactionId, transaction] of transactions.entries()) {
-        if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
-          const event = {
-            ...transaction,
-            redisMetadata: {
-              transactionId,
-              origin: transaction.redisMetadata.origin,
-              prefix: transaction.redisMetadata.prefix
-            }
-          } as unknown as IncomerChannelMessages<T>["IncomerMessages"];
-
-          await this.incomerChannel.publish(event);
-        }
-      }
-    }
-    finally {
-      kCancelTimeout.abort();
-      kCancelTask.signal.removeEventListener("abort", () => this.logAbortError());
-    }
   }
 
   private async handleMessages(channel: string, message: string) {
@@ -488,14 +481,6 @@ export class Incomer <
       .with({ name: "ping" }, async(res: { name: "ping", message: DispatcherPingMessage }) => {
         this.lastPingDate = Date.now();
         this.dispatcherIsAlive = true;
-
-        if (this.checkDispatcherStateTimeout) {
-          clearTimeout(this.checkDispatcherStateTimeout);
-          this.checkDispatcherStateTimeout = undefined;
-        }
-        this.checkDispatcherStateTimeout = setTimeout(async() => {
-          await this.checkDispatcherState();
-        }, this.maxPingInterval);
 
         const { message } = res;
 
@@ -591,21 +576,50 @@ export class Incomer <
       prefix: this.prefix
     });
 
-    const registerTransaction = await this.incomerTransactionStore.getTransactionById(this.registerTransactionId);
+    const oldTransactions = await this.incomerTransactionStore.getTransactions();
 
-    await this.incomerTransactionStore.updateTransaction(this.registerTransactionId, {
-      ...registerTransaction,
-      redisMetadata: {
-        ...registerTransaction.redisMetadata,
-        relatedTransaction: message.redisMetadata.transactionId,
-        resolved: true
-      }
-    } as Transaction<"incomer">);
-
-    this.incomerTransactionStore = new TransactionStore({
+    const newTransactionStore = new TransactionStore({
       prefix: this.prefixedName + this.providedUUID,
       instance: "incomer"
     });
+
+    const transactionToUpdate = [];
+    for (const [transactionId, transaction] of oldTransactions.entries()) {
+      if (transaction.name === "register") {
+        transactionToUpdate.push([
+          Promise.all([
+            this.incomerTransactionStore.deleteTransaction(transactionId),
+            newTransactionStore.setTransaction({
+              ...transaction,
+              redisMetadata: {
+                ...transaction.redisMetadata,
+                origin: this.providedUUID,
+                relatedTransaction: message.redisMetadata.transactionId,
+                published: true,
+                resolved: true
+              }
+            } as Transaction<"incomer">)
+          ])
+        ]);
+
+        continue;
+      }
+
+      transactionToUpdate.push(Promise.all([
+        this.incomerTransactionStore.deleteTransaction(transactionId),
+        newTransactionStore.setTransaction({
+          ...transaction,
+          redisMetadata: {
+            ...transaction.redisMetadata,
+            origin: this.providedUUID
+          }
+        })
+      ]));
+    }
+
+    await Promise.all(transactionToUpdate);
+
+    this.incomerTransactionStore = newTransactionStore;
 
     this.lastPingDate = Date.now();
     this.emit("registered");

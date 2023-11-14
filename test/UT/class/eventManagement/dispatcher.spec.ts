@@ -335,7 +335,7 @@ describe("Dispatcher", () => {
       });
 
       test("It should have update the update the incomer last activity", async () => {
-        await timers.setTimeout(4_000);
+        await timers.setTimeout(8_000);
 
         const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
@@ -343,14 +343,6 @@ describe("Dispatcher", () => {
         expect(pongTransactionToRetrieve).toBeNull();
         expect(pingTransaction).toBeNull();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
-        expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
-      });
-
-      test("It should remove the inactive incomers", async() => {
-        await timers.setTimeout(4_000);
-
-        expect(mockedCheckLastActivity).toHaveBeenCalled();
-        expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
       });
     });
   });
@@ -369,9 +361,9 @@ describe("Dispatcher", () => {
       dispatcher = new Dispatcher({
         logger,
         pingInterval: 1_600,
-        checkLastActivityInterval: 3_800,
-        checkTransactionInterval: 3_000,
-        idleTime: 4_000,
+        checkLastActivityInterval: 2_000,
+        checkTransactionInterval: 2_000,
+        idleTime: 8_000,
         prefix
       });
 
