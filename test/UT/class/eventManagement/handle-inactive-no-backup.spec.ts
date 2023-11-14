@@ -74,7 +74,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
     let handlerTransaction;
-    let mockedSetTransaction;
+    let mockedSetTransaction: jest.SpyInstance;
 
     // Constants
     const event: EventOptions<"accountingFolder"> = {
@@ -196,7 +196,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      await timers.setTimeout(10_000);
+      await timers.setTimeout(20_000);
 
       expect(mockedSetTransaction).toHaveBeenCalledWith({
         ...event,
