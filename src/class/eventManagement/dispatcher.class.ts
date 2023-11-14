@@ -244,7 +244,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     if (activeDispatcher && this.isIncomerActive(activeDispatcher)) {
       this.checkDispatcherStateInterval = setInterval(
-        async() => await this.takeLeadBack({ incomers }), this.pingInterval
+        async() => await this.takeLeadBack(), this.pingInterval
       ).unref();
 
       return;
