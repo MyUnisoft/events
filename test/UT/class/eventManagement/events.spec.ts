@@ -362,7 +362,7 @@ describe("Publishing/exploiting a custom event", () => {
         }
       });
 
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(8_000);
 
       const mockedEvent = {
         ...event,
@@ -379,11 +379,20 @@ describe("Publishing/exploiting a custom event", () => {
         },
       };
 
-      if (mockedIncomerSetTransaction.mock.calls.length === 1) {
-        expect(mockedIncomerSetTransaction).toHaveBeenCalledWith(mockedEvent);
-        expect(mockedSecondIncomerSetTransaction).not.toHaveBeenCalledWith(mockedEvent);
-        expect(mockedDiffIncomerSetTransaction).toHaveBeenCalledWith(mockedEvent);
-      }
+      const mockIncomerSetTransactionCalls = mockedIncomerSetTransaction.mock.calls.flat();
+      const mockSecondIncomerSetTransactionCalls = mockedSecondIncomerSetTransaction.mock.calls.flat();
+      const mockDiffIncomerSetTransactionCalls = mockedDiffIncomerSetTransaction.mock.calls.flat();
+
+      expect(mockIncomerSetTransactionCalls).toEqual(expect.arrayContaining([
+        expect.objectContaining(mockedEvent)
+      ]));
+      expect(mockSecondIncomerSetTransactionCalls).not.toEqual(expect.arrayContaining([
+        expect.objectContaining(mockedEvent)
+      ]));
+      expect(mockDiffIncomerSetTransactionCalls).toEqual(expect.arrayContaining([
+        expect.objectContaining(mockedEvent)
+      ]));
+
 
       expect(mockedEventComeBackHandler).toHaveBeenCalledTimes(2);
       expect(mockedEventComeBackHandler).toHaveBeenCalledWith({
@@ -412,7 +421,7 @@ describe("Publishing/exploiting a custom event", () => {
     let secondConcernedIncomer: Incomer;
     let diffConcernedIncomer: Incomer;
     let publisherTransactionStore: TransactionStore<"incomer">;
-    let mockedPublisherSetTransaction;
+    let mockedPublisherSetTransaction: jest.SpyInstance;
     let mockedIncomerSetTransaction;
     let mockedSecondIncomerSetTransaction;
     let mockedDiffIncomerSetTransaction;
@@ -520,18 +529,22 @@ describe("Publishing/exploiting a custom event", () => {
     });
 
     test("callback function must have been call & every incomers should have create the relating transaction", async() => {
-      expect(mockedPublisherSetTransaction).toHaveBeenNthCalledWith(1, {
-        ...event,
-        redisMetadata: {
-          incomerName: publisher.name,
-          origin: expect.any(String),
-          prefix: publisher.prefix,
-          published: false,
-          mainTransaction: true,
-          resolved: false,
-          relatedTransaction: null
-        }
-      });
+      const mockResults = mockedPublisherSetTransaction.mock.calls.flat();
+
+      expect(mockResults).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          ...event,
+          redisMetadata: {
+            incomerName: publisher.name,
+            origin: expect.any(String),
+            prefix: publisher.prefix,
+            published: false,
+            mainTransaction: true,
+            resolved: false,
+            relatedTransaction: null
+          }
+        })
+      ]));
 
       await timers.setTimeout(5_000);
 

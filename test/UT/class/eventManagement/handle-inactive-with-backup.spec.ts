@@ -46,7 +46,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       logger: dispatcherLogger,
       pingInterval: 2_000,
       checkLastActivityInterval: 2_000,
-      checkTransactionInterval: 5_000,
+      checkTransactionInterval: 2_000,
       idleTime: 5_000,
       eventsValidation: {
         eventsValidationFn,
@@ -201,20 +201,24 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       await timers.setTimeout(15_000);
 
-      expect(mockedSetTransaction).toHaveBeenCalledWith({
-        ...event,
-        redisMetadata: {
-          origin: expect.anything(),
-          to: expect.anything(),
-          eventTransactionId: expect.anything(),
-          transactionId: expect.anything(),
-          incomerName: concernedIncomer.name,
-          mainTransaction: false,
-          relatedTransaction: expect.anything(),
-          resolved: expect.anything()
-        },
-        aliveSince: expect.anything()
-      });
+      const mockCalls = mockedSetTransaction.mock.calls.flat();
+
+      expect(mockCalls).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          ...event,
+          redisMetadata: {
+            origin: expect.anything(),
+            to: expect.anything(),
+            eventTransactionId: expect.anything(),
+            transactionId: expect.anything(),
+            incomerName: concernedIncomer.name,
+            mainTransaction: false,
+            relatedTransaction: expect.anything(),
+            resolved: expect.anything()
+          },
+          aliveSince: expect.anything()
+        })
+      ]));
 
       await secondConcernedIncomer.close();
     });

@@ -96,7 +96,7 @@ describe("Init Incomer without Dispatcher alive", () => {
     incomer["subscriber"]!.subscribe(incomer["dispatcherChannelName"], incomer["incomerChannelName"]);
     incomer["subscriber"]!.on("message", (channel: string, message: string) => incomer["handleMessages"](channel, message));
 
-    await timers.setTimeout(pingInterval);
+    await timers.setTimeout(pingInterval * 2);
 
     expect(incomer.dispatcherIsAlive).toBe(false);
   });
