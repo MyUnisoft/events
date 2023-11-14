@@ -237,17 +237,20 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
 
     const incomers = await this.incomerStore.getIncomers();
-    const dispatcherToRemove = [...incomers.values()]
-      .find((incomer) => (incomer.name === this.instanceName && incomer.baseUUID !== this.selfProvidedUUID) &&
-        !this.isIncomerActive(incomer));
 
-    if (dispatcherToRemove) {
-      this.checkDispatcherStateInterval = setInterval(async() => await this.takeLeadBack(), this.pingInterval).unref();
+    const activeDispatcher = [...incomers.values()]
+      .find((incomer) => (incomer.name === this.instanceName && incomer.baseUUID !== this.selfProvidedUUID &&
+        incomer.isDispatcherActiveInstance));
+
+    if (activeDispatcher && this.isIncomerActive(activeDispatcher)) {
+      this.checkDispatcherStateInterval = setInterval(
+        async() => await this.takeLeadBack({ incomers }), this.pingInterval
+      ).unref();
 
       return;
     }
 
-    await this.takeLead();
+    await this.takeLead({ incomers });
   }
 
   public async close() {
@@ -275,7 +278,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.isWorking = false;
   }
 
-  async takeLead() {
+  async takeLead(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
+    const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
+
     try {
       await Promise.race([
         once(this, "ABORT_TAKING_LEAD"),
@@ -295,24 +300,41 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
       });
 
-      this.isWorking = true;
-      await this.ping();
+      try {
+        await Promise.race([
+          once(this, "ABORT_TAKING_LEAD"),
+          // We want to reject if we reach the timer
+          new Promise((_, reject) => timers.setTimeout(this.randomIntFromRange()).then(() => reject(new Error())))
+        ]);
+
+        await this.takeLead();
+      }
+      catch {
+        this.isWorking = true;
+        await this.ping();
+
+        for (const { providedUUID, prefix } of [...incomers.values()]) {
+          await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
+        }
+
+        this.logger.info(`Dispatcher ${this.selfProvidedUUID} took lead`);
+      }
     }
   }
 
   private isIncomerActive(incomer: RegisteredIncomer) {
     const now = Date.now();
 
-    return now > (incomer.lastActivity) + this.idleTime;
+    return now < incomer.lastActivity + this.idleTime;
   }
 
-  private async takeLeadBack() {
-    const incomers = await this.incomerStore.getIncomers();
+  private async takeLeadBack(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
+    const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
 
     const dispatcherToRemove = [...incomers.values()]
       .find((incomer) => (incomer.name === this.instanceName &&
       incomer.baseUUID !== this.selfProvidedUUID &&
-      incomer.isDispatcherActiveInstance) && this.isIncomerActive(incomer));
+      incomer.isDispatcherActiveInstance) && !(this.isIncomerActive(incomer)));
 
     if (!dispatcherToRemove) {
       return;
@@ -365,7 +387,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         this.checkDispatcherStateInterval = undefined;
       }
 
-      for (const { providedUUID, prefix } of incomers) {
+      for (const { providedUUID, prefix } of [...incomers.values()]) {
         await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
       }
 
@@ -404,7 +426,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const { providedUUID: uuid } = incomer;
 
       if (incomer.baseUUID === this.selfProvidedUUID) {
-        pingToResolve.push(this.updateIncomerState(uuid));
+        await this.updateIncomerState(uuid);
 
         continue;
       }
@@ -1228,21 +1250,35 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private async setAsActiveDispatcher() {
     const incomers = await this.incomerStore.getIncomers();
 
-    for (const incomer of incomers) {
-      if (incomer.baseUUID === this.selfProvidedUUID) {
-        try {
-          await this.incomerStore.updateIncomer({
-            ...incomer,
-            isDispatcherActiveInstance: true
-          });
-        }
-        catch (error) {
-          this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state while taking relay");
-        }
+    const relatedIncomer = [...incomers.values()].find((incomer) => incomer.baseUUID === this.selfProvidedUUID);
 
-        break;
-      }
+    if (!relatedIncomer) {
+      this.logger.warn("No Incomer found while setting incomer as active Dispatcher Instance");
+
+      return;
     }
+
+    await this.incomerStore.updateIncomer({
+      ...relatedIncomer,
+      isDispatcherActiveInstance: true
+    });
+  }
+
+  private async setAsInactiveDispatcher() {
+    const incomers = await this.incomerStore.getIncomers();
+
+    const relatedIncomer = [...incomers.values()].find((incomer) => incomer.baseUUID === this.selfProvidedUUID);
+
+    if (!relatedIncomer) {
+      this.logger.warn("No Incomer found while setting incomer as inactive Dispatcher Instance");
+
+      return;
+    }
+
+    await this.incomerStore.updateIncomer({
+      ...relatedIncomer,
+      isDispatcherActiveInstance: false
+    });
   }
 
   private schemaValidation(message: IncomerRegistrationMessage | EventMessage<T>) {
@@ -1284,36 +1320,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
       IncomerChannelMessages<T>["IncomerMessages"] = JSON.parse(message);
 
-    if (!this.isWorking) {
-      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
-        return;
-      }
-
-      if (formattedMessage.name === "Abort_taking_lead") {
-        this.emit("ABORT_TAKING_LEAD");
-
-        return;
-      }
-
-      if (formattedMessage.name === "Abort_taking_lead_back") {
-        this.logger.info({ formattedMessage }, "New dispatcher that takes lead");
-        this.emit("ABORT_TAKING_LEAD_BACK");
-
-        return;
-      }
-
-      return;
-    }
-
-    if (this.isWorking) {
-      if (
-        formattedMessage.name === "Abort_taking_lead" ||
-        formattedMessage.name === "Abort_taking_lead_back"
-      ) {
-        return;
-      }
-    }
-
     try {
       if (!formattedMessage.name || !formattedMessage.redisMetadata) {
         throw new Error("Malformed message");
@@ -1322,6 +1328,38 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       // Avoid reacting to his own message
       if (formattedMessage.redisMetadata.origin === this.privateUUID) {
         return;
+      }
+
+      if (!this.isWorking) {
+        if (formattedMessage.name === "Abort_taking_lead") {
+          this.emit("ABORT_TAKING_LEAD");
+
+          return;
+        }
+
+        if (formattedMessage.name === "Abort_taking_lead_back") {
+          this.emit("ABORT_TAKING_LEAD_BACK");
+
+          return;
+        }
+
+        return;
+      }
+
+      if (this.isWorking) {
+        if (formattedMessage.name === "Abort_taking_lead") {
+          this.isWorking = false;
+          this.emit("ABORT_TAKING_LEAD");
+
+          return;
+        }
+        else if (formattedMessage.name === "Abort_taking_lead_back") {
+          this.isWorking = false;
+          await this.setAsInactiveDispatcher();
+          this.emit("ABORT_TAKING_LEAD_BACK");
+
+          return;
+        }
       }
 
       this.schemaValidation(formattedMessage);
