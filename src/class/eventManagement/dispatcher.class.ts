@@ -1349,6 +1349,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       if (this.isWorking) {
         if (formattedMessage.name === "Abort_taking_lead") {
           this.isWorking = false;
+          await this.setAsInactiveDispatcher();
           this.emit("ABORT_TAKING_LEAD");
 
           return;
