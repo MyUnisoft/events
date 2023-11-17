@@ -75,7 +75,7 @@ describe("validate", () => {
     };
 
     expect(() => MyEvents.validate(event as any))
-      .toThrow(`Unknown "operation": ${event.operation} for the "event": ${event.name}`);
+      .toThrow(`operation: ${event.operation} doesn't exist for the event: ${event.name}`);
   });
 
   test("Given a wrong data according to the operation and the event name, it should throw", () => {
@@ -161,6 +161,7 @@ describe("isCreateOperation", () => {
   test("given another operation", async() => {
     expect(MyEvents.isCreateOperation("UPDATE")).toBe(false);
     expect(MyEvents.isCreateOperation("DELETE")).toBe(false);
+    expect(MyEvents.isCreateOperation("VOID")).toBe(false);
   });
 });
 
@@ -172,6 +173,7 @@ describe("isUpdateOperation", () => {
   test("given another operation", async() => {
     expect(MyEvents.isUpdateOperation("CREATE")).toBe(false);
     expect(MyEvents.isUpdateOperation("DELETE")).toBe(false);
+    expect(MyEvents.isUpdateOperation("VOID")).toBe(false);
   });
 });
 
@@ -183,5 +185,6 @@ describe("isDeleteOperation", () => {
   test("given another operation", async() => {
     expect(MyEvents.isDeleteOperation("UPDATE")).toBe(false);
     expect(MyEvents.isDeleteOperation("CREATE")).toBe(false);
+    expect(MyEvents.isDeleteOperation("VOID")).toBe(false);
   });
 });
