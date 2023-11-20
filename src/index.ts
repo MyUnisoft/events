@@ -27,7 +27,7 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
 
   const event = eventsValidationFn.get(name);
   if (!event.has(operation?.toLocaleLowerCase())) {
-    throw new Error(`Unknown "operation": ${operation} for the "event": ${name}`);
+    throw new Error(`operation: ${operation} doesn't exist for the event: ${name}`);
   }
 
   const operationValidationFunction = event.get(operation?.toLocaleLowerCase());
