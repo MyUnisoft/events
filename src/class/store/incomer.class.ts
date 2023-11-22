@@ -78,6 +78,10 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     return incomers;
   }
 
+  async getIncomer(uuid: string): Promise<RegisteredIncomer> {
+    return await this.getValue(`${this.key}-${uuid}`);
+  }
+
   async updateIncomer(incomer: RegisteredIncomer) {
     const incomerKey = `${this.key}-${incomer.providedUUID}`;
 

@@ -344,6 +344,15 @@ export class Incomer <
       this.checkDispatcherStateTimeout = undefined;
     }
 
+    await this.incomerChannel.publish({
+      name: "close",
+      redisMetadata: {
+        origin: this.providedUUID,
+        incomerName: this.name,
+        prefix: this.prefix
+      }
+    });
+
     await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
     this.subscriber.removeAllListeners("message");
   }
@@ -389,7 +398,7 @@ export class Incomer <
         ...formattedEvent.redisMetadata,
         transactionId: transaction.redisMetadata.transactionId
       }
-    } as unknown as IncomerChannelMessages<T>["IncomerMessages"];
+    } as unknown as EventMessage<T>;
 
     if (!this.dispatcherIsAlive) {
       this.logger.info(this.standardLogFn({

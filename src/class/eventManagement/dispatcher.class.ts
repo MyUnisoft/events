@@ -32,7 +32,8 @@ import {
   DispatcherPingMessage,
   DistributedEventMessage,
   EventMessage,
-  GenericEvent
+  GenericEvent,
+  CloseMessage
 } from "../../types/eventManagement/index";
 import * as eventsSchema from "../../schema/eventManagement/index";
 import { CustomEventsValidationFunctions, defaultStandardLog, StandardLog } from "../../utils/index";
@@ -67,6 +68,18 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
 };
 
 type DispatcherChannelEvents = { name: "register" };
+
+function isIncomerCloseMessage<T extends GenericEvent = GenericEvent>(
+  value: IncomerChannelMessages<T>["IncomerMessages"]
+): value is CloseMessage {
+  return value.name === "close";
+}
+
+function isRegistrationOrCustomIncomerMessage<T extends GenericEvent = GenericEvent>(
+  value: IncomerChannelMessages<T>["IncomerMessages"] | IncomerRegistrationMessage
+): value is EventMessage<T> | IncomerRegistrationMessage {
+  return value.name !== "close";
+}
 
 function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(
   value: DispatcherChannelMessages["IncomerMessages"] |
@@ -1298,8 +1311,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       );
     }
 
-    if (this.validationCbFn && isIncomerChannelMessage(message) && event.name !== "ping") {
-      this.validationCbFn({ ...message });
+    if (this.validationCbFn && isIncomerChannelMessage(message)) {
+      this.validationCbFn({ ...message } as EventMessage<T>);
 
       return;
     }
@@ -1363,7 +1376,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
       }
 
-      this.schemaValidation(formattedMessage);
+      if (isRegistrationOrCustomIncomerMessage(formattedMessage)) {
+        this.schemaValidation(formattedMessage);
+      }
 
       if (channel === this.dispatcherChannelName) {
         if (isDispatcherChannelMessage(formattedMessage)) {
@@ -1415,9 +1430,28 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const { name } = event;
     const { transactionId } = redisMetadata;
 
+    if (isIncomerCloseMessage(message)) {
+      const logData = {
+        channel,
+        ...message as CloseMessage
+      };
+
+      const relatedIncomer = await this.incomerStore.getIncomer(redisMetadata.origin);
+
+      if (!relatedIncomer) {
+        this.logger.warn(logData, "Unable to find the Incomer closing the connection");
+
+        return;
+      }
+
+      await this.removeNonActives([relatedIncomer]);
+
+      return;
+    }
+
     const logData = {
       channel,
-      ...message
+      ...message as EventMessage<T>
     };
 
     const senderTransactionStore = new TransactionStore({

@@ -2,7 +2,8 @@
 import {
   DispatcherTransactionMetadata,
   GenericEvent,
-  IncomerTransactionMetadata
+  IncomerTransactionMetadata,
+  Prefix
 } from "./index";
 
 export type DispatcherPingMessage = { name: "ping", data: null, redisMetadata: DispatcherTransactionMetadata };
@@ -24,9 +25,19 @@ export type EventMessage<
   redisMetadata: IncomerTransactionMetadata;
 };
 
+export type CloseMessage = {
+  name: string;
+  redisMetadata: {
+    origin: string;
+    incomerName: string;
+    prefix?: Prefix;
+    transactionId?: null;
+  }
+}
+
 export type IncomerChannelMessages<
   T extends GenericEvent = GenericEvent
 > = {
-  IncomerMessages: EventMessage<T>;
+  IncomerMessages: EventMessage<T> | CloseMessage;
   DispatcherMessages: DispatcherPingMessage | DistributedEventMessage<T>;
 };

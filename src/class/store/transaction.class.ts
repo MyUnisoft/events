@@ -13,7 +13,8 @@ import {
   IncomerTransactionMetadata,
   DispatcherChannelMessages,
   IncomerChannelMessages,
-  DispatcherPingMessage
+  DispatcherPingMessage,
+  EventMessage
 } from "../../types/eventManagement/index";
 
 export type Instance = "dispatcher" | "incomer";
@@ -50,15 +51,15 @@ type DispatcherTransaction = (
     redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction)
   }
 ) | (
-  IncomerChannelMessages["IncomerMessages"] & {
+  EventMessage & {
     redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction);
   }
 );
 
 type IncomerTransaction = DispatcherChannelMessages["IncomerMessages"] & {
   redisMetadata: DispatcherChannelMessages["IncomerMessages"]["redisMetadata"] & (HandlerTransaction | MainTransaction)
-} | IncomerChannelMessages["IncomerMessages"] & {
-  redisMetadata: IncomerChannelMessages["IncomerMessages"]["redisMetadata"] & (HandlerTransaction | MainTransaction)
+} | EventMessage & {
+  redisMetadata: EventMessage["redisMetadata"] & (HandlerTransaction | MainTransaction)
 } | DispatcherPingMessage & {
   redisMetadata: DispatcherPingMessage["redisMetadata"] & (HandlerTransaction | MainTransaction)
 };
