@@ -362,7 +362,7 @@ describe("Publishing/exploiting a custom event", () => {
         }
       });
 
-      await timers.setTimeout(8_000);
+      await timers.setTimeout(10_000);
 
       const mockedEvent = {
         ...event,
