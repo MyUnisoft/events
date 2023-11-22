@@ -12,6 +12,7 @@ import { Dispatcher, Incomer } from "../../../../src/index";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
+const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any, "removeNonActives");
 
 const kIdleTime = 4_000;
 
@@ -22,7 +23,9 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   let incomer: Incomer;
   let dispatcherIncomer: Incomer;
-  let dispatcher: Dispatcher | undefined;
+  let dispatcher: Dispatcher;
+  let secondDispatcher: Dispatcher;
+  let secondDispatcherIncomer: Incomer;
 
   beforeAll(async() => {
     await initRedis({
@@ -104,7 +107,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("It should set the dispatcher state at true when there is a Dispatcher sending ping", async() => {
     await timers.setTimeout(kIdleTime + pingInterval);
 
-    const secondDispatcherIncomer = new Incomer({
+    secondDispatcherIncomer = new Incomer({
       name: "node:Pulsar",
       eventsCast: [],
       eventsSubscribe: [],
@@ -117,7 +120,7 @@ describe("Init Incomer without Dispatcher alive", () => {
       externalsInitialized: true
     });
 
-    const secondDispatcher = new Dispatcher({
+    secondDispatcher = new Dispatcher({
       instanceName: "node:Pulsar",
       idleTime: kIdleTime,
       checkLastActivityInterval: 60_000 * 1,
@@ -133,16 +136,24 @@ describe("Init Incomer without Dispatcher alive", () => {
 
     expect(secondDispatcherIncomer.dispatcherIsAlive).toBe(true);
     expect(incomer.dispatcherIsAlive).toBe(true);
+  });
 
-    await secondDispatcher.close();
+  test("Incomer calling close, it should remove the given Incomer", async() => {
     await secondDispatcherIncomer.close();
+
+    await timers.setTimeout(500);
+
+    expect(mockedDispatcherRemoveNonActives).toHaveBeenCalled();
+
+    const incomers = await secondDispatcher["incomerStore"].getIncomers();
+
+    expect([...incomers.keys()]).not.toContain(secondDispatcherIncomer["providedUUID"]);
   });
 
   afterAll(async() => {
-    setImmediate(async() => {
-      await dispatcherIncomer.close();
-      await incomer.close();
-      await closeAllRedis();
-    });
+    await dispatcherIncomer.close();
+    await incomer.close();
+    await secondDispatcher.close();
+    await closeAllRedis();
   });
 });
