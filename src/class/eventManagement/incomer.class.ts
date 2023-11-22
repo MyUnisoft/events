@@ -344,14 +344,16 @@ export class Incomer <
       this.checkDispatcherStateTimeout = undefined;
     }
 
-    await this.incomerChannel.publish({
-      name: "close",
-      redisMetadata: {
-        origin: this.providedUUID,
-        incomerName: this.name,
-        prefix: this.prefix
-      }
-    });
+    if (this.incomerChannel) {
+      await this.incomerChannel.publish({
+        name: "close",
+        redisMetadata: {
+          origin: this.providedUUID,
+          incomerName: this.name,
+          prefix: this.prefix
+        }
+      });
+    }
 
     await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
     this.subscriber.removeAllListeners("message");
