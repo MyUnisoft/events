@@ -137,7 +137,9 @@ export class Incomer <
     this.standardLogFn = options.standardLog ?? defaultStandardLog;
     this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
     this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
-    this.isDispatcherInstance = kIsDispatcherInstance;
+    if (this.isDispatcherInstance === undefined) {
+      this.isDispatcherInstance = kIsDispatcherInstance;
+    }
 
     if (options.eventsValidation) {
       this.eventsValidationFn = options.eventsValidation.eventsValidationFn;
