@@ -10,6 +10,7 @@ import {
 } from "@myunisoft/redis";
 import { Logger, pino } from "pino";
 import { P, match } from "ts-pattern";
+import { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import {
@@ -39,14 +40,16 @@ import {
   defaultStandardLog
 } from "../../utils/index";
 import { Externals } from "./externals.class";
-import { ValidateFunction } from "ajv";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
 // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
-const kDefaultStartTime = 3_500;
-const kExternalInit = process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL || false;
-const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
+const kDefaultStartTime = Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT ?? 3_500);
+const kExternalInit = Boolean(process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL ?? false);
+const kSilentLogger = Boolean(process.env.MYUNISOFT_EVENTS_SILENT_LOGGER ?? false);
+const kMaxPingInterval = Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL ?? 60_000);
+const kPublishInterval = Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL ?? 60_000);
+const kIsDispatcherInstance = Boolean(process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? false);
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
@@ -101,7 +104,7 @@ export class Incomer <
   public baseUUID = randomUUID();
 
   private prefixedName: string;
-  private isDispatcherInstance?: boolean;
+  private isDispatcherInstance: boolean;
   private registerTransactionId: string | null;
   private eventsCast: EventCast[];
   private eventsSubscribe: EventSubscribe[];
@@ -132,8 +135,9 @@ export class Incomer <
     this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
     this.dispatcherChannelName = this.prefixedName + channels.dispatcher;
     this.standardLogFn = options.standardLog ?? defaultStandardLog;
-    this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? 60_000;
-    this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? 60_000;
+    this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
+    this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
+    this.isDispatcherInstance = kIsDispatcherInstance;
 
     if (options.eventsValidation) {
       this.eventsValidationFn = options.eventsValidation.eventsValidationFn;
@@ -169,7 +173,6 @@ export class Incomer <
   private async checkDispatcherState() {
     if (this.lastPingDate + this.maxPingInterval < Date.now()) {
       this.dispatcherIsAlive = false;
-      this.isDispatcherInstance = false;
 
       return;
     }

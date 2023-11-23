@@ -132,6 +132,25 @@ if (isDeleteOperation(event.operation)) {
 }
 ```
 
+### Environment Variables
+
+> [!IMPORTANT]
+> Some options takes the lead over environment variables. For instance with: `new Incomer({ dispatcherInactivityOptions: { maxPingInterval: 900_000 }})` the max ping interval will be `900_000` even if `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` variable is set.
+
+| variable | description | default |
+| --- | --- | --- |
+| `MYUNISOFT_INCOMER_INIT_TIMEOUT` | Incomer initialisation timeout | `3_500` |
+| `MYUNISOFT_EVENTS_INIT_EXTERNAL` | Weither Incomer should initialise an external Dispatcher | `false` |
+| `MYUNISOFT_EVENTS_SILENT_LOGGER` | Disable logs | `false` |
+| `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` | Maximum ping interval | `60_000` |
+| `MYUNISOFT_INCOMER_PUBLISH_INTERVAL` | Publish interval | `60_000` |
+| `MYUNISOFT_INCOMER_IS_DISPATCHER` | Weither Incomer is a Dispatcher | `false` |
+| `MYUNISOFT_DISPATCHER_IDLE_TIME` | Interval threshold when Dispatcher become idle | `600_000` |
+| `MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL` | Dispatcher checking last activity interval | `120_000` |
+| `MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME` | Default name for backup transaction store | `backup` |
+| `MYUNISOFT_DISPATCHER_INIT_TIMEOUT` | Dispatcher initialisation timeout | `3_500` |
+| `MYUNISOFT_DISPATCHER_PING_INTERVAL` | Dispatcher ping interval | `3_500` |
+
 ### API
 
 #### Dispatcher & Incomer class

@@ -41,12 +41,13 @@ import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
 
 // CONSTANTS
 const ajv = new Ajv();
-const kIdleTime = 60_000 * 10;
-const kCheckLastActivityInterval = 60_000 * 2;
-const kCheckRelatedTransactionInterval = 60_000 * 3;
-const kBackupTransactionStoreName = "backup";
-const kSilentLogger = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false;
-export const PING_INTERVAL = 60_000 * 5;
+const kIdleTime = Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME ?? 60_000 * 10);
+const kCheckLastActivityInterval = Number(process.env.MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL ?? 60_000 * 2);
+const kCheckRelatedTransactionInterval = Number(process.env.MYUNISOFT_DISPATCHER_RESOLVE_TRANSACTION_INTERVAL ?? 60_000 * 3);
+const kBackupTransactionStoreName = String(process.env.MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME ?? "backup");
+const kSilentLogger = Boolean(process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false);
+const kMaxInitTimeout = Number(process.env.MYUNISOFT_DISPATCHER_INIT_TIMEOUT ?? 3_500);
+export const PING_INTERVAL = Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL ?? 60_000 * 5);
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
@@ -137,7 +138,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private minTimeout = 0;
   // Arbitrary value according to fastify default pluginTimeout
   // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
-  private maxTimeout = 3_500;
+  private maxTimeout = kMaxInitTimeout;
 
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
   private validationCbFn: (event: T) => void = null;
