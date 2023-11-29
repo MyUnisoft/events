@@ -29,10 +29,22 @@ export interface SharedConf {
   prefix?: Prefix;
 }
 
+export interface DefaultEventDispatchSubscriber {
+  name: string;
+  horizontalScale: boolean;
+}
+
+export interface DefaultEventDispatchConfig {
+  [key: string]: {
+    subscribers: DefaultEventDispatchSubscriber[];
+  }
+}
+
 export type DispatcherOptions = Partial<InterpersonalOptions> & Partial<SharedConf> & {
   eventsSubscribe: (EventSubscribe & {
     horizontalScale?: boolean;
   })[];
+  defaultEventConfig?: DefaultEventDispatchConfig;
 }
 
 export class Dispatcher {

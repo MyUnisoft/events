@@ -1,3 +1,4 @@
+/* eslint-disable max-depth */
 // Import Node.js Dependencies
 import { Readable } from "node:stream";
 import { once, EventEmitter } from "node:events";
@@ -15,7 +16,7 @@ import { Logger } from "pino";
 // Import Internal Dependencies
 import { EventSubscribe, Prefix } from "../../../../types";
 import { PubSubHandler } from "./pubsub.class";
-import { SharedConf } from "./dispatcher.class";
+import { DefaultEventDispatchConfig, SharedConf } from "./dispatcher.class";
 import { IncomerStore } from "../../../store/incomer.class";
 
 export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
@@ -24,6 +25,7 @@ export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
   })[];
   pubsubHandler: PubSubHandler;
   incomerStore: IncomerStore;
+  defaultEventConfig?: DefaultEventDispatchConfig;
 }
 
 // CONSTANTS
@@ -39,7 +41,7 @@ export class InitHandler extends EventEmitter {
   public consumerName: string;
 
   public interpersonal: Interpersonal;
-  public streams = new Map<string, Stream>();
+  public eventStreams = new Map<string, Stream>();
 
   private dispatcherStream: Interpersonal;
   private DispatcherStreamReader: Readable;
@@ -47,6 +49,7 @@ export class InitHandler extends EventEmitter {
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   private incomerStore: IncomerStore;
   private pubsubHandler: PubSubHandler;
+  private defaultEventConfig: DefaultEventDispatchConfig | undefined;
 
   private nextInitCustomId = 2;
 
@@ -162,6 +165,50 @@ export class InitHandler extends EventEmitter {
     };
 
     await this.pubsubHandler.dispatcherChannel.publish(takeLeadEvent);
+
+    if (this.defaultEventConfig) {
+      const streamToInit: any[] = [];
+      for (const [event, config] of Object.entries(this.defaultEventConfig)) {
+        const streamName = this.formattedPrefix + event;
+
+        const eventStream = new Interpersonal({
+          count: 100,
+          lastId: ">",
+          frequency: 1,
+          claimOptions: {
+            idleTime: 5_000
+          },
+          streamName,
+          groupName: this.groupName,
+          consumerName: this.consumerName
+        });
+
+        const eventStreamExist = await eventStream.streamExist();
+        if (!eventStreamExist) {
+          await eventStream.init();
+        }
+
+        const groupToInit: any[] = [];
+        for (const subscriber of config.subscribers) {
+          const { name, horizontalScale } = subscriber;
+
+          const subscriberGroupExist = await eventStream["groupExist"]();
+
+          if (!subscriberGroupExist) {
+            groupToInit.push(
+              await this.redis.xgroup("CREATE", streamName, name, "$", "MKSTREAM")
+            );
+          }
+
+          if (horizontalScale) {
+            // eslint-disable-next-line dot-notation
+            groupToInit.push(
+              await this.redis.xgroup("CREATE", streamName, this.groupName, "$", "MKSTREAM")
+            );
+          }
+        }
+      }
+    }
 
     const now = Date.now();
 
