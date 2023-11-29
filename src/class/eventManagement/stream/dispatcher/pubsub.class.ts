@@ -17,12 +17,15 @@ import { SharedConf } from "./dispatcher.class";
 // CONSTANTS
 const kDispatcherChannel = "dispatcher";
 
-export type PubSubHandlerOptions = SharedConf;
+export type PubSubHandlerOptions = SharedConf & {
+  incomerStore: IncomerStore;
+};
 
 export class PubSubHandler {
   public isLeader = false;
 
   public prefix: Prefix;
+  public formattedPrefix: string;
 
   public dispatcherChannel: Channel;
   public consumerName: string;
@@ -36,13 +39,12 @@ export class PubSubHandler {
   constructor(options: PubSubHandlerOptions) {
     Object.assign(this, options);
 
+    this.formattedPrefix = `${this.prefix ? `${this.prefix}-` : ""}`;
+
     this.logger = options.logger.child({ module: "pubsub-handler" });
 
     this.dispatcherTransactionStore = new TransactionStore({
-      instance: "dispatcher"
-    });
-
-    this.incomerStore = new IncomerStore({
+      instance: "dispatcher",
       prefix: this.prefix
     });
 
@@ -61,7 +63,7 @@ export class PubSubHandler {
   }
 
   public async init() {
-    await this.subscriber.subscribe(kDispatcherChannel);
+    await this.subscriber.subscribe(this.formattedPrefix + kDispatcherChannel);
     this.subscriber.on("message", async(channel, message) => {
       if (!message) {
         return;

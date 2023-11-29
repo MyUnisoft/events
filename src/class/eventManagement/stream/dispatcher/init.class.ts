@@ -22,14 +22,16 @@ export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
   eventsSubscribe: (EventSubscribe & {
     horizontalScale?: boolean;
   })[];
+  pubsubHandler: PubSubHandler;
+  incomerStore: IncomerStore;
 }
 
 // CONSTANTS
 const kNullTimeStamp = 0;
 
 export class InitHandler extends EventEmitter {
-  public dispatcherStreamName = "Local-Dispatcher-Stream";
-  public groupName = "Dispatcher";
+  public dispatcherStreamName = "dispatcher-stream";
+  public groupName = "dispatcher";
 
   public prefix: Prefix;
   public formattedPrefix: string;
@@ -40,11 +42,11 @@ export class InitHandler extends EventEmitter {
   public streams = new Map<string, Stream>();
 
   private dispatcherStream: Interpersonal;
-  private pubSubHandler: PubSubHandler;
   private DispatcherStreamReader: Readable;
 
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   private incomerStore: IncomerStore;
+  private pubsubHandler: PubSubHandler;
 
   private nextInitCustomId = 2;
 
@@ -58,14 +60,9 @@ export class InitHandler extends EventEmitter {
 
     this.logger = options.logger.child({ module: "init-handler" });
 
-    this.incomerStore = new IncomerStore({
-      prefix: this.prefix
-    });
-
     this.dispatcherStream = new Interpersonal({
       ...options,
-      // Threshold of Dispatcher Instance
-      count: 1000,
+      count: 1,
       lastId: ">",
       frequency: 1,
       claimOptions: {
@@ -75,8 +72,6 @@ export class InitHandler extends EventEmitter {
       groupName: this.groupName,
       consumerName: this.consumerName
     });
-
-    this.pubSubHandler = new PubSubHandler({ ...options });
   }
 
   get redis() {
@@ -94,9 +89,9 @@ export class InitHandler extends EventEmitter {
       // eslint-disable-next-line dot-notation
       const groupExist = await this.dispatcherStream["groupExist"]();
       if (groupExist) {
-        await this.pubSubHandler.init();
+        await this.pubsubHandler.init();
 
-        await this.pubSubHandler.register();
+        await this.pubsubHandler.register();
 
         // eslint-disable-next-line dot-notation
         await this.dispatcherStream["createConsumer"]();
@@ -135,15 +130,13 @@ export class InitHandler extends EventEmitter {
       return;
     });
 
-    await this.pubSubHandler.init();
+    await this.pubsubHandler.init();
 
     try {
       await this.dispatcherStream.push({ event: "init" }, { id: `${kNullTimeStamp}-${this.nextInitCustomId}` });
     }
     catch (error) {
-      this.logger.warn("Key already pushed");
-
-      await this.pubSubHandler.register();
+      await this.pubsubHandler.register();
     }
   }
 
@@ -159,7 +152,7 @@ export class InitHandler extends EventEmitter {
   }
 
   private async takeLead() {
-    this.pubSubHandler.isLeader = true;
+    this.pubsubHandler.isLeader = true;
 
     const takeLeadEvent = {
       name: "dispatcher-take_lead",
@@ -168,7 +161,7 @@ export class InitHandler extends EventEmitter {
       }
     };
 
-    await this.pubSubHandler.dispatcherChannel.publish(takeLeadEvent);
+    await this.pubsubHandler.dispatcherChannel.publish(takeLeadEvent);
 
     const now = Date.now();
 
@@ -183,7 +176,7 @@ export class InitHandler extends EventEmitter {
       prefix: this.prefix
     });
 
-    this.pubSubHandler.providedUUID = await this.incomerStore.setIncomer(incomer);
+    this.pubsubHandler.providedUUID = await this.incomerStore.setIncomer(incomer);
 
     this.logger.info("Resolved initialization and taking Lead");
   }
