@@ -23,7 +23,7 @@ const kEnvIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_IDLE_TIME)) ? und
 const kDefaultIdleTime = 2_000;
 
 export interface SharedConf {
-  consumerName: string;
+  consumerUUID: string;
   logger:Partial<Logger> & Pick<Logger, "info" | "warn">;
   idleTime: number;
   prefix?: Prefix;
@@ -32,6 +32,7 @@ export interface SharedConf {
 export interface DefaultEventDispatchSubscriber {
   name: string;
   horizontalScale: boolean;
+  replicas: number;
 }
 
 export interface DefaultEventDispatchConfig {
@@ -48,10 +49,10 @@ export type DispatcherOptions = Partial<InterpersonalOptions> & Partial<SharedCo
 }
 
 export class Dispatcher {
-  public dispatcherStreamName = "Local-Dispatcher-Stream";
-  public groupName = "Dispatcher";
+  public dispatcherStreamName = "dispatcher-stream";
+  public groupName = "dispatcher";
 
-  public consumerName = randomUUID();
+  public consumerUUID = randomUUID();
   public prefix: Prefix;
   public logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
 
@@ -76,12 +77,12 @@ export class Dispatcher {
 
     this.logger.setBindings({
       prefix: this.prefix,
-      consumer: this.consumerName
+      consumer: this.consumerUUID
     });
 
     const genericOptions = {
       idleTime: kEnvIdleTime ?? options.idleTime ?? kDefaultIdleTime,
-      consumerName: this.consumerName,
+      consumerUUID: this.consumerUUID,
       logger: this.logger
     };
 
@@ -127,7 +128,20 @@ async function main() {
   const dispatchers = new Array(1);
   const toInit: any[] = [];
   for (const _ of dispatchers) {
-    toInit.push(new Dispatcher({ eventsSubscribe: [] }));
+    toInit.push(new Dispatcher({
+      eventsSubscribe: [],
+      defaultEventConfig: {
+        accountingFolder: {
+          subscribers: [
+            {
+              name: "GED",
+              horizontalScale: true,
+              replicas: 2
+            }
+          ]
+        }
+      }
+    }));
   }
 
   await Promise.all([

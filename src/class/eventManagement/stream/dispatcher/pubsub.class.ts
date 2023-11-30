@@ -28,7 +28,7 @@ export class PubSubHandler {
   public formattedPrefix: string;
 
   public dispatcherChannel: Channel;
-  public consumerName: string;
+  public consumerUUID: string;
   public providedUUID: string | undefined;
 
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -75,7 +75,7 @@ export class PubSubHandler {
         throw new Error("Malformed message");
       }
 
-      if (parsedMessage.redisMetadata.origin === this.consumerName) {
+      if (parsedMessage.redisMetadata.origin === this.consumerUUID) {
         return;
       }
 
@@ -87,7 +87,7 @@ export class PubSubHandler {
       }
 
       if (!this.isLeader) {
-        if (parsedMessage.redisMetadata.to === this.consumerName) {
+        if (parsedMessage.redisMetadata.to === this.consumerUUID) {
           if (parsedMessage.name === "dispatcher-approvement") {
             await this.handleApprovement(parsedMessage);
           }
@@ -114,7 +114,7 @@ export class PubSubHandler {
         ]
       },
       redisMetadata: {
-        origin: this.consumerName,
+        origin: this.consumerUUID,
         prefix: this.prefix
       }
     };
@@ -177,7 +177,7 @@ export class PubSubHandler {
         providedUUID
       },
       redisMetadata: {
-        origin: this.consumerName,
+        origin: this.consumerUUID,
         incomerName: "dispatcher",
         to: redisMetadata.origin
       }
