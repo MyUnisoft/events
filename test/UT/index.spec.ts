@@ -68,7 +68,7 @@ describe("validate", () => {
   test("Given a wrong operation according to the event name, it should throw", () => {
     const event = {
       name: "accountingFolder",
-      operation: "UPDATE",
+      operation: "VOID",
       data: {
         accountingFolderId: "1"
       }

@@ -33,7 +33,7 @@ export interface Connector {
 }
 
 export type AccountingFolderOperation = Operation[
-  keyof Pick<Operation, "create">
+  keyof Pick<Operation, "create" | "update">
 ];
 
 export type AccountingFolderScope = Scope & Required<Pick<Scope, "firmId">>;
