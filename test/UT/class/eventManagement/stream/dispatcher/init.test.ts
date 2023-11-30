@@ -11,6 +11,8 @@ import { pino } from "pino";
 
 // Import Internal Dependencies
 import { InitHandler } from "../../../../../../src/class/eventManagement/stream/dispatcher/init.class";
+import { IncomerStore } from "../../../../../../src/class/store/incomer.class";
+import { PubSubHandler } from "../../../../../../src/class/eventManagement/stream/dispatcher/pubsub.class";
 
 async function multipleInit() {
   const modules = new Array(10);
@@ -26,11 +28,20 @@ async function multipleInit() {
 
     logger.setBindings({ consumer: consumerName });
 
+    const incomerStore = new IncomerStore({});
+
     const initModule = new InitHandler({
-      consumerName,
+      consumerUUID: consumerName,
       idleTime: 2000,
       logger,
-      eventsSubscribe: []
+      eventsSubscribe: [],
+      incomerStore: incomerStore,
+      pubsubHandler: new PubSubHandler({
+        consumerUUID: consumerName,
+        idleTime: 2000,
+        logger,
+        incomerStore
+      })
     });
 
     initModules.push(initModule)
@@ -73,7 +84,7 @@ describe("init", () => {
 
     await timers.setTimeout(200);
     for (const module of initModules) {
-      if (module["pubSubHandler"].isLeader === true) {
+      if (module["pubsubHandler"].isLeader === true) {
         expect(true).toBe(true);
       }
     }
