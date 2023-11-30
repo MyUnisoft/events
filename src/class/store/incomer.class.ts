@@ -8,7 +8,7 @@ import {
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import { EventCast, EventSubscribe } from "../../types";
+import { EventSubscribe } from "../../types";
 
 export interface RegisteredIncomer {
   providedUUID: string;
@@ -17,7 +17,6 @@ export interface RegisteredIncomer {
   isDispatcherActiveInstance: boolean;
   lastActivity: number;
   aliveSince: number;
-  eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   prefix?: string;
 }

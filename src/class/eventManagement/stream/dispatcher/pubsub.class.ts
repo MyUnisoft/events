@@ -24,11 +24,12 @@ export type PubSubHandlerOptions = SharedConf & {
 export class PubSubHandler {
   public isLeader = false;
 
+  public instanceName: string;
   public prefix: Prefix;
   public formattedPrefix: string;
+  public consumerUUID: string;
 
   public dispatcherChannel: Channel;
-  public consumerUUID: string;
   public providedUUID: string | undefined;
 
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -106,6 +107,7 @@ export class PubSubHandler {
     const registerEvent = {
       name: "dispatcher-register",
       data: {
+        incomerName: this.instanceName,
         eventsSubscribe: [
           {
             name: "foo",
@@ -115,6 +117,7 @@ export class PubSubHandler {
       },
       redisMetadata: {
         origin: this.consumerUUID,
+        incomerName: this.instanceName,
         prefix: this.prefix
       }
     };
@@ -178,7 +181,7 @@ export class PubSubHandler {
       },
       redisMetadata: {
         origin: this.consumerUUID,
-        incomerName: "dispatcher",
+        incomerName: this.instanceName,
         to: redisMetadata.origin
       }
     };
