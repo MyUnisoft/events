@@ -3,6 +3,7 @@
 import { Readable } from "node:stream";
 import { once, EventEmitter } from "node:events";
 import timers from "node:timers/promises";
+import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
 import {
@@ -38,7 +39,7 @@ export class InitHandler extends EventEmitter {
   public prefix: Prefix;
   public formattedPrefix: string;
   public prefixedDispatcherStreamName: string;
-  public consumerName: string;
+  public consumerUUID: string;
 
   public interpersonal: Interpersonal;
   public eventStreams = new Map<string, Stream>();
@@ -73,7 +74,7 @@ export class InitHandler extends EventEmitter {
       },
       streamName: this.prefixedDispatcherStreamName,
       groupName: this.groupName,
-      consumerName: this.consumerName
+      consumerName: this.consumerUUID
     });
   }
 
@@ -160,14 +161,13 @@ export class InitHandler extends EventEmitter {
     const takeLeadEvent = {
       name: "dispatcher-take_lead",
       redisMetadata: {
-        origin: this.consumerName
+        origin: this.consumerUUID
       }
     };
 
     await this.pubsubHandler.dispatcherChannel.publish(takeLeadEvent);
 
     if (this.defaultEventConfig) {
-      const streamToInit: any[] = [];
       for (const [event, config] of Object.entries(this.defaultEventConfig)) {
         const streamName = this.formattedPrefix + event;
 
@@ -180,7 +180,7 @@ export class InitHandler extends EventEmitter {
           },
           streamName,
           groupName: this.groupName,
-          consumerName: this.consumerName
+          consumerName: this.consumerUUID
         });
 
         const eventStreamExist = await eventStream.streamExist();
@@ -188,23 +188,32 @@ export class InitHandler extends EventEmitter {
           await eventStream.init();
         }
 
-        const groupToInit: any[] = [];
         for (const subscriber of config.subscribers) {
-          const { name, horizontalScale } = subscriber;
+          const { name, horizontalScale, replicas } = subscriber;
 
-          const subscriberGroupExist = await eventStream["groupExist"]();
+          const subscriberGroupExist = (await eventStream.getGroupsData())
+            .some((group) => group.name === name);
 
           if (!subscriberGroupExist) {
-            groupToInit.push(
-              await this.redis.xgroup("CREATE", streamName, name, "$", "MKSTREAM")
-            );
+            await this.redis.xgroup("CREATE", streamName, name, "$", "MKSTREAM");
+          }
+
+          for (let index = 0; index < replicas; index++) {
+            if (!horizontalScale) {
+              await this.redis.xgroup("CREATECONSUMER", streamName, name, randomUUID());
+            }
           }
 
           if (horizontalScale) {
-            // eslint-disable-next-line dot-notation
-            groupToInit.push(
-              await this.redis.xgroup("CREATE", streamName, this.groupName, "$", "MKSTREAM")
-            );
+            const filteredGroups = (await eventStream.getGroupsData())
+              .filter((group) => group.name.startsWith(`${name}-`));
+
+            const totalGroupsInit = filteredGroups.length + 1;
+
+            for (let index = totalGroupsInit; index < replicas; index++) {
+              const groupName = `${name}-${randomUUID()}`;
+              await this.redis.xgroup("CREATE", streamName, groupName, "$", "MKSTREAM");
+            }
           }
         }
       }
@@ -217,7 +226,7 @@ export class InitHandler extends EventEmitter {
       isDispatcherActiveInstance: true,
       eventsCast: [],
       eventsSubscribe: [],
-      baseUUID: this.consumerName,
+      baseUUID: this.consumerUUID,
       lastActivity: now,
       aliveSince: now,
       prefix: this.prefix
