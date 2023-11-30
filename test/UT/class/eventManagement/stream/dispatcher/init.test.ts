@@ -19,25 +19,27 @@ async function multipleInit() {
 
   const initModules: InitHandler[] = [];
   for (const _ of modules) {
-    const consumerName = randomUUID();
+    const consumerUUID = randomUUID();
+    const instanceName = "Pulsar";
+    const incomerStore = new IncomerStore({});
 
     const logger = pino({
       name: "Dispatcher",
       level: "info"
     });
 
-    logger.setBindings({ consumer: consumerName });
-
-    const incomerStore = new IncomerStore({});
+    logger.setBindings({ consumer: consumerUUID });
 
     const initModule = new InitHandler({
-      consumerUUID: consumerName,
+      instanceName: "Pulsar",
+      consumerUUID,
       idleTime: 2000,
       logger,
       eventsSubscribe: [],
       incomerStore: incomerStore,
       pubsubHandler: new PubSubHandler({
-        consumerUUID: consumerName,
+        instanceName,
+        consumerUUID,
         idleTime: 2000,
         logger,
         incomerStore

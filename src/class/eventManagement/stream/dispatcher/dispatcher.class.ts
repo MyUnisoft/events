@@ -23,6 +23,7 @@ const kEnvIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_IDLE_TIME)) ? und
 const kDefaultIdleTime = 2_000;
 
 export interface SharedConf {
+  instanceName: string;
   consumerUUID: string;
   logger:Partial<Logger> & Pick<Logger, "info" | "warn">;
   idleTime: number;
@@ -41,7 +42,9 @@ export interface DefaultEventDispatchConfig {
   }
 }
 
-export type DispatcherOptions = Partial<InterpersonalOptions> & Partial<SharedConf> & {
+type DispatcherPartialSharedConf = Partial<SharedConf> & Pick<SharedConf, "instanceName">;
+
+export type DispatcherOptions = Partial<InterpersonalOptions> & DispatcherPartialSharedConf & {
   eventsSubscribe: (EventSubscribe & {
     horizontalScale?: boolean;
   })[];
@@ -50,8 +53,8 @@ export type DispatcherOptions = Partial<InterpersonalOptions> & Partial<SharedCo
 
 export class Dispatcher {
   public dispatcherStreamName = "dispatcher-stream";
-  public groupName = "dispatcher";
 
+  public instanceName: string;
   public consumerUUID = randomUUID();
   public prefix: Prefix;
   public logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
@@ -81,6 +84,7 @@ export class Dispatcher {
     });
 
     const genericOptions = {
+      instanceName: options.instanceName,
       idleTime: kEnvIdleTime ?? options.idleTime ?? kDefaultIdleTime,
       consumerUUID: this.consumerUUID,
       logger: this.logger
@@ -129,7 +133,13 @@ async function main() {
   const toInit: any[] = [];
   for (const _ of dispatchers) {
     toInit.push(new Dispatcher({
-      eventsSubscribe: [],
+      instanceName: "Pulsar",
+      eventsSubscribe: [
+        {
+          name: "accountingFolder",
+          horizontalScale: true
+        }
+      ],
       defaultEventConfig: {
         accountingFolder: {
           subscribers: [

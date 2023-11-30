@@ -34,8 +34,8 @@ const kNullTimeStamp = 0;
 
 export class InitHandler extends EventEmitter {
   public dispatcherStreamName = "dispatcher-stream";
-  public groupName = "dispatcher";
 
+  public instanceName: string;
   public prefix: Prefix;
   public formattedPrefix: string;
   public prefixedDispatcherStreamName: string;
@@ -73,7 +73,7 @@ export class InitHandler extends EventEmitter {
         idleTime: 500
       },
       streamName: this.prefixedDispatcherStreamName,
-      groupName: this.groupName,
+      groupName: this.instanceName,
       consumerName: this.consumerUUID
     });
   }
@@ -179,7 +179,7 @@ export class InitHandler extends EventEmitter {
             idleTime: 5_000
           },
           streamName,
-          groupName: this.groupName,
+          groupName: this.instanceName,
           consumerName: this.consumerUUID
         });
 
@@ -222,9 +222,8 @@ export class InitHandler extends EventEmitter {
     const now = Date.now();
 
     const incomer = Object.assign({}, {
-      name: "foo",
+      name: this.instanceName,
       isDispatcherActiveInstance: true,
-      eventsCast: [],
       eventsSubscribe: [],
       baseUUID: this.consumerUUID,
       lastActivity: now,
