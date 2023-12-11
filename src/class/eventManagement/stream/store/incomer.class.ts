@@ -8,13 +8,12 @@ import {
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import { EventCast, EventSubscribe } from "../../types";
+import { EventCast, EventSubscribe } from "../../../../types";
 
 export interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
   name: string;
-  isDispatcherActiveInstance: boolean;
   lastActivity: number;
   aliveSince: number;
   eventsCast: EventCast[];
@@ -31,7 +30,7 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     this.key = `${options.prefix ? `${options.prefix}-` : ""}incomer`;
   }
 
-  async setIncomer(incomer: Omit<RegisteredIncomer, "providedUUID">): Promise<string> {
+  async set(incomer: Omit<RegisteredIncomer, "providedUUID">): Promise<string> {
     const providedUUID = randomUUID();
 
     const key = `${this.key}-${providedUUID}`;
@@ -46,7 +45,7 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     return providedUUID;
   }
 
-  async* incomerLazyFetch() {
+  async* lazyFetch() {
     const count = 5000;
     let cursor = 0;
 
@@ -62,10 +61,10 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     while (cursor !== 0);
   }
 
-  async getIncomers(): Promise<Set<RegisteredIncomer>> {
+  async getAll(): Promise<Set<RegisteredIncomer>> {
     const incomers: Set<RegisteredIncomer> = new Set();
 
-    for await (const incomerKeys of this.incomerLazyFetch()) {
+    for await (const incomerKeys of this.lazyFetch()) {
       const foundIncomers = await Promise.all(incomerKeys.map(
         (incomerKey) => this.getValue(incomerKey)
       ));
@@ -78,28 +77,34 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     return incomers;
   }
 
-  async getIncomer(uuid: string): Promise<RegisteredIncomer> {
+  async getByUUID(uuid: string): Promise<RegisteredIncomer> {
     return await this.getValue(`${this.key}-${uuid}`);
   }
 
-  async updateIncomer(incomer: RegisteredIncomer) {
+  async update(incomer: RegisteredIncomer) {
     const incomerKey = `${this.key}-${incomer.providedUUID}`;
 
-    await this.setValue({ key: incomerKey, value: { ...incomer, lastActivity: Date.now() } });
+    await this.setValue({
+      key: incomerKey,
+      value: { ...incomer, lastActivity: Date.now() }
+    });
   }
 
-  async updateIncomerState(incomerId: string): Promise<void> {
-    const incomerKey = `${this.key}-${incomerId}`;
+  async updateState(uuid: string): Promise<void> {
+    const incomerKey = `${this.key}-${uuid}`;
     const incomer = await this.getValue(incomerKey);
 
     if (!incomer) {
       throw new Error("Cannot find the Incomer");
     }
 
-    this.setValue({ key: incomerKey, value: { ...incomer, lastActivity: Date.now() } });
+    this.setValue({
+      key: incomerKey,
+      value: { ...incomer, lastActivity: Date.now() }
+    });
   }
 
-  async deleteIncomer(incomerId: string): Promise<void> {
-    await this.deleteValue(`${this.key}-${incomerId}`);
+  async delete(uuid: string): Promise<void> {
+    await this.deleteValue(`${this.key}-${uuid}`);
   }
 }
