@@ -9,16 +9,19 @@ import {
 import { Logger } from "pino";
 
 // Import Internal Dependencies
-import { TransactionStore } from "../../../store/transaction.class";
-import { IncomerStore } from "../../../store/incomer.class";
+import { TransactionStore } from "../store/transaction.class";
 import { Prefix } from "../../../../types";
 import { SharedConf } from "./dispatcher.class";
+import { DispatcherStore } from "../store/dispatcher.class";
 
 // CONSTANTS
 const kDispatcherChannel = "dispatcher";
+const kDispatcherTakeLeadEvent = "dispatcher-take_lead";
+const kDispatcherApprovementEvent = "dispatcher-approvement";
+const kDispatcherRegistrationEvent = "dispatcher-register";
 
 export type PubSubHandlerOptions = SharedConf & {
-  incomerStore: IncomerStore;
+  dispatcherStore: DispatcherStore;
 };
 
 export class PubSubHandler {
@@ -33,7 +36,7 @@ export class PubSubHandler {
   public providedUUID: string | undefined;
 
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
-  private incomerStore: IncomerStore;
+  private dispatcherStore: DispatcherStore;
 
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
 
@@ -72,160 +75,183 @@ export class PubSubHandler {
 
       const parsedMessage = JSON.parse(message);
 
-      if (!parsedMessage.name || !parsedMessage.redisMetadata) {
-        throw new Error("Malformed message");
-      }
-
-      if (parsedMessage.redisMetadata.origin === this.consumerUUID) {
-        return;
-      }
-
-      if (parsedMessage.name === "ok") {
-        this.logger.info("here register");
-        await this.register();
-
-        return;
-      }
-
-      if (!this.isLeader) {
-        if (parsedMessage.redisMetadata.to === this.consumerUUID) {
-          if (parsedMessage.name === "dispatcher-approvement") {
-            await this.handleApprovement(parsedMessage);
-          }
+      try {
+        if (!parsedMessage.name || !parsedMessage.redisMetadata) {
+          throw new Error("Malformed message");
         }
 
-        return;
-      }
+        if (parsedMessage.redisMetadata.origin === this.consumerUUID) {
+          return;
+        }
 
-      if (parsedMessage.name === "dispatcher-register") {
-        await this.approveIncomer(parsedMessage);
-      }
-    });
-  }
+        if (parsedMessage.name === kDispatcherTakeLeadEvent) {
+          await this.dispatcherRegistration();
 
-  public async register() {
-    const registerEvent = {
-      name: "dispatcher-register",
-      data: {
-        incomerName: this.instanceName,
-        eventsSubscribe: [
-          {
-            name: "foo",
-            horizontalScale: true
+          return;
+        }
+
+        if (!this.isLeader) {
+          if (parsedMessage.redisMetadata.to === this.consumerUUID) {
+            if (parsedMessage.name === kDispatcherApprovementEvent) {
+              await this.handleDispatcherApprovement(parsedMessage);
+            }
           }
-        ]
-      },
-      redisMetadata: {
-        origin: this.consumerUUID,
-        incomerName: this.instanceName,
-        prefix: this.prefix
-      }
-    };
 
-    const transaction = await this.dispatcherTransactionStore.setTransaction({
-      ...registerEvent,
-      redisMetadata: {
-        ...registerEvent.redisMetadata,
-        published: false,
-        resolved: false
-      }
-    } as any);
+          return;
+        }
 
-    await this.dispatcherChannel.publish({
-      ...registerEvent,
-      redisMetadata: {
-        ...registerEvent.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        if (parsedMessage.name === kDispatcherRegistrationEvent) {
+          await this.approveDispatcher(parsedMessage);
+        }
+      }
+      catch (error) {
+        this.logger.error(error);
       }
     });
-
-    this.logger.info("Asking for registration");
   }
 
-  private async approveIncomer(message: any) {
+  public async dispatcherRegistration() {
+    try {
+      const registerEvent = {
+        name: kDispatcherRegistrationEvent,
+        data: {
+          incomerName: this.instanceName,
+          eventsSubscribe: [
+            {
+              name: "foo",
+              horizontalScale: true
+            }
+          ]
+        },
+        redisMetadata: {
+          origin: this.consumerUUID,
+          incomerName: this.instanceName,
+          prefix: this.prefix
+        }
+      };
+
+      const transaction = await this.dispatcherTransactionStore.setTransaction({
+        ...registerEvent,
+        redisMetadata: {
+          ...registerEvent.redisMetadata,
+          published: false,
+          resolved: false
+        }
+      } as any);
+
+      await this.dispatcherChannel.publish({
+        ...registerEvent,
+        redisMetadata: {
+          ...registerEvent.redisMetadata,
+          transactionId: transaction.redisMetadata.transactionId
+        }
+      });
+
+      this.logger.info("Asking for registration");
+    }
+    catch (error) {
+      this.logger.error({ error }, "Unable to publish the registration");
+    }
+  }
+
+  private async approveDispatcher(message: any) {
     const { data, redisMetadata } = message;
     const { transactionId, prefix, origin } = redisMetadata;
 
-    const transaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
+    try {
+      const transaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
 
-    if (!transaction) {
-      throw new Error("Unknown Transaction");
-    }
-
-    const dispatchers = await this.incomerStore.getIncomers();
-
-    for (const dispatcher of dispatchers) {
-      if (dispatcher.baseUUID === origin) {
-        await this.dispatcherTransactionStore.deleteTransaction(transactionId);
-
-        throw new Error("Forbidden multiple registration for a same instance");
+      if (!transaction) {
+        throw new Error("Unknown Transaction");
       }
-    }
 
-    const now = Date.now();
+      const dispatchers = await this.dispatcherStore.getAll();
 
-    const incomer = Object.assign({}, {
-      ...data,
-      baseUUID: origin,
-      lastActivity: now,
-      aliveSince: now,
-      prefix
-    });
+      for (const dispatcher of dispatchers) {
+        if (dispatcher.baseUUID === origin) {
+          await this.dispatcherTransactionStore.deleteTransaction(transactionId);
 
-    const providedUUID = await this.incomerStore.setIncomer(incomer);
-
-    const event = {
-      name: "dispatcher-approvement",
-      data: {
-        providedUUID
-      },
-      redisMetadata: {
-        origin: this.consumerUUID,
-        incomerName: this.instanceName,
-        to: redisMetadata.origin
+          throw new Error("Forbidden multiple registration for a same instance");
+        }
       }
-    };
 
-    await Promise.all([
-      this.dispatcherChannel.publish({
-        ...event,
-        redisMetadata: {
-          ...event.redisMetadata,
-          transactionId
-        }
-      }),
-      this.dispatcherTransactionStore.updateTransaction(transactionId, {
-        ...transaction,
-        redisMetadata: {
-          ...transaction.redisMetadata,
-          published: true
-        }
-      })
-    ]);
+      const now = Date.now();
 
-    this.logger.info(`Approved Incomer with uuid: ${providedUUID}`);
+      const dispatcher = Object.assign({}, {
+        ...data,
+        baseUUID: origin,
+        lastActivity: now,
+        aliveSince: now,
+        prefix
+      });
+
+      if (data.incomerName === this.instanceName) {
+        dispatcher.isDispatcherActiveInstance = false;
+      }
+
+      const providedUUID = await this.dispatcherStore.set(dispatcher);
+
+      const event = {
+        name: kDispatcherApprovementEvent,
+        data: {
+          providedUUID
+        },
+        redisMetadata: {
+          origin: this.consumerUUID,
+          incomerName: this.instanceName,
+          to: redisMetadata.origin
+        }
+      };
+
+      await Promise.all([
+        this.dispatcherChannel.publish({
+          ...event,
+          redisMetadata: {
+            ...event.redisMetadata,
+            transactionId
+          }
+        }),
+        this.dispatcherTransactionStore.updateTransaction(transactionId, {
+          ...transaction,
+          redisMetadata: {
+            ...transaction.redisMetadata,
+            published: true
+          }
+        })
+      ]);
+
+      this.logger.info(`Approved Incomer with uuid: ${providedUUID}`);
+    }
+    catch (error) {
+      this.logger.error({ error }, `Unable to approve next to the transaction: ${transactionId}`);
+    }
   }
 
-  private async handleApprovement(message: any) {
+  private async handleDispatcherApprovement(message: any) {
     const { data, redisMetadata } = message;
     const { transactionId } = redisMetadata;
 
-    const transaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
+    try {
+      const transaction = await this.dispatcherTransactionStore.getTransactionById(transactionId);
 
-    if (!transaction) {
-      throw new Error("Unknown Transaction");
-    }
-
-    this.providedUUID = data.providedUUID;
-
-    await this.dispatcherTransactionStore.updateTransaction(transactionId, {
-      ...transaction,
-      redisMetadata: {
-        ...transaction.redisMetadata,
-        resolved: true
+      if (!transaction) {
+        throw new Error("Unknown Transaction");
       }
-    });
 
-    this.logger.info(`Dispatcher Approved width uuid: ${this.providedUUID}`);
+      this.providedUUID = data.providedUUID;
+
+      await this.dispatcherTransactionStore.updateTransaction(transactionId, {
+        ...transaction,
+        redisMetadata: {
+          ...transaction.redisMetadata,
+          resolved: true
+        }
+      });
+
+      this.logger.info(`Dispatcher Approved width uuid: ${this.providedUUID}`);
+    }
+    catch (error) {
+      this.logger.error({ error }, `Unable to handle approvement next to the transaction: ${transactionId}`);
+    }
   }
 }

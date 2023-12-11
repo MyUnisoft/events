@@ -18,14 +18,15 @@ import { Logger } from "pino";
 import { EventSubscribe, Prefix } from "../../../../types";
 import { PubSubHandler } from "./pubsub.class";
 import { DefaultEventDispatchConfig, SharedConf } from "./dispatcher.class";
-import { IncomerStore } from "../../../store/incomer.class";
+import { IncomerStore } from "../store/incomer.class";
+import { DispatcherStore } from "../store/dispatcher.class";
 
 export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
   eventsSubscribe: (EventSubscribe & {
     horizontalScale?: boolean;
   })[];
   pubsubHandler: PubSubHandler;
-  incomerStore: IncomerStore;
+  dispatcherStore: DispatcherStore;
   defaultEventConfig?: DefaultEventDispatchConfig;
 }
 
@@ -44,15 +45,15 @@ export class InitHandler extends EventEmitter {
   public interpersonal: Interpersonal;
   public eventStreams = new Map<string, Stream>();
 
-  private dispatcherStream: Interpersonal;
+  private dispatcherInitStream: Interpersonal;
   private DispatcherStreamReader: Readable;
 
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
-  private incomerStore: IncomerStore;
+  private dispatcherStore: IncomerStore;
   private pubsubHandler: PubSubHandler;
   private defaultEventConfig: DefaultEventDispatchConfig | undefined;
 
-  private nextInitCustomId = 2;
+  private initCustomId = 2;
 
   constructor(options: InitHandlerOptions) {
     super();
@@ -64,7 +65,7 @@ export class InitHandler extends EventEmitter {
 
     this.logger = options.logger.child({ module: "init-handler" });
 
-    this.dispatcherStream = new Interpersonal({
+    this.dispatcherInitStream = new Interpersonal({
       ...options,
       count: 1,
       lastId: ">",
@@ -87,44 +88,44 @@ export class InitHandler extends EventEmitter {
   }
 
   public async init(): Promise<void> {
-    const streamExist = await this.dispatcherStream.streamExist();
+    const streamExist = await this.dispatcherInitStream.streamExist();
 
     if (streamExist) {
       // eslint-disable-next-line dot-notation
-      const groupExist = await this.dispatcherStream["groupExist"]();
+      const groupExist = await this.dispatcherInitStream["groupExist"]();
       if (groupExist) {
         await this.pubsubHandler.init();
 
-        await this.pubsubHandler.register();
+        await this.pubsubHandler.dispatcherRegistration();
 
         // eslint-disable-next-line dot-notation
-        await this.dispatcherStream["createConsumer"]();
+        await this.dispatcherInitStream["createConsumer"]();
 
         return;
       }
     }
 
     try {
-      await this.dispatcherStream.init();
+      await this.dispatcherInitStream.init();
     }
     catch {
       // wait for stream & group to be init
       await timers.setTimeout(10);
 
-      await this.dispatcherStream.init();
+      await this.dispatcherInitStream.init();
     }
 
-    this.DispatcherStreamReader = Readable.from(this.dispatcherStream[Symbol.asyncIterator]());
+    this.DispatcherStreamReader = Readable.from(this.dispatcherInitStream[Symbol.asyncIterator]());
 
     this.DispatcherStreamReader.on("readable", async() => {
       const entries = this.DispatcherStreamReader.read();
 
       for (const entry of entries) {
-        if (String(entry.id) === `${kNullTimeStamp}-${this.nextInitCustomId}`) {
+        if (String(entry.id) === `${kNullTimeStamp}-${this.initCustomId}`) {
           await this.takeLead();
         }
 
-        await this.dispatcherStream.claimEntry(entry.id);
+        await this.dispatcherInitStream.claimEntry(entry.id);
       }
     });
 
@@ -136,11 +137,18 @@ export class InitHandler extends EventEmitter {
 
     await this.pubsubHandler.init();
 
+    await this.pushInitStreamEntry();
+  }
+
+  private async pushInitStreamEntry() {
     try {
-      await this.dispatcherStream.push({ event: "init" }, { id: `${kNullTimeStamp}-${this.nextInitCustomId}` });
+      await this.dispatcherInitStream.push(
+        { event: "init" },
+        { id: `${kNullTimeStamp}-${this.initCustomId}` }
+      );
     }
     catch (error) {
-      await this.pubsubHandler.register();
+      await this.pubsubHandler.dispatcherRegistration();
     }
   }
 
@@ -152,7 +160,59 @@ export class InitHandler extends EventEmitter {
     this.DispatcherStreamReader.destroy();
     once(this.DispatcherStreamReader, "close");
 
-    this.dispatcherStream.deleteConsumer();
+    this.dispatcherInitStream.deleteConsumer();
+  }
+
+  private async handleDefaultEventConfig() {
+    for (const [event, config] of Object.entries(this.defaultEventConfig)) {
+      const streamName = this.formattedPrefix + event;
+
+      const eventStream = new Interpersonal({
+        count: 100,
+        lastId: ">",
+        frequency: 1,
+        claimOptions: {
+          idleTime: 5_000
+        },
+        streamName,
+        groupName: this.instanceName,
+        consumerName: this.consumerUUID
+      });
+
+      const eventStreamExist = await eventStream.streamExist();
+      if (!eventStreamExist) {
+        await eventStream.init();
+      }
+
+      for (const subscriber of config.subscribers) {
+        const { name, horizontalScale, replicas } = subscriber;
+
+        const subscriberGroupExist = (await eventStream.getGroupsData())
+          .some((group) => group.name === name);
+
+        if (!subscriberGroupExist) {
+          await this.redis.xgroup("CREATE", streamName, name, "$", "MKSTREAM");
+        }
+
+        if (!horizontalScale) {
+          for (let index = 0; index < replicas; index++) {
+            await this.redis.xgroup("CREATECONSUMER", streamName, name, randomUUID());
+          }
+        }
+
+        if (horizontalScale) {
+          const filteredGroups = (await eventStream.getGroupsData())
+            .filter((group) => group.name.startsWith(`${name}-`));
+
+          const totalGroupsInit = filteredGroups.length + 1;
+
+          for (let index = totalGroupsInit; index < replicas; index++) {
+            const groupName = `${name}-${randomUUID()}`;
+            await this.redis.xgroup("CREATE", streamName, groupName, "$", "MKSTREAM");
+          }
+        }
+      }
+    }
   }
 
   private async takeLead() {
@@ -168,70 +228,23 @@ export class InitHandler extends EventEmitter {
     await this.pubsubHandler.dispatcherChannel.publish(takeLeadEvent);
 
     if (this.defaultEventConfig) {
-      for (const [event, config] of Object.entries(this.defaultEventConfig)) {
-        const streamName = this.formattedPrefix + event;
-
-        const eventStream = new Interpersonal({
-          count: 100,
-          lastId: ">",
-          frequency: 1,
-          claimOptions: {
-            idleTime: 5_000
-          },
-          streamName,
-          groupName: this.instanceName,
-          consumerName: this.consumerUUID
-        });
-
-        const eventStreamExist = await eventStream.streamExist();
-        if (!eventStreamExist) {
-          await eventStream.init();
-        }
-
-        for (const subscriber of config.subscribers) {
-          const { name, horizontalScale, replicas } = subscriber;
-
-          const subscriberGroupExist = (await eventStream.getGroupsData())
-            .some((group) => group.name === name);
-
-          if (!subscriberGroupExist) {
-            await this.redis.xgroup("CREATE", streamName, name, "$", "MKSTREAM");
-          }
-
-          for (let index = 0; index < replicas; index++) {
-            if (!horizontalScale) {
-              await this.redis.xgroup("CREATECONSUMER", streamName, name, randomUUID());
-            }
-          }
-
-          if (horizontalScale) {
-            const filteredGroups = (await eventStream.getGroupsData())
-              .filter((group) => group.name.startsWith(`${name}-`));
-
-            const totalGroupsInit = filteredGroups.length + 1;
-
-            for (let index = totalGroupsInit; index < replicas; index++) {
-              const groupName = `${name}-${randomUUID()}`;
-              await this.redis.xgroup("CREATE", streamName, groupName, "$", "MKSTREAM");
-            }
-          }
-        }
-      }
+      await this.handleDefaultEventConfig();
     }
 
     const now = Date.now();
 
-    const incomer = Object.assign({}, {
+    const dispatcher = Object.assign({}, {
       name: this.instanceName,
       isDispatcherActiveInstance: true,
       eventsSubscribe: [],
+      eventsCast: [],
       baseUUID: this.consumerUUID,
       lastActivity: now,
       aliveSince: now,
       prefix: this.prefix
     });
 
-    this.pubsubHandler.providedUUID = await this.incomerStore.setIncomer(incomer);
+    this.pubsubHandler.providedUUID = await this.dispatcherStore.set(dispatcher);
 
     this.logger.info("Resolved initialization and taking Lead");
   }

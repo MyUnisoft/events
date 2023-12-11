@@ -13,7 +13,7 @@ import { Logger, pino } from "pino";
 // Import Internal Dependencies
 import { EventSubscribe, Prefix } from "../../../../types";
 import { InitHandler } from "./init.class";
-import { IncomerStore } from "../../../store/incomer.class";
+import { DispatcherStore } from "../store/dispatcher.class";
 import { PubSubHandler } from "./pubsub.class";
 
 // CONSTANTS
@@ -62,7 +62,7 @@ export class Dispatcher {
   public interpersonal: Interpersonal;
   public streams = new Map<string, Stream>();
 
-  private incomerStore: IncomerStore;
+  private dispatcherStore: DispatcherStore;
 
   private pubsubHandler: PubSubHandler;
   private initHandler: InitHandler;
@@ -90,21 +90,21 @@ export class Dispatcher {
       logger: this.logger
     };
 
-    this.incomerStore = new IncomerStore({
+    this.dispatcherStore = new DispatcherStore({
       prefix: this.prefix
     });
 
     this.pubsubHandler = new PubSubHandler({
       ...options,
       ...genericOptions,
-      incomerStore: this.incomerStore
+      dispatcherStore: this.dispatcherStore
     });
 
     this.initHandler = new InitHandler({
       ...options,
       ...genericOptions,
       pubsubHandler: this.pubsubHandler,
-      incomerStore: this.incomerStore
+      dispatcherStore: this.dispatcherStore
     });
   }
 
@@ -134,6 +134,7 @@ async function main() {
   for (const _ of dispatchers) {
     toInit.push(new Dispatcher({
       instanceName: "Pulsar",
+      prefix: "test",
       eventsSubscribe: [
         {
           name: "accountingFolder",
