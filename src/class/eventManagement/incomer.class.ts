@@ -45,11 +45,11 @@ import { Externals } from "./externals.class";
 // Arbitrary value according to fastify default pluginTimeout
 // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
 const kDefaultStartTime = Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT ?? 3_500);
-const kExternalInit = Boolean(process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL ?? false);
-const kSilentLogger = Boolean(process.env.MYUNISOFT_EVENTS_SILENT_LOGGER ?? false);
+const kExternalInit = (process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL ?? "false") === "true";
+const kSilentLogger = (process.env.MYUNISOFT_EVENTS_SILENT_LOGGER ?? "false") === "true";
 const kMaxPingInterval = Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL ?? 60_000);
 const kPublishInterval = Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL ?? 60_000);
-const kIsDispatcherInstance = Boolean(process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? false);
+const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
 type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
