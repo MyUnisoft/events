@@ -167,6 +167,26 @@ describe("eventsValidationFn", () => {
       expect(accountingEntryLettering.has("void")).toBe(false);
     });
   });
+
+  describe("DocumentCloud", () => {
+    let cloudDocument;
+
+    beforeAll(() => {
+      expect(eventsValidationFn.has("cloudDocument")).toBe(true);
+
+      cloudDocument = eventsValidationFn.get("cloudDocument");
+    });
+
+    test("cloudDocument should have a validation function for \"create\", \"update\"", () => {
+      expect(cloudDocument.has("create")).toBe(true);
+      expect(cloudDocument.has("update")).toBe(true);
+    });
+
+    test("cloudDocument should not have a validation function for \"delete\", \"void\"", () => {
+      expect(cloudDocument.has("delete")).toBe(false);
+      expect(cloudDocument.has("void")).toBe(false);
+    });
+  });
 });
 
 describe("defaultStandardLog", () => {

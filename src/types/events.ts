@@ -154,6 +154,23 @@ export interface AccountingEntryLettering {
   }
 }
 
+export type CloudDocumentOperation = Operation[
+  keyof Pick<Operation, "create" | "update">
+];
+
+export type CloudDocumentScope = Scope;
+
+export interface CloudDocument {
+  name: "cloudDocument";
+  scope: CloudDocumentScope;
+  operation: CloudDocumentOperation;
+  data: {
+    id: string;
+    status: "rejected" | "completed";
+    reason: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -163,4 +180,5 @@ export interface Events {
   adminMessage: AdminMessage;
   thirdParty: ThirdParty;
   accountingEntryLettering: AccountingEntryLettering;
+  cloudDocument: CloudDocument;
 }

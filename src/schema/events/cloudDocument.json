@@ -1,0 +1,38 @@
+{
+  "cloudDocument": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "status": {
+          "enum": ["reject", "completed"]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "status", "reason"],
+      "additionalProperties": false
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "status": {
+          "enum": ["reject", "completed"]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "code", "reason"],
+      "additionalProperties": false
+    }
+  }
+}
