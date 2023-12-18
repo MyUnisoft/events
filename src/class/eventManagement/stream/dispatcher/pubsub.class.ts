@@ -4,15 +4,17 @@ import { randomUUID } from "node:crypto";
 // Import Third-party Dependencies
 import {
   Channel,
+  Stream,
   getRedis
 } from "@myunisoft/redis";
 import { Logger } from "pino";
 
 // Import Internal Dependencies
 import { TransactionStore } from "../store/transaction.class";
-import { Prefix } from "../../../../types";
+import { EventCast, EventSubscribe, Prefix } from "../../../../types";
 import { SharedConf } from "./dispatcher.class";
 import { DispatcherStore } from "../store/dispatcher.class";
+import { StateManager } from "./state-manager.class";
 
 // CONSTANTS
 const kDispatcherChannel = "dispatcher";
@@ -22,15 +24,20 @@ const kDispatcherRegistrationEvent = "dispatcher-register";
 
 export type PubSubHandlerOptions = SharedConf & {
   dispatcherStore: DispatcherStore;
+  eventsSubscribe: (EventSubscribe & {
+    horizontalScale?: boolean;
+  })[];
+  eventsCast: EventCast[];
+  stateManager: StateManager;
 };
 
 export class PubSubHandler {
-  public isLeader = false;
-
   public instanceName: string;
   public prefix: Prefix;
   public formattedPrefix: string;
   public consumerUUID: string;
+  public eventsCast: EventCast[];
+  public eventsSubscribe: EventSubscribe[];
 
   public dispatcherChannel: Channel;
   public providedUUID: string | undefined;
@@ -38,6 +45,7 @@ export class PubSubHandler {
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
   private dispatcherStore: DispatcherStore;
 
+  private stateManager: StateManager;
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
 
   constructor(options: PubSubHandlerOptions) {
@@ -90,7 +98,7 @@ export class PubSubHandler {
           return;
         }
 
-        if (!this.isLeader) {
+        if (!this.stateManager.isLeader) {
           if (parsedMessage.redisMetadata.to === this.consumerUUID) {
             if (parsedMessage.name === kDispatcherApprovementEvent) {
               await this.handleDispatcherApprovement(parsedMessage);
@@ -115,17 +123,13 @@ export class PubSubHandler {
       const registerEvent = {
         name: kDispatcherRegistrationEvent,
         data: {
-          incomerName: this.instanceName,
-          eventsSubscribe: [
-            {
-              name: "foo",
-              horizontalScale: true
-            }
-          ]
+          instanceName: this.instanceName,
+          eventsSubscribe: this.eventsSubscribe,
+          eventsCast: this.eventsCast
         },
         redisMetadata: {
           origin: this.consumerUUID,
-          incomerName: this.instanceName,
+          instanceName: this.instanceName,
           prefix: this.prefix
         }
       };
@@ -152,6 +156,132 @@ export class PubSubHandler {
     catch (error) {
       this.logger.error({ error }, "Unable to publish the registration");
     }
+  }
+
+  private async* lazyFetchStreams(this: PubSubHandler) {
+    const count = 5000;
+    let cursor = 0;
+
+    do {
+      // eslint-disable-next-line no-invalid-this
+      const [lastCursor, keys] = await this.redis.scan(
+        cursor,
+        // eslint-disable-next-line no-invalid-this
+        "MATCH", `${this.prefix}-*`,
+        "COUNT", count,
+        "TYPE", "stream"
+      );
+
+      cursor = Number(lastCursor);
+
+      yield keys;
+
+      continue;
+    }
+    while (cursor !== 0);
+  }
+
+  private async getStreams() {
+    const streams: string[] = [];
+
+    for await (const streamKeys of this.lazyFetchStreams()) {
+      for (const streamKey of streamKeys) {
+        streams.push(streamKey);
+      }
+    }
+
+    return streams;
+  }
+
+  private async foo(options: {
+    prefix: string;
+    instanceName: string;
+    eventsSubscribe: EventSubscribe[];
+  }) {
+    const { prefix, instanceName, eventsSubscribe } = options;
+
+    const consumerUUID = randomUUID();
+    const formattedPrefix = `${prefix ? `${prefix}-` : ""}`;
+
+    const streams = await this.getStreams();
+    const unknownEvents = eventsSubscribe.filter(
+      (eventSubscribe) => !streams.find((streamKey) => streamKey.split("-").includes(eventSubscribe.name))
+    );
+
+    const streamsData: { streamKey: string; groupKey: string; consumerUUID: string; }[] = [];
+    for (const unknownEvent of unknownEvents) {
+      const streamKey = `${formattedPrefix}${unknownEvent.name}`;
+
+      const stream = new Stream({
+        streamName: streamKey,
+        frequency: 500
+      });
+
+      await stream.init();
+
+      const groupKey = `${formattedPrefix}${instanceName}-${consumerUUID}`;
+
+      await this.redis.xgroup("CREATE", streamKey, groupKey, "$", "MKSTREAM");
+      await this.redis.xgroup("CREATECONSUMER", streamKey, groupKey, consumerUUID);
+
+      streamsData.push({
+        streamKey,
+        groupKey,
+        consumerUUID
+      });
+    }
+
+    // NOTES:
+    // Correlate Pulsar id with his consumer ID according to the dispatcher stream
+    // Check for horizontal scaling before creating new group.
+
+    for (const streamKey of streams) {
+      const stream = new Stream({
+        streamName: streamKey,
+        frequency: 500
+      });
+
+      if (eventsSubscribe.find((event) => streamKey.split("-").includes(event.name))) {
+        await stream.init();
+
+        const groupKey = `${instanceName}-${consumerUUID}`;
+
+        await this.redis.xgroup("CREATE", streamKey, groupKey, "$", "MKSTREAM");
+        await this.redis.xgroup("CREATECONSUMER", streamKey, groupKey, consumerUUID);
+
+        streamsData.push({
+          streamKey,
+          groupKey,
+          consumerUUID
+        });
+
+        // Also create group & consumer for each dispatcher instances & comm to
+
+        continue;
+      }
+
+      // const groups = await stream.getGroupsData();
+
+      // const filteredGroups = groups.filter((group) => group.name.split("-").includes(instanceName));
+
+      // if (filteredGroups.length === 0) {
+      //   // Create Group & consumer
+      //   // Push into array response
+      // }
+
+      // // for (const group of groups) {
+      // //   // Find related group by their name
+      // //   // check if already in use or not according to scaling prop
+      // //   // If match group => assign uuid & create the consumer
+      // //   // If no match group => create new group with random uuid, assign & create consumer
+      // // }
+      // resultData.push(streamKey);
+    }
+
+    return {
+      consumerUUID,
+      streamsData
+    };
   }
 
   private async approveDispatcher(message: any) {
@@ -186,15 +316,20 @@ export class PubSubHandler {
       });
 
       if (data.incomerName === this.instanceName) {
-        dispatcher.isDispatcherActiveInstance = false;
+        dispatcher.isActiveInstance = false;
       }
 
-      const providedUUID = await this.dispatcherStore.set(dispatcher);
+      console.log("here");
+      // get streams & groups
+      const { streamsData, consumerUUID } = await this.foo({ ...dispatcher });
+
+      await this.dispatcherStore.set({ ...dispatcher, providedUUID: consumerUUID });
 
       const event = {
         name: kDispatcherApprovementEvent,
         data: {
-          providedUUID
+          providedUUID: consumerUUID,
+          streamsData
         },
         redisMetadata: {
           origin: this.consumerUUID,
@@ -220,7 +355,7 @@ export class PubSubHandler {
         })
       ]);
 
-      this.logger.info(`Approved Incomer with uuid: ${providedUUID}`);
+      this.logger.info(`Approved Incomer with uuid: ${consumerUUID}`);
     }
     catch (error) {
       this.logger.error({ error }, `Unable to approve next to the transaction: ${transactionId}`);

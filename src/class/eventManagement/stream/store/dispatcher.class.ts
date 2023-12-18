@@ -31,19 +31,10 @@ export class DispatcherStore extends KVPeer<RegisteredDispatcher> {
     this.key = `${options.prefix ? `${options.prefix}-` : ""}dispatcher`;
   }
 
-  async set(dispatcher: Omit<RegisteredDispatcher, "providedUUID">): Promise<string> {
-    const providedUUID = randomUUID();
+  async set(dispatcher: RegisteredDispatcher): Promise<void> {
+    const key = `${this.key}-${dispatcher.providedUUID}`;
 
-    const key = `${this.key}-${providedUUID}`;
-
-    await this.setValue({ key,
-      value: {
-        ...dispatcher,
-        providedUUID
-      }
-    });
-
-    return providedUUID;
+    await this.setValue({ key, value: dispatcher });
   }
 
   async* lazyFetch() {

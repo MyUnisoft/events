@@ -11,7 +11,7 @@ import {
 import { Logger, pino } from "pino";
 
 // Import Internal Dependencies
-import { EventSubscribe, Prefix } from "../../../../types";
+import { EventCast, EventSubscribe, Prefix } from "../../../../types";
 import { InitHandler } from "./init.class";
 import { DispatcherStore } from "../store/dispatcher.class";
 import { PubSubHandler } from "./pubsub.class";
@@ -25,7 +25,7 @@ const kDefaultIdleTime = 2_000;
 export interface SharedConf {
   instanceName: string;
   consumerUUID: string;
-  logger:Partial<Logger> & Pick<Logger, "info" | "warn">;
+  logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   idleTime: number;
   prefix?: Prefix;
 }
@@ -48,6 +48,7 @@ export type DispatcherOptions = Partial<InterpersonalOptions> & DispatcherPartia
   eventsSubscribe: (EventSubscribe & {
     horizontalScale?: boolean;
   })[];
+  eventsCast: EventCast[];
   defaultEventConfig?: DefaultEventDispatchConfig;
 }
 
@@ -58,12 +59,15 @@ export class Dispatcher {
   public consumerUUID = randomUUID();
   public prefix: Prefix;
   public logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  public eventsCast: EventCast[];
+  public eventsSubscribe: EventSubscribe[];
 
   public interpersonal: Interpersonal;
   public streams = new Map<string, Stream>();
 
   private dispatcherStore: DispatcherStore;
 
+  private stateManager: StateManager;
   private pubsubHandler: PubSubHandler;
   private initHandler: InitHandler;
 
@@ -86,6 +90,8 @@ export class Dispatcher {
     const genericOptions = {
       instanceName: options.instanceName,
       idleTime: kEnvIdleTime ?? options.idleTime ?? kDefaultIdleTime,
+      eventsSubscribe: this.eventsSubscribe,
+      eventsCast: this.eventsCast,
       consumerUUID: this.consumerUUID,
       logger: this.logger
     };
@@ -94,22 +100,31 @@ export class Dispatcher {
       prefix: this.prefix
     });
 
+    this.stateManager = new StateManager();
+
     this.pubsubHandler = new PubSubHandler({
       ...options,
       ...genericOptions,
+      stateManager: this.stateManager,
       dispatcherStore: this.dispatcherStore
     });
 
     this.initHandler = new InitHandler({
       ...options,
       ...genericOptions,
+      stateManager: this.stateManager,
       pubsubHandler: this.pubsubHandler,
       dispatcherStore: this.dispatcherStore
     });
   }
 
   public async init(): Promise<void> {
-    await this.initHandler.init();
+    try {
+      await this.initHandler.init();
+    }
+    catch (error) {
+      this.logger.error({ error }, "Unable to init");
+    }
   }
 
   public async publish() {
@@ -118,6 +133,7 @@ export class Dispatcher {
 }
 
 import timers from "node:timers/promises";
+import { StateManager } from "./state-manager.class";
 
 async function main() {
   await initRedis();
@@ -138,9 +154,10 @@ async function main() {
       eventsSubscribe: [
         {
           name: "accountingFolder",
-          horizontalScale: true
+          horizontalScale: false
         }
       ],
+      eventsCast: [],
       defaultEventConfig: {
         accountingFolder: {
           subscribers: [
