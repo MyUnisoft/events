@@ -45,7 +45,7 @@ const kIdleTime = Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME ?? 60_000 * 
 const kCheckLastActivityInterval = Number(process.env.MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL ?? 60_000 * 2);
 const kCheckRelatedTransactionInterval = Number(process.env.MYUNISOFT_DISPATCHER_RESOLVE_TRANSACTION_INTERVAL ?? 60_000 * 3);
 const kBackupTransactionStoreName = String(process.env.MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME ?? "backup");
-const kSilentLogger = Boolean(process.env.MYUNISOFT_EVENTS_SILENT_LOGGER || false);
+const kSilentLogger = (process.env.MYUNISOFT_EVENTS_SILENT_LOGGER ?? "false") === "true";
 const kMaxInitTimeout = Number(process.env.MYUNISOFT_DISPATCHER_INIT_TIMEOUT ?? 3_500);
 export const PING_INTERVAL = Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL ?? 60_000 * 5);
 
