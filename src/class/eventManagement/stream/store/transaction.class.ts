@@ -160,16 +160,7 @@ export class TransactionStore<
   }
 
   async getTransactionById(transactionId: string): Promise<Transaction<T> | null> {
-    let foo;
-
-    try {
-      foo = await this.getValue(`${this.key}-${transactionId}`);
-    }
-    catch (error) {
-      console.log("rehhrehre");
-    }
-
-    return foo;
+    return await this.getValue(`${this.key}-${transactionId}`);
   }
 
   async deleteTransaction(transactionId: string): Promise<void> {

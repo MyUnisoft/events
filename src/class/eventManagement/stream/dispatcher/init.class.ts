@@ -20,6 +20,7 @@ import { PubSubHandler } from "./pubsub.class";
 import { DefaultEventDispatchConfig, SharedConf } from "./dispatcher.class";
 import { IncomerStore } from "../store/incomer.class";
 import { DispatcherStore } from "../store/dispatcher.class";
+import { StateManager } from "./state-manager.class";
 
 export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
   eventsSubscribe: (EventSubscribe & {
@@ -28,13 +29,14 @@ export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
   pubsubHandler: PubSubHandler;
   dispatcherStore: DispatcherStore;
   defaultEventConfig?: DefaultEventDispatchConfig;
+  stateManager: StateManager;
 }
 
 // CONSTANTS
 const kNullTimeStamp = 0;
 
 export class InitHandler extends EventEmitter {
-  public dispatcherStreamName = "dispatcher-stream";
+  public dispatcherStreamName = "dispatcher";
 
   public instanceName: string;
   public prefix: Prefix;
@@ -49,8 +51,9 @@ export class InitHandler extends EventEmitter {
   private DispatcherStreamReader: Readable;
 
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
-  private dispatcherStore: IncomerStore;
+  private dispatcherStore: DispatcherStore;
   private pubsubHandler: PubSubHandler;
+  private stateManager: StateManager;
   private defaultEventConfig: DefaultEventDispatchConfig | undefined;
 
   private initCustomId = 2;
@@ -122,6 +125,8 @@ export class InitHandler extends EventEmitter {
 
       for (const entry of entries) {
         if (String(entry.id) === `${kNullTimeStamp}-${this.initCustomId}`) {
+          this.logger.info("Taking lead");
+
           await this.takeLead();
         }
 
@@ -134,6 +139,7 @@ export class InitHandler extends EventEmitter {
 
       return;
     });
+
 
     await this.pubsubHandler.init();
 
@@ -165,6 +171,7 @@ export class InitHandler extends EventEmitter {
 
   private async handleDefaultEventConfig() {
     for (const [event, config] of Object.entries(this.defaultEventConfig)) {
+      console.log("heree", event);
       const streamName = this.formattedPrefix + event;
 
       const eventStream = new Interpersonal({
@@ -216,7 +223,7 @@ export class InitHandler extends EventEmitter {
   }
 
   private async takeLead() {
-    this.pubsubHandler.isLeader = true;
+    this.stateManager.isLeader = true;
 
     const takeLeadEvent = {
       name: "dispatcher-take_lead",
@@ -235,7 +242,7 @@ export class InitHandler extends EventEmitter {
 
     const dispatcher = Object.assign({}, {
       name: this.instanceName,
-      isDispatcherActiveInstance: true,
+      isActiveInstance: true,
       eventsSubscribe: [],
       eventsCast: [],
       baseUUID: this.consumerUUID,
@@ -244,8 +251,13 @@ export class InitHandler extends EventEmitter {
       prefix: this.prefix
     });
 
-    this.pubsubHandler.providedUUID = await this.dispatcherStore.set(dispatcher);
+    this.pubsubHandler.providedUUID = randomUUID();
 
-    this.logger.info("Resolved initialization and taking Lead");
+    await this.dispatcherStore.set({
+      ...dispatcher,
+      providedUUID: this.pubsubHandler.providedUUID
+    });
+
+    this.logger.info("Resolved initialization and took Lead");
   }
 }
