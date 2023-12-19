@@ -28,10 +28,11 @@
           "enum": ["reject", "completed"]
         },
         "reason": {
-          "type": "string"
+          "type": "string",
+          "nullable": true
         }
       },
-      "required": ["id", "code", "reason"],
+      "required": ["id", "code"],
       "additionalProperties": false
     }
   }

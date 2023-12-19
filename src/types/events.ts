@@ -167,7 +167,7 @@ export interface CloudDocument {
   data: {
     id: string;
     status: "rejected" | "completed";
-    reason: string;
+    reason?: string;
   }
 }
 
