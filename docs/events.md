@@ -220,3 +220,27 @@ export interface AccountingEntryLettering {
   }
 }
 ```
+
+# CloudDocument
+
+- **Operations**: CREATE, UPDATE
+- [JSON Schema](./json-schema/events/cloudDocument.md)
+
+```ts
+export type CloudDocumentOperation = Operation[
+  keyof Pick<Operation, "create" | "delete">
+];
+
+export type CloudDocumentScope = Scope;
+
+export interface CloudDocument {
+  name: "cloudDocument";
+  scope: CloudDocumentScope;
+  operation: CloudDocumentOperation;
+  data: {
+    id: string;
+    status: "rejected" | "completed";
+    reason?: string;
+  }
+}
+```
