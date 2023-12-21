@@ -228,7 +228,7 @@ export interface AccountingEntryLettering {
 
 ```ts
 export type CloudDocumentOperation = Operation[
-  keyof Pick<Operation, "create" | "delete">
+  keyof Pick<Operation, "create" | "update">
 ];
 
 export type CloudDocumentScope = Scope;
