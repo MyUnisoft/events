@@ -15,7 +15,7 @@ import {
 import { Logger } from "pino";
 
 // Import Internal Dependencies
-import { EventSubscribe, Prefix } from "../../../../types";
+import { EventCast, EventSubscribe, Prefix } from "../../../../types";
 import { PubSubHandler } from "./pubsub.class";
 import { DefaultEventDispatchConfig, SharedConf } from "./dispatcher.class";
 import { IncomerStore } from "../store/incomer.class";
@@ -36,13 +36,12 @@ export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
 const kNullTimeStamp = 0;
 
 export class InitHandler extends EventEmitter {
-  public dispatcherStreamName = "dispatcher";
-
   public instanceName: string;
   public prefix: Prefix;
   public formattedPrefix: string;
-  public prefixedDispatcherStreamName: string;
   public consumerUUID: string;
+  public eventsSubscribe: EventSubscribe[];
+  public eventsCast: EventCast[];
 
   public interpersonal: Interpersonal;
   public eventStreams = new Map<string, Stream>();
@@ -64,22 +63,8 @@ export class InitHandler extends EventEmitter {
     Object.assign(this, options);
 
     this.formattedPrefix = `${this.prefix ? `${this.prefix}-` : ""}`;
-    this.prefixedDispatcherStreamName = this.formattedPrefix + this.dispatcherStreamName;
 
     this.logger = options.logger.child({ module: "init-handler" });
-
-    this.dispatcherInitStream = new Interpersonal({
-      ...options,
-      count: 1,
-      lastId: ">",
-      frequency: 1,
-      claimOptions: {
-        idleTime: 500
-      },
-      streamName: this.prefixedDispatcherStreamName,
-      groupName: this.instanceName,
-      consumerName: this.consumerUUID
-    });
   }
 
   get redis() {
@@ -171,7 +156,6 @@ export class InitHandler extends EventEmitter {
 
   private async handleDefaultEventConfig() {
     for (const [event, config] of Object.entries(this.defaultEventConfig)) {
-      console.log("heree", event);
       const streamName = this.formattedPrefix + event;
 
       const eventStream = new Interpersonal({
@@ -186,10 +170,9 @@ export class InitHandler extends EventEmitter {
         consumerName: this.consumerUUID
       });
 
-      const eventStreamExist = await eventStream.streamExist();
-      if (!eventStreamExist) {
-        await eventStream.init();
-      }
+      // AVOID CREATING USELESS GROUP & CONSUMER
+      await eventStream.init();
+      await this.redis.xgroup("DESTROY", streamName, this.instanceName);
 
       for (const subscriber of config.subscribers) {
         const { name, horizontalScale, replicas } = subscriber;
@@ -222,6 +205,27 @@ export class InitHandler extends EventEmitter {
     }
   }
 
+  private async initDispatcherGroup() {
+    for (const event of this.eventsSubscribe) {
+      const streamName = this.formattedPrefix + event.name;
+
+      const eventStream = new Interpersonal({
+        count: 100,
+        lastId: ">",
+        frequency: 1,
+        claimOptions: {
+          idleTime: 5_000
+        },
+        streamName,
+        groupName: this.instanceName,
+        consumerName: this.consumerUUID
+      });
+
+      // AVOID CREATING USELESS GROUP & CONSUMER
+      await eventStream.init();
+    }
+  }
+
   private async takeLead() {
     this.stateManager.isLeader = true;
 
@@ -238,24 +242,24 @@ export class InitHandler extends EventEmitter {
       await this.handleDefaultEventConfig();
     }
 
+    await this.initDispatcherGroup();
+
     const now = Date.now();
 
     const dispatcher = Object.assign({}, {
-      name: this.instanceName,
+      instanceName: this.instanceName,
       isActiveInstance: true,
-      eventsSubscribe: [],
-      eventsCast: [],
+      eventsSubscribe: this.eventsSubscribe,
+      eventsCast: this.eventsCast,
       baseUUID: this.consumerUUID,
       lastActivity: now,
       aliveSince: now,
       prefix: this.prefix
     });
 
-    this.pubsubHandler.providedUUID = randomUUID();
-
     await this.dispatcherStore.set({
       ...dispatcher,
-      providedUUID: this.pubsubHandler.providedUUID
+      providedUUID: this.consumerUUID
     });
 
     this.logger.info("Resolved initialization and took Lead");
