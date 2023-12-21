@@ -1,6 +1,3 @@
-// Import Node.js Dependencies
-import { randomUUID } from "node:crypto";
-
 // Import Third-party Dependencies
 import {
   KVOptions,
@@ -11,9 +8,9 @@ import {
 import { EventCast, EventSubscribe } from "../../../../types";
 
 export interface RegisteredDispatcher {
+  instanceName: string;
   providedUUID: string;
   baseUUID: string;
-  name: string;
   isActiveInstance: boolean;
   lastActivity: number;
   aliveSince: number;

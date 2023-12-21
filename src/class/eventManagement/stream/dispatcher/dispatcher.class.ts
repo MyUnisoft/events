@@ -21,10 +21,12 @@ const kLoggerLevel = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER;
 const kEnvIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_IDLE_TIME)) ? undefined :
   Number(process.env.MYUNISOFT_IDLE_TIME);
 const kDefaultIdleTime = 2_000;
+const kDispatcherStreamName = "dispatcher";
 
 export interface SharedConf {
   instanceName: string;
   consumerUUID: string;
+  dispatcherInitStream: Interpersonal;
   logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
   idleTime: number;
   prefix?: Prefix;
@@ -62,6 +64,7 @@ export class Dispatcher {
   public eventsCast: EventCast[];
   public eventsSubscribe: EventSubscribe[];
 
+  public formattedPrefix: string;
   public interpersonal: Interpersonal;
   public streams = new Map<string, Stream>();
 
@@ -100,13 +103,29 @@ export class Dispatcher {
       prefix: this.prefix
     });
 
+    this.formattedPrefix = `${this.prefix ? `${this.prefix}-` : ""}`;
+
+    const dispatcherInitStream = new Interpersonal({
+      ...options,
+      count: 1,
+      lastId: ">",
+      frequency: 1,
+      claimOptions: {
+        idleTime: 500
+      },
+      streamName: this.formattedPrefix + kDispatcherStreamName,
+      groupName: this.instanceName,
+      consumerName: this.consumerUUID
+    });
+
     this.stateManager = new StateManager();
 
     this.pubsubHandler = new PubSubHandler({
       ...options,
       ...genericOptions,
       stateManager: this.stateManager,
-      dispatcherStore: this.dispatcherStore
+      dispatcherStore: this.dispatcherStore,
+      dispatcherInitStream
     });
 
     this.initHandler = new InitHandler({
@@ -114,7 +133,8 @@ export class Dispatcher {
       ...genericOptions,
       stateManager: this.stateManager,
       pubsubHandler: this.pubsubHandler,
-      dispatcherStore: this.dispatcherStore
+      dispatcherStore: this.dispatcherStore,
+      dispatcherInitStream
     });
   }
 

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 // Import Third-party Dependencies
 import {
   Channel,
+  Interpersonal,
   Stream,
   getRedis
 } from "@myunisoft/redis";
@@ -40,10 +41,10 @@ export class PubSubHandler {
   public eventsSubscribe: EventSubscribe[];
 
   public dispatcherChannel: Channel;
-  public providedUUID: string | undefined;
 
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
   private dispatcherStore: DispatcherStore;
+  private dispatcherInitStream: Interpersonal;
 
   private stateManager: StateManager;
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
@@ -193,7 +194,7 @@ export class PubSubHandler {
     return streams;
   }
 
-  private async foo(options: {
+  private async assignStreamGroups(options: {
     prefix: string;
     instanceName: string;
     eventsSubscribe: EventSubscribe[];
@@ -309,19 +310,16 @@ export class PubSubHandler {
 
       const dispatcher = Object.assign({}, {
         ...data,
+        isActiveInstance: false,
         baseUUID: origin,
         lastActivity: now,
         aliveSince: now,
         prefix
       });
 
-      if (data.incomerName === this.instanceName) {
-        dispatcher.isActiveInstance = false;
-      }
-
       console.log("here");
       // get streams & groups
-      const { streamsData, consumerUUID } = await this.foo({ ...dispatcher });
+      const { streamsData, consumerUUID } = await this.assignStreamGroups({ ...dispatcher });
 
       await this.dispatcherStore.set({ ...dispatcher, providedUUID: consumerUUID });
 
@@ -355,7 +353,7 @@ export class PubSubHandler {
         })
       ]);
 
-      this.logger.info(`Approved Incomer with uuid: ${consumerUUID}`);
+      this.logger.info(`Approved Dispatcher with uuid: ${consumerUUID}`);
     }
     catch (error) {
       this.logger.error({ error }, `Unable to approve next to the transaction: ${transactionId}`);
@@ -373,17 +371,27 @@ export class PubSubHandler {
         throw new Error("Unknown Transaction");
       }
 
-      this.providedUUID = data.providedUUID;
+      this.consumerUUID = data.providedUUID;
 
-      await this.dispatcherTransactionStore.updateTransaction(transactionId, {
-        ...transaction,
-        redisMetadata: {
-          ...transaction.redisMetadata,
-          resolved: true
-        }
-      });
+      await Promise.all([
+        this.dispatcherTransactionStore.updateTransaction(transactionId, {
+          ...transaction,
+          redisMetadata: {
+            ...transaction.redisMetadata,
+            resolved: true
+          }
+        }),
+        this.dispatcherInitStream.deleteConsumer(),
+        this.redis.xgroup(
+          "CREATECONSUMER",
+          // eslint-disable-next-line dot-notation
+          this.dispatcherInitStream["streamName"],
+          this.dispatcherInitStream.groupName,
+          this.consumerUUID
+        )
+      ]);
 
-      this.logger.info(`Dispatcher Approved width uuid: ${this.providedUUID}`);
+      this.logger.info(`Dispatcher Approved width uuid: ${this.consumerUUID}`);
     }
     catch (error) {
       this.logger.error({ error }, `Unable to handle approvement next to the transaction: ${transactionId}`);
