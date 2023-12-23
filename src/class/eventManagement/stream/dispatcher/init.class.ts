@@ -15,36 +15,51 @@ import {
 import { Logger } from "pino";
 
 // Import Internal Dependencies
-import { EventCast, EventSubscribe, Prefix } from "../../../../types";
+import { CallBackEventMessage, EventCast, EventSubscribe, GenericEvent, Prefix } from "../../../../types";
 import { PubSubHandler } from "./pubsub.class";
-import { DefaultEventDispatchConfig, SharedConf } from "./dispatcher.class";
-import { IncomerStore } from "../store/incomer.class";
+import { DefaultEventDispatchConfig, EventCallBackFn, SharedConf } from "./dispatcher.class";
 import { DispatcherStore } from "../store/dispatcher.class";
 import { StateManager } from "./state-manager.class";
 
-export type InitHandlerOptions = Partial<InterpersonalOptions> & SharedConf & {
+export type InitHandlerOptions<
+  T extends GenericEvent
+> = Partial<InterpersonalOptions> & SharedConf & {
   eventsSubscribe: (EventSubscribe & {
-    horizontalScale?: boolean;
+    eventCallback?: EventCallBackFn<T>;
   })[];
   pubsubHandler: PubSubHandler;
   dispatcherStore: DispatcherStore;
   defaultEventConfig?: DefaultEventDispatchConfig;
   stateManager: StateManager;
+  eventCallback: EventCallBackFn<T>;
 }
+
+export type RedisResponse<T extends GenericEvent> = (CallBackEventMessage<T> & {
+  id: string;
+  // data: string;
+})[];
 
 // CONSTANTS
 const kNullTimeStamp = 0;
 
-export class InitHandler extends EventEmitter {
+export class InitHandler<
+  T extends GenericEvent
+> extends EventEmitter {
   public instanceName: string;
   public prefix: Prefix;
   public formattedPrefix: string;
   public consumerUUID: string;
-  public eventsSubscribe: EventSubscribe[];
+  public eventsSubscribe: (EventSubscribe & {
+    eventCallback?: EventCallBackFn<T>;
+  })[];
   public eventsCast: EventCast[];
+  public eventCallback: EventCallBackFn<T>;
 
   public interpersonal: Interpersonal;
   public eventStreams = new Map<string, Stream>();
+
+  // Move into a dedicated class to handle streams interactions
+  public streamsReadable: Map<string, { instance: Interpersonal, stream: Readable }> = new Map();
 
   private dispatcherInitStream: Interpersonal;
   private DispatcherStreamReader: Readable;
@@ -57,7 +72,7 @@ export class InitHandler extends EventEmitter {
 
   private initCustomId = 2;
 
-  constructor(options: InitHandlerOptions) {
+  constructor(options: InitHandlerOptions<T>) {
     super();
 
     Object.assign(this, options);
@@ -158,21 +173,12 @@ export class InitHandler extends EventEmitter {
     for (const [event, config] of Object.entries(this.defaultEventConfig)) {
       const streamName = this.formattedPrefix + event;
 
-      const eventStream = new Interpersonal({
-        count: 100,
-        lastId: ">",
-        frequency: 1,
-        claimOptions: {
-          idleTime: 5_000
-        },
-        streamName,
-        groupName: this.instanceName,
-        consumerName: this.consumerUUID
+      const eventStream = new Stream({
+        frequency: 0,
+        streamName
       });
 
-      // AVOID CREATING USELESS GROUP & CONSUMER
       await eventStream.init();
-      await this.redis.xgroup("DESTROY", streamName, this.instanceName);
 
       for (const subscriber of config.subscribers) {
         const { name, horizontalScale, replicas } = subscriber;
@@ -181,24 +187,16 @@ export class InitHandler extends EventEmitter {
           .some((group) => group.name === name);
 
         if (!subscriberGroupExist) {
-          await this.redis.xgroup("CREATE", streamName, name, "$", "MKSTREAM");
-        }
-
-        if (!horizontalScale) {
-          for (let index = 0; index < replicas; index++) {
-            await this.redis.xgroup("CREATECONSUMER", streamName, name, randomUUID());
-          }
+          await eventStream.createGroup(name);
         }
 
         if (horizontalScale) {
-          const filteredGroups = (await eventStream.getGroupsData())
+          const existingGroups = (await eventStream.getGroupsData())
             .filter((group) => group.name.startsWith(`${name}-`));
 
-          const totalGroupsInit = filteredGroups.length + 1;
-
-          for (let index = totalGroupsInit; index < replicas; index++) {
+          for (let index = existingGroups.length; index < replicas - 1; index++) {
             const groupName = `${name}-${randomUUID()}`;
-            await this.redis.xgroup("CREATE", streamName, groupName, "$", "MKSTREAM");
+            await eventStream.createGroup(groupName);
           }
         }
       }
@@ -206,13 +204,15 @@ export class InitHandler extends EventEmitter {
   }
 
   private async initDispatcherGroup() {
-    for (const event of this.eventsSubscribe) {
-      const streamName = this.formattedPrefix + event.name;
+    for (const subEvent of this.eventsSubscribe) {
+      const { name, eventCallback } = subEvent;
+
+      const streamName = this.formattedPrefix + name;
 
       const eventStream = new Interpersonal({
         count: 100,
         lastId: ">",
-        frequency: 1,
+        frequency: 0,
         claimOptions: {
           idleTime: 5_000
         },
@@ -221,8 +221,47 @@ export class InitHandler extends EventEmitter {
         consumerName: this.consumerUUID
       });
 
-      // AVOID CREATING USELESS GROUP & CONSUMER
       await eventStream.init();
+
+      const eventStreamReadable = Readable.from(eventStream[Symbol.asyncIterator]());
+
+      this.streamsReadable.set(streamName, { instance: eventStream, stream: eventStreamReadable });
+
+      eventStreamReadable.on("readable", async() => {
+        const redisEvents = eventStreamReadable.read() as RedisResponse<T>;
+
+        for (const redisEvent of redisEvents) {
+          const { id, data: eventData } = redisEvent;
+
+          const parsedEventData = JSON.parse(eventData.data);
+          const fullyParsedData = Object.assign({}, parsedEventData);
+
+          for (const key of Object.keys(parsedEventData)) {
+            try {
+              fullyParsedData[key] = JSON.parse(parsedEventData[key]);
+            }
+            catch {
+              continue;
+            }
+          }
+
+          const event = {
+            ...eventData,
+            data: fullyParsedData
+          };
+
+          try {
+            Promise.all([
+              typeof eventCallback === "undefined" ? this.eventCallback(event as CallBackEventMessage<T>) :
+                eventCallback(event as CallBackEventMessage<T>),
+              eventStream.claimEntry(id)
+            ]);
+          }
+          catch (error) {
+            this.logger.error({ error }, "Unable to handle the Event with id... (Inject custom ID on publish)");
+          }
+        }
+      });
     }
   }
 

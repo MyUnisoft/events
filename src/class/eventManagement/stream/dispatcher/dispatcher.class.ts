@@ -11,7 +11,13 @@ import {
 import { Logger, pino } from "pino";
 
 // Import Internal Dependencies
-import { EventCast, EventSubscribe, Prefix } from "../../../../types";
+import {
+  CallBackEventMessage,
+  EventCast,
+  EventSubscribe,
+  GenericEvent,
+  Prefix
+} from "../../../../types";
 import { InitHandler } from "./init.class";
 import { DispatcherStore } from "../store/dispatcher.class";
 import { PubSubHandler } from "./pubsub.class";
@@ -46,15 +52,22 @@ export interface DefaultEventDispatchConfig {
 
 type DispatcherPartialSharedConf = Partial<SharedConf> & Pick<SharedConf, "instanceName">;
 
-export type DispatcherOptions = Partial<InterpersonalOptions> & DispatcherPartialSharedConf & {
+export type EventCallBackFn<
+  T extends GenericEvent
+> = (message: CallBackEventMessage<T>) => void;
+
+export type DispatcherOptions<
+  T extends GenericEvent
+> = Partial<InterpersonalOptions> & DispatcherPartialSharedConf & {
   eventsSubscribe: (EventSubscribe & {
-    horizontalScale?: boolean;
+    eventCallback?: EventCallBackFn<T>;
   })[];
   eventsCast: EventCast[];
   defaultEventConfig?: DefaultEventDispatchConfig;
+  eventCallback: EventCallBackFn<T>;
 }
 
-export class Dispatcher {
+export class Dispatcher<T extends GenericEvent = GenericEvent> {
   public dispatcherStreamName = "dispatcher-stream";
 
   public instanceName: string;
@@ -72,9 +85,9 @@ export class Dispatcher {
 
   private stateManager: StateManager;
   private pubsubHandler: PubSubHandler;
-  private initHandler: InitHandler;
+  private initHandler: InitHandler<T>;
 
-  constructor(options: DispatcherOptions) {
+  constructor(options: DispatcherOptions<T>) {
     Object.assign(this, options);
 
     this.logger = options.logger ?? pino({
@@ -147,8 +160,23 @@ export class Dispatcher {
     }
   }
 
-  public async publish() {
-    //
+  public async publish(event: T) {
+    const { name } = event;
+
+    const eventStream = this.initHandler.streamsReadable.get(this.formattedPrefix + name);
+
+    if (!eventStream) {
+      throw new Error(`Unknown Event: ${JSON.stringify(event)}`);
+    }
+
+    const parsedMessage = Object.assign({}, event) as Record<string, any>;
+
+    for (const key of Object.keys(event)) {
+      parsedMessage[key] = typeof parsedMessage[key] === "object" ?
+        JSON.stringify(parsedMessage[key]) : parsedMessage[key];
+    }
+
+    await eventStream.instance.push(parsedMessage, {});
   }
 }
 
@@ -159,14 +187,8 @@ async function main() {
   await initRedis();
   await initRedis({}, "subscriber");
 
-  // const foo = new Dispatcher({
-  //   eventsSubscribe: []
-  // });
-
-  // await foo.init();
-
-  const dispatchers = new Array(1);
-  const toInit: any[] = [];
+  const dispatchers = new Array(2);
+  const toInit: Dispatcher[] = [];
   for (const _ of dispatchers) {
     toInit.push(new Dispatcher({
       instanceName: "Pulsar",
@@ -174,7 +196,10 @@ async function main() {
       eventsSubscribe: [
         {
           name: "accountingFolder",
-          horizontalScale: false
+          horizontalScale: false,
+          eventCallback: (message) => {
+            console.log("Received event with custom callback: ", message);
+          }
         }
       ],
       eventsCast: [],
@@ -188,6 +213,9 @@ async function main() {
             }
           ]
         }
+      },
+      eventCallback: (message) => {
+        console.log("Received event: ", message);
       }
     }));
   }
@@ -196,13 +224,9 @@ async function main() {
     ...toInit.map((dispatcher) => dispatcher.init())
   ]);
 
-  // await timers.setTimeout(2000);
+  await timers.setTimeout(2000);
 
-  // const bar = new Dispatcher({
-  //   eventsSubscribe: []
-  // });
-
-  // await bar.init();
+  await toInit[0].publish({ name: "accountingFolder", data: { foo: "bar" } });
 }
 
 main().then(() => console.log("init")).catch((error) => console.error(error));
