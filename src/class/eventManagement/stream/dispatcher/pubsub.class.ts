@@ -222,8 +222,9 @@ export class PubSubHandler {
 
       const groupKey = `${formattedPrefix}${instanceName}-${consumerUUID}`;
 
-      await this.redis.xgroup("CREATE", streamKey, groupKey, "$", "MKSTREAM");
-      await this.redis.xgroup("CREATECONSUMER", streamKey, groupKey, consumerUUID);
+      await stream.createGroup(groupKey);
+      // NOT HERE, THE GIVEN INSTANCE MUST BE THE ONE CREATING THE CONSUMER THROUGH INIT OF INTRAPERSONAL CLASS
+      // await this.redis.xgroup("CREATECONSUMER", streamKey, groupKey, consumerUUID);
 
       streamsData.push({
         streamKey,
@@ -231,10 +232,6 @@ export class PubSubHandler {
         consumerUUID
       });
     }
-
-    // NOTES:
-    // Correlate Pulsar id with his consumer ID according to the dispatcher stream
-    // Check for horizontal scaling before creating new group.
 
     for (const streamKey of streams) {
       const stream = new Stream({
@@ -247,8 +244,8 @@ export class PubSubHandler {
 
         const groupKey = `${instanceName}-${consumerUUID}`;
 
-        await this.redis.xgroup("CREATE", streamKey, groupKey, "$", "MKSTREAM");
-        await this.redis.xgroup("CREATECONSUMER", streamKey, groupKey, consumerUUID);
+        await stream.createGroup(groupKey);
+        await stream.createConsumer(groupKey, consumerUUID);
 
         streamsData.push({
           streamKey,
@@ -256,27 +253,8 @@ export class PubSubHandler {
           consumerUUID
         });
 
-        // Also create group & consumer for each dispatcher instances & comm to
-
         continue;
       }
-
-      // const groups = await stream.getGroupsData();
-
-      // const filteredGroups = groups.filter((group) => group.name.split("-").includes(instanceName));
-
-      // if (filteredGroups.length === 0) {
-      //   // Create Group & consumer
-      //   // Push into array response
-      // }
-
-      // // for (const group of groups) {
-      // //   // Find related group by their name
-      // //   // check if already in use or not according to scaling prop
-      // //   // If match group => assign uuid & create the consumer
-      // //   // If no match group => create new group with random uuid, assign & create consumer
-      // // }
-      // resultData.push(streamKey);
     }
 
     return {
@@ -317,8 +295,6 @@ export class PubSubHandler {
         prefix
       });
 
-      console.log("here");
-      // get streams & groups
       const { streamsData, consumerUUID } = await this.assignStreamGroups({ ...dispatcher });
 
       await this.dispatcherStore.set({ ...dispatcher, providedUUID: consumerUUID });
@@ -382,13 +358,8 @@ export class PubSubHandler {
           }
         }),
         this.dispatcherInitStream.deleteConsumer(),
-        this.redis.xgroup(
-          "CREATECONSUMER",
-          // eslint-disable-next-line dot-notation
-          this.dispatcherInitStream["streamName"],
-          this.dispatcherInitStream.groupName,
-          this.consumerUUID
-        )
+        (new Stream({ streamName: this.dispatcherInitStream.streamName, frequency: 0 }))
+          .createConsumer(this.dispatcherInitStream.groupName, this.consumerUUID)
       ]);
 
       this.logger.info(`Dispatcher Approved width uuid: ${this.consumerUUID}`);
