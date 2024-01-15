@@ -6,7 +6,8 @@ import timers from "timers/promises";
 import {
   initRedis,
   clearAllKeys,
-  closeAllRedis
+  closeAllRedis,
+  getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -32,6 +33,8 @@ describe("Ping", () => {
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any);
+
+    await getRedis()!.flushall();
 
     await initRedis({
       port: process.env.REDIS_PORT,
