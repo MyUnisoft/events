@@ -144,15 +144,11 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        const mockLogs = mockedLoggerError.mock.calls.flat();
-        expect(mockLogs).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            channel: "dispatcher",
-            message: event,
-            error: expect.anything()
-          }),
-          expect.anything()
-        ]));
+        expect(mockedLoggerError).toHaveBeenCalledWith({
+          channel: "dispatcher",
+          message: event,
+          error: expect.any(String)
+        }, "Handle registration");
       });
 
       describe("Publishing a well formed register event but multiple times", () => {
@@ -234,21 +230,17 @@ describe("Dispatcher", () => {
           await timers.setTimeout(4_000);
 
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-          const mockLogs = mockedLoggerError.mock.calls.flat();
-          expect(mockLogs).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-              channel: "dispatcher",
-              message: {
-                ...event,
-                redisMetadata: {
-                  ...event.redisMetadata,
-                  transactionId: transaction.redisMetadata.transactionId
-                }
-              },
-              error: expect.anything()
-            }),
-            expect.anything()
-          ]));
+          expect(mockedLoggerError).toHaveBeenLastCalledWith({
+            channel: "dispatcher",
+            message: {
+              ...event,
+              redisMetadata: {
+                ...event.redisMetadata,
+                transactionId: transaction.redisMetadata.transactionId
+              }
+            },
+            error: expect.any(String)
+          }, "Handle registration");
         });
       });
     });

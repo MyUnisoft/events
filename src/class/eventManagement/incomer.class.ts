@@ -512,16 +512,11 @@ export class Incomer <
       return;
     }
 
-    try {
-      if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
-        await this.handleDispatcherMessages(channel, formattedMessage);
-      }
-      else if (channel === this.incomerChannelName && isIncomerChannelMessage(formattedMessage)) {
-        await this.handleIncomerMessages(channel, formattedMessage);
-      }
+    if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
+      await this.handleDispatcherMessages(channel, formattedMessage);
     }
-    catch (error) {
-      this.logger.error({ channel, message: formattedMessage, error: error.stack });
+    else if (channel === this.incomerChannelName && isIncomerChannelMessage(formattedMessage)) {
+      await this.handleIncomerMessages(channel, formattedMessage);
     }
   }
 
@@ -545,17 +540,15 @@ export class Incomer <
         .with({ name: "APPROVEMENT" }, async() => {
           this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-          await this.handleApprovement(message as DispatcherApprovementMessage);
-        })
-        .otherwise(() => {
-          throw new Error("Unknown event");
-        });
-    }
-    catch (error) {
-      this.logger.error({
-        channel: "dispatcher",
-        error: error.stack,
-        message
+        await this.handleApprovement(message);
+      })
+      .exhaustive()
+      .catch((error) => {
+        this.logger.error({
+          channel: "dispatcher",
+          stack: error.stack,
+          message
+        }, "Handle approvement message");
       });
     }
   }
@@ -609,7 +602,19 @@ export class Incomer <
       }
     });
 
-    this.logger.debug(this.standardLogFn(logData as any)("Resolved Ping event"));
+        this.logger.info(logData, "Resolved Ping event");
+      })
+      .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
+        ...res, channel
+      }))
+      .exhaustive()
+      .catch((error) => {
+        this.logger.error({
+          channel: "incomer",
+          stack: error.stack,
+          message
+        }, "Handle message on custom channel");
+      });
   }
 
   private async customEvent(opts: { name: string, channel: string, message: DistributedEventMessage<T> }) {
@@ -677,9 +682,8 @@ export class Incomer <
       prefix: this.prefix
     });
 
-    const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
-
-    this.newTransactionStore = new TransactionStore({
+    const oldTransactions = await this.incomerTransactionStore.getTransactions();
+    const newTransactionStore = new TransactionStore({
       prefix: this.prefixedName + this.providedUUID,
       instance: "incomer"
     });

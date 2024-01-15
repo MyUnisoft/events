@@ -32,7 +32,11 @@ async function updateRegisterTransactionState(
   publisherOldTransacStore: TransactionStore<"incomer">,
   approvementTransactionId: string
 ) {
-  const [_, registerTransaction] = [...await publisherOldTransacStore.getTransactions()].find(([id, transac]) => transac.name === "REGISTER")!;
+  const registerTransaction = await publisherOldTransacStore.getTransactionById(publisherRegistrationTransacId);
+
+  if (!registerTransaction) {
+    return;
+  }
 
   await publisherOldTransacStore.updateTransaction(registerTransaction.redisMetadata.transactionId!, {
     ...registerTransaction,
@@ -113,12 +117,26 @@ beforeAll(async() => {
 
   await getRedis()!.flushall();
 
-  await initRedis({
-    port: process.env.REDIS_PORT,
-    host: process.env.REDIS_HOST,
-    enableAutoPipelining: true
-  } as any, "subscriber");
-});
+    await initRedis({
+      port: process.env.REDIS_PORT,
+      host: process.env.REDIS_HOST
+    } as any, "subscriber");
+
+    await getRedis()!.flushall();
+
+    dispatcher = new Dispatcher({
+      pingInterval: 10_000,
+      checkLastActivityInterval: 14_000,
+      checkTransactionInterval: 5_000,
+      idleTime: 14_000,
+      eventsValidation: {
+        eventsValidationFn,
+        validationCbFn: validate
+      }
+     });
+
+    await dispatcher.initialize();
+  });
 
 afterAll(async() => {
   await closeAllRedis();
@@ -358,15 +376,15 @@ describe("Event that doesn't scale", () => {
           diffConcernedIncomer.emit("registered");
         }
 
-        index++;
-    });
+        index++
+      });
 
     await publisher.initialize();
     await concernedIncomer.initialize();
     await secondConcernedIncomer.initialize();
     await diffConcernedIncomer.initialize();
 
-    await timers.setTimeout(1_600);
+      await timers.setTimeout(1_000);
 
     await publisher.publish(event);
   });
@@ -394,7 +412,7 @@ describe("Event that doesn't scale", () => {
       }
     });
 
-    await timers.setTimeout(12_000);
+      await timers.setTimeout(8_000);
 
     const mockedEvent = {
       ...event,

@@ -39,6 +39,8 @@ describe("Init Incomer without Dispatcher alive", () => {
       host: process.env.REDIS_HOST
     } as any, "subscriber");
 
+    await getRedis()!.flushall();
+
     incomer = new Incomer({
       name: "foo",
       eventsCast: [],

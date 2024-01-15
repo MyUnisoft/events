@@ -43,7 +43,7 @@ export type RedisResponse<T extends GenericEvent> = (CallBackEventMessage<T> & {
 const kNullTimeStamp = 0;
 
 export class InitHandler<
-  T extends GenericEvent
+  T extends GenericEvent = GenericEvent
 > extends EventEmitter {
   public instanceName: string;
   public prefix: Prefix;

@@ -584,16 +584,86 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       await Promise.all(toResolve);
 
-      await this.removeNonActives(inactiveIncomers);
+    await this.removeNonActives(nonActives);
+
+    this.logger.info({ uuids: [...nonActives.map((incomer) => incomer.providedUUID)].join(",") }, "Removed nonactives incomers");
+  }
+
+  private async publishEvent(options: {
+    concernedStore?: TransactionStore<"incomer">;
+    concernedChannel: Channel<
+      DispatcherChannelMessages["DispatcherMessages"] |
+      (IncomerChannelMessages<T>["DispatcherMessages"] | DistributedEventMessage<T>)
+    >;
+    transactionMeta: {
+      mainTransaction: boolean;
+      relatedTransaction: null | string;
+      eventTransactionId: null | string;
+      resolved: boolean;
+    };
+    formattedEvent: any;
+  }) {
+    const {
+      concernedChannel,
+      transactionMeta,
+      formattedEvent
+    } = options;
+    const {
+      mainTransaction,
+      relatedTransaction,
+      eventTransactionId,
+      resolved
+    } = transactionMeta;
+
+    const concernedStore = options.concernedStore ?? this.dispatcherTransactionStore;
+
+    try {
+      const transaction = formattedEvent.name === "approvement" ? await concernedStore.setTransaction({
+        ...formattedEvent,
+        redisMetadata: {
+          ...formattedEvent.redisMetadata,
+          to: formattedEvent.data.uuid,
+          mainTransaction,
+          relatedTransaction,
+          resolved
+        }
+      }) : await concernedStore.setTransaction({
+        ...formattedEvent,
+        redisMetadata: {
+          ...formattedEvent.redisMetadata,
+          mainTransaction,
+          relatedTransaction,
+          resolved
+        }
+      });
+
+      await concernedChannel.publish({
+        ...formattedEvent,
+        redisMetadata: {
+          ...formattedEvent.redisMetadata,
+          eventTransactionId,
+          transactionId: transaction.redisMetadata.transactionId
+        }
+      });
     }
     catch (error) {
-      const uuids = [...inactiveIncomers.map((incomer) => incomer?.providedUUID ?? incomer?.baseUUID)].join(",");
-
-      this.logger.error({ error: error.stack }, `[${uuids}], Failed to remove nonactives incomers`);
+      this.logger.error({ error }, "Failed to publish");
     }
   }
 
-  private async ping() {
+  private async InactiveIncomerTransactionsResolution(options: {
+    incomerToRemove: RegisteredIncomer,
+    incomerTransactionStore: TransactionStore<"incomer">
+  }
+  ) {
+    const {
+      incomerToRemove,
+      incomerTransactionStore
+    } = options;
+
+    const incomerTransactions = await incomerTransactionStore.getTransactions();
+    let dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
+
     const incomers = await this.incomerStore.getIncomers();
     const pingToResolve = [];
     const concernedIncomers: string[] = [];
@@ -710,8 +780,139 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
   }
 
-  private async handleCustomEvents(channel: string, customEvent: EventMessage<T>) {
-    const { redisMetadata, ...event } = customEvent;
+  private schemaValidation(message: IncomerRegistrationMessage | EventMessage<T>) {
+    const { redisMetadata, ...event } = message;
+
+    const eventValidations = this.eventsValidationFn.get(event.name) as ValidateFunction<Record<string, any>>;
+    const redisMetadataValidationFn = this.eventsValidationFn.get("redisMetadata") as ValidateFunction<Record<string, any>>;
+
+    if (!eventValidations) {
+      throw new Error(`Unknown Event ${event.name}`);
+    }
+
+    if (!redisMetadataValidationFn(redisMetadata)) {
+      throw new Error(
+        `Malformed redis metadata: [${[...redisMetadataValidationFn.errors]
+          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+      );
+    }
+
+    if (this.validationCbFn && isIncomerChannelMessage(message)) {
+      this.validationCbFn({ ...message } as EventMessage<T>);
+
+      return;
+    }
+
+    if (!eventValidations(event)) {
+      throw new Error(
+        `Malformed event: [${[...eventValidations.errors]
+          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+      );
+    }
+  }
+
+  private async handleMessages(channel: string, message: string) {
+    if (!message) {
+      return;
+    }
+
+    const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
+      IncomerChannelMessages<T>["IncomerMessages"] = JSON.parse(message);
+
+    try {
+      if (!formattedMessage.name || !formattedMessage.redisMetadata) {
+        throw new Error("Malformed message");
+      }
+
+      // Avoid reacting to his own message
+      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
+        return;
+      }
+
+      if (!this.isWorking) {
+        if (formattedMessage.name === "Abort_taking_lead") {
+          this.emit("ABORT_TAKING_LEAD");
+
+          return;
+        }
+
+        if (formattedMessage.name === "Abort_taking_lead_back") {
+          this.emit("ABORT_TAKING_LEAD_BACK");
+
+          return;
+        }
+
+        return;
+      }
+
+      if (this.isWorking) {
+        if (formattedMessage.name === "Abort_taking_lead") {
+          this.isWorking = false;
+          await this.setAsInactiveDispatcher();
+          this.emit("ABORT_TAKING_LEAD");
+
+          return;
+        }
+        else if (formattedMessage.name === "Abort_taking_lead_back") {
+          this.isWorking = false;
+          await this.setAsInactiveDispatcher();
+          this.emit("ABORT_TAKING_LEAD_BACK");
+
+          return;
+        }
+      }
+
+      if (isRegistrationOrCustomIncomerMessage(formattedMessage)) {
+        this.schemaValidation(formattedMessage);
+      }
+
+      if (channel === this.dispatcherChannelName) {
+        if (isDispatcherChannelMessage(formattedMessage)) {
+          await this.handleDispatcherMessages(channel, formattedMessage);
+        }
+        else {
+          throw new Error("Unknown event on Dispatcher Channel");
+        }
+      }
+      else if (isIncomerChannelMessage(formattedMessage)) {
+        await this.handleIncomerMessages(channel, formattedMessage);
+      }
+    }
+    catch (error) {
+      this.logger.error({ channel, message: formattedMessage, error: error.message });
+    }
+  }
+
+  private async handleDispatcherMessages(
+    channel: string,
+    message: DispatcherChannelMessages["IncomerMessages"]
+  ) {
+    const { name } = message;
+
+    const logData = {
+      channel,
+      ...message
+    };
+
+    match<DispatcherChannelEvents>({ name })
+      .with({ name: "register" }, async() => {
+        this.logger.info(logData, "Registration asked");
+
+        if (isIncomerRegistrationMessage(message)) {
+          await this.approveIncomer(message);
+        }
+      })
+      .exhaustive()
+      .catch((error) => {
+        this.logger.error({ channel: "dispatcher", message, error: error.stack }, "Handle registration");
+      });
+  }
+
+  private async handleIncomerMessages(
+    channel: string,
+    message: IncomerChannelMessages<T>["IncomerMessages"]
+  ) {
+    const { redisMetadata, ...event } = message;
     const { name } = event;
     const { transactionId } = redisMetadata;
 

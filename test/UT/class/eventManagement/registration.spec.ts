@@ -68,6 +68,8 @@ describe("Registration", () => {
       host: process.env.REDIS_HOST
     } as any, "subscriber");
 
+    await getRedis()!.flushall();
+
     dispatcher = new Dispatcher({
       logger: dispatcherLogger,
       pingInterval: 1_000,
