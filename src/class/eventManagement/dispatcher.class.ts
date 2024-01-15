@@ -585,33 +585,38 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const concernedStore = options.concernedStore ?? this.dispatcherTransactionStore;
 
-    const transaction = formattedEvent.name === "approvement" ? await concernedStore.setTransaction({
-      ...formattedEvent,
-      redisMetadata: {
-        ...formattedEvent.redisMetadata,
-        to: formattedEvent.data.uuid,
-        mainTransaction,
-        relatedTransaction,
-        resolved
-      }
-    }) : await concernedStore.setTransaction({
-      ...formattedEvent,
-      redisMetadata: {
-        ...formattedEvent.redisMetadata,
-        mainTransaction,
-        relatedTransaction,
-        resolved
-      }
-    });
+    try {
+      const transaction = formattedEvent.name === "approvement" ? await concernedStore.setTransaction({
+        ...formattedEvent,
+        redisMetadata: {
+          ...formattedEvent.redisMetadata,
+          to: formattedEvent.data.uuid,
+          mainTransaction,
+          relatedTransaction,
+          resolved
+        }
+      }) : await concernedStore.setTransaction({
+        ...formattedEvent,
+        redisMetadata: {
+          ...formattedEvent.redisMetadata,
+          mainTransaction,
+          relatedTransaction,
+          resolved
+        }
+      });
 
-    await concernedChannel.publish({
-      ...formattedEvent,
-      redisMetadata: {
-        ...formattedEvent.redisMetadata,
-        eventTransactionId,
-        transactionId: transaction.redisMetadata.transactionId
-      }
-    });
+      await concernedChannel.publish({
+        ...formattedEvent,
+        redisMetadata: {
+          ...formattedEvent.redisMetadata,
+          eventTransactionId,
+          transactionId: transaction.redisMetadata.transactionId
+        }
+      });
+    }
+    catch (error) {
+      this.logger.error({ error }, "Failed to publish");
+    }
   }
 
   private async InactiveIncomerTransactionsResolution(options: {
@@ -1257,7 +1262,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       await this.incomerStore.updateIncomerState(origin);
     }
     catch (error) {
-      this.logger.error({ uuid: origin, error: error.message }, "Failed to update incomer state");
+      this.logger.error({ uuid: origin, error: error.stack }, "Failed to update incomer state");
     }
   }
 
@@ -1419,7 +1424,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       })
       .exhaustive()
       .catch((error) => {
-        this.logger.error({ channel: "dispatcher", message, error: error.message });
+        this.logger.error({ channel: "dispatcher", message, error: error.stack }, "Handle registration");
       });
   }
 

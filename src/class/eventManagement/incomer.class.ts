@@ -443,16 +443,11 @@ export class Incomer <
       return;
     }
 
-    try {
-      if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
-        await this.handleDispatcherMessages(channel, formattedMessage);
-      }
-      else if (channel === this.incomerChannelName && isIncomerChannelMessage(formattedMessage)) {
-        await this.handleIncomerMessages(channel, formattedMessage);
-      }
+    if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
+      await this.handleDispatcherMessages(channel, formattedMessage);
     }
-    catch (error) {
-      this.logger.error({ channel, message: formattedMessage, error: error.message });
+    else if (channel === this.incomerChannelName && isIncomerChannelMessage(formattedMessage)) {
+      await this.handleIncomerMessages(channel, formattedMessage);
     }
   }
 
@@ -481,9 +476,9 @@ export class Incomer <
       .catch((error) => {
         this.logger.error({
           channel: "dispatcher",
-          error: error.message,
+          stack: error.stack,
           message
-        });
+        }, "Handle approvement message");
       });
   }
 
@@ -526,9 +521,9 @@ export class Incomer <
       .catch((error) => {
         this.logger.error({
           channel: "incomer",
-          error: error.message,
+          stack: error.stack,
           message
-        });
+        }, "Handle message on custom channel");
       });
   }
 
@@ -593,7 +588,6 @@ export class Incomer <
     });
 
     const oldTransactions = await this.incomerTransactionStore.getTransactions();
-
     const newTransactionStore = new TransactionStore({
       prefix: this.prefixedName + this.providedUUID,
       instance: "incomer"

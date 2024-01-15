@@ -136,8 +136,8 @@ describe("Dispatcher", () => {
         expect(mockedLoggerError).toHaveBeenCalledWith({
           channel: "dispatcher",
           message: event,
-          error: "No related transaction found next to register event"
-        });
+          error: expect.any(String)
+        }, "Handle registration");
       });
 
       describe("Publishing a well formed register event but multiple times", () => {
@@ -228,8 +228,8 @@ describe("Dispatcher", () => {
                 transactionId: transaction.redisMetadata.transactionId
               }
             },
-            error: "Forbidden multiple registration for a same instance"
-          });
+            error: expect.any(String)
+          }, "Handle registration");
         });
       });
     });

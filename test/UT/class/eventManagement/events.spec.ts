@@ -35,6 +35,10 @@ async function updateRegisterTransactionState(
 ) {
   const registerTransaction = await publisherOldTransacStore.getTransactionById(publisherRegistrationTransacId);
 
+  if (!registerTransaction) {
+    return;
+  }
+
   await publisherOldTransacStore.updateTransaction(publisherRegistrationTransacId, {
     ...registerTransaction,
     redisMetadata: {
@@ -88,6 +92,8 @@ describe("Publishing/exploiting a custom event", () => {
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any, "subscriber");
+
+    await getRedis()!.flushall();
 
     dispatcher = new Dispatcher({
       pingInterval: 10_000,
@@ -343,7 +349,7 @@ describe("Publishing/exploiting a custom event", () => {
             diffConcernedIncomer.emit("registered");
           }
 
-          index++;
+        index++
       });
 
       await publisher.initialize();
@@ -351,7 +357,7 @@ describe("Publishing/exploiting a custom event", () => {
       await secondConcernedIncomer.initialize();
       await diffConcernedIncomer.initialize();
 
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(1_000);
 
       await publisher.publish(event);
     });
@@ -370,7 +376,7 @@ describe("Publishing/exploiting a custom event", () => {
         }
       });
 
-      await timers.setTimeout(10_000);
+      await timers.setTimeout(8_000);
 
       const mockedEvent = {
         ...event,

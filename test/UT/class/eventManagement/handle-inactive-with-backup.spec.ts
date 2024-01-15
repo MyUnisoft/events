@@ -45,6 +45,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       host: process.env.REDIS_HOST
     } as any, "subscriber");
 
+    await getRedis()!.flushall();
+
     dispatcher = new Dispatcher({
       logger: dispatcherLogger,
       pingInterval: 2_000,
