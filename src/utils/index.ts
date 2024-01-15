@@ -7,14 +7,17 @@ import { EventOptions, Events, GenericEvent } from "../types";
 
 // CONSTANTS
 const ajv = new Ajv();
-const kCustomKey = "scope";
+const kScopeKey = "scope";
+const kMetadataKey = "metadata";
+const kOriginKey = "origin";
 const kScopeKeys = Object.freeze({
   eventTransactionId: "event-id",
   transactionId: "t-id",
   schemaId: "s",
   firmId: "f",
   accountingFolderId: "acf",
-  persPhysiqueId: "p"
+  persPhysiqueId: "p",
+  requestId: "req-id"
 });
 
 export type OperationFunctions = Record<string, any>;
@@ -72,12 +75,20 @@ function* mapped<
       continue;
     }
 
-    if (!event[kCustomKey] || !event[kCustomKey][key]) {
+    const originExist = event[kMetadataKey] && event[kMetadataKey][kOriginKey];
+
+    if (!event[kScopeKey] || !event[kScopeKey][key]) {
+      if (originExist && event[kMetadataKey][kOriginKey][key]) {
+        yield `${formattedKey}:${logValueFallback(event[kMetadataKey][kOriginKey][key])}`;
+
+        continue;
+      }
+
       yield `${formattedKey}:none`;
 
       continue;
     }
 
-    yield `${formattedKey}:${logValueFallback(event[kCustomKey][key])}`;
+    yield `${formattedKey}:${logValueFallback(event[kScopeKey][key])}`;
   }
 }
