@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeAllRedis
+  closeAllRedis,
+  getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -25,6 +26,8 @@ beforeAll(async() => {
     port: Number(process.env.REDIS_PORT),
     host: process.env.REDIS_HOST
   }, "subscriber");
+
+  await getRedis()!.flushall();
 });
 
 afterAll(async() => {

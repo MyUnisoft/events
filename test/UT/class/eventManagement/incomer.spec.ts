@@ -4,7 +4,8 @@ import timers from "node:timers/promises";
 // Import Third-party Dependencies
 import {
   initRedis,
-  closeAllRedis
+  closeAllRedis,
+  getRedis
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
@@ -32,6 +33,8 @@ describe("Init Incomer without Dispatcher alive", () => {
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any);
+
+    await getRedis()!.flushall();
 
     await initRedis({
       port: process.env.REDIS_PORT,

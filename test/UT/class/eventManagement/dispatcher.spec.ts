@@ -8,7 +8,8 @@ import {
   closeRedis,
   Channel,
   closeAllRedis,
-  clearAllKeys
+  clearAllKeys,
+  getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 import Ajv from "ajv";
@@ -17,7 +18,6 @@ import Ajv from "ajv";
 import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
-import { IncomerStore } from "../../../../src/class/store/incomer.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
@@ -47,6 +47,8 @@ describe("Dispatcher", () => {
       port: Number(process.env.REDIS_PORT),
       host: process.env.REDIS_HOST
     });
+
+    await getRedis()!.flushall();
   });
 
   afterAll(async() => {

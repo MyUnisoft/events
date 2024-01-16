@@ -7,7 +7,8 @@ import {
   initRedis,
   clearAllKeys,
   Channel,
-  closeAllRedis
+  closeAllRedis,
+  getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
 
@@ -36,6 +37,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       port: process.env.REDIS_PORT,
       host: process.env.REDIS_HOST
     } as any);
+
+    await getRedis()!.flushall();
 
     await initRedis({
       port: process.env.REDIS_PORT,
