@@ -4,8 +4,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[0-9]+"
+          "type": "string"
         },
         "status": {
           "enum": ["reject", "completed"]
@@ -14,15 +13,14 @@
           "type": "string"
         }
       },
-      "required": ["id", "status", "reason"],
+      "required": ["id", "status"],
       "additionalProperties": false
     },
     "update": {
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[0-9]+"
+          "type": "string"
         },
         "status": {
           "enum": ["reject", "completed"]
@@ -32,7 +30,7 @@
           "nullable": true
         }
       },
-      "required": ["id", "code"],
+      "required": ["id"],
       "additionalProperties": false
     }
   }

@@ -19,8 +19,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[0-9]+"
+          "type": "string"
         },
         "status": {
           "enum": ["reject", "completed"]
