@@ -20,7 +20,7 @@ const dispatcherLogger = Logger.pino({
 const incomerLogger = Logger.pino({
   level: "debug"
 });
-const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
+const mockedIncomerLoggerDebug = jest.spyOn(incomerLogger, "debug");
 
 describe("Ping", () => {
   const eventComeBackHandler = () => void 0;
@@ -77,11 +77,7 @@ describe("Ping", () => {
   });
 
   test("Dispatcher should have ping", () => {
-    expect(mockedIncomerLoggerInfo.mock.calls[3][1]).toContain("Resolved Ping event");
-  });
-
-  test("Incomer should have create a transaction to resolve the ping", async() => {
-    expect(mockedIncomerLoggerInfo.mock.calls[3][1]).toContain("Resolved Ping event");
+    expect(mockedIncomerLoggerDebug.mock.calls[0][0]).toContain("Resolved Ping event");
   });
 });
 

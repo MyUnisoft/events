@@ -1,5 +1,4 @@
 // Import Node.js Dependencies
-import { randomUUID } from "node:crypto";
 import timers from "timers/promises";
 
 // Import Third-party Dependencies
@@ -56,8 +55,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         validationCbFn: validate
       }
      });
-
-    Reflect.set(dispatcher, "logger", dispatcherLogger);
 
     await dispatcher.initialize();
   });
