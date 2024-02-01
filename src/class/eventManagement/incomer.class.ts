@@ -517,7 +517,7 @@ export class Incomer <
           }
         });
 
-        this.logger.info(logData, "Resolved Ping event");
+        this.logger.debug(this.standardLogFn(logData as any)("Resolved Ping event"));
       })
       .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
         ...res, channel

@@ -479,7 +479,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await Promise.all(pingToResolve);
     if (concernedIncomers.length > 0) {
-      this.logger.info({ incomers: concernedIncomers }, "New Ping events");
+      this.logger.debug({ incomers: concernedIncomers }, "New Ping events");
     }
   }
 
@@ -503,11 +503,15 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       await Promise.all(toHandle);
+
+      this.logger.info(`[${inactiveIncomers.map(
+        (incomer) => `(name:${incomer.name}|uuid:${incomer.providedUUID ?? incomer.baseUUID})`
+      ).join(",")}], Removed Incomer`);
     }
     catch (error) {
-      const uuids = [...inactiveIncomers.map((incomer) => incomer?.providedUUID)].join(",");
+      const uuids = [...inactiveIncomers.map((incomer) => incomer.providedUUID ?? incomer.baseUUID)];
 
-      throw new Error(`${{ uuids }}, Failed to remove nonactives incomers`);
+      throw new Error(`[${uuids}], Failed to remove nonactives incomers`);
     }
   }
 
@@ -665,7 +669,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           })
         ]);
 
-        this.logger.info(this.standardLogFn(newlyTransaction as any)("Main transaction has been backup"));
+        this.logger.debug(this.standardLogFn(newlyTransaction as any)("Main transaction has been backup"));
 
         continue;
       }
@@ -708,7 +712,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         )
       ));
 
-      this.logger.info(this.standardLogFn(newlyIncomerTransaction as any)("Main transaction redistributed  to an Incomer"));
+      this.logger.debug(this.standardLogFn(newlyIncomerTransaction as any)("Main transaction redistributed to an Incomer"));
     }
 
     dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
@@ -749,7 +753,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             })
           ]);
 
-          this.logger.info(this.standardLogFn(newlyTransaction as any)("Spread transaction has been backup"));
+          this.logger.debug(this.standardLogFn(newlyTransaction as any)("Spread transaction has been backup"));
 
           continue;
         }
@@ -770,7 +774,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         const relatedDispatcherTransaction = dispatcherTransactions.get(incomerTransaction.redisMetadata.relatedTransaction);
 
         if (!relatedDispatcherTransaction) {
-          this.logger.info(this.standardLogFn(incomerTransaction as any)("Couldn't find the related Dispatcher transaction"));
+          this.logger.debug(this.standardLogFn(incomerTransaction as any)("Couldn't find the related Dispatcher transaction"));
 
           continue;
         }
@@ -796,7 +800,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransaction.redisMetadata.transactionId)
         ]);
 
-        this.logger.info(this.standardLogFn(incomerTransaction as any)("Spread transaction redistributed to an Incomer"));
+        this.logger.debug(this.standardLogFn(incomerTransaction as any)("Spread transaction redistributed to an Incomer"));
 
         continue;
       }
@@ -828,7 +832,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             this.backupDispatcherTransactionStore.setTransaction({ ...dispatcherTransaction })
           ]);
 
-          this.logger.info(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
+          this.logger.debug(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
             ...dispatcherTransaction.redisMetadata,
             origin: this.privateUUID
           } } as unknown as T)("Unresolved injected event has been backup"));
@@ -883,7 +887,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
         ]);
 
-        this.logger.info(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
+        this.logger.debug(this.standardLogFn(dispatcherTransaction && { redisMetadata: {
           ...dispatcherTransaction.redisMetadata,
           origin: this.privateUUID,
           to: concernedIncomer.providedUUID
