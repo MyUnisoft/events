@@ -508,7 +508,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           this.InactiveIncomerTransactionsResolution({
             incomerToRemove: inactive,
             incomerTransactionStore: transactionStore
-          })
+          }),
+          this.subscriber.unsubscribe(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
         ]));
       }
 
@@ -567,8 +568,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await Promise.all(toResolve);
 
     await this.removeNonActives(nonActives);
-
-    this.logger.info({ uuids: [...nonActives.map((incomer) => incomer.providedUUID)].join(",") }, "Removed nonactives incomers");
   }
 
   private async publishEvent(options: {

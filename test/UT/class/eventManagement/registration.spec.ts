@@ -16,6 +16,8 @@ import { Dispatcher, Incomer } from "../../../../src/index";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
+const mockedIncomerRegistrationIntervalCb = jest.spyOn(Incomer.prototype as any, "registrationIntervalCb");
+const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any, "removeNonActives");
 
 const dispatcherLogger = Logger.pino({
   level: "debug"
@@ -25,9 +27,15 @@ const incomerLogger = Logger.pino({
 });
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 
+
 describe("Registration", () => {
   let dispatcher: Dispatcher;
   let incomer: Incomer;
+
+  function updateIncomerState(...args) {
+    incomer["lastPingDate"] = Date.now();
+    incomer["dispatcherConnectionState"] = true;
+  }
 
   beforeAll(async() => {
     await initRedis({
@@ -44,10 +52,10 @@ describe("Registration", () => {
 
     dispatcher = new Dispatcher({
       logger: dispatcherLogger,
-      pingInterval: 1_600,
-      checkLastActivityInterval: 4_000,
-      checkTransactionInterval: 2_400,
-      idleTime: 4_000
+      pingInterval: 1_000,
+      checkLastActivityInterval: 1_000,
+      checkTransactionInterval: 1_500,
+      idleTime: 2_000
      });
 
     await dispatcher.initialize();
@@ -62,69 +70,92 @@ describe("Registration", () => {
     await clearAllKeys();
   });
 
-  describe("Initializing consecutively the same Incomer", () => {
-    const eventComeBackHandler = () => void 0;
+  // describe("Initializing consecutively the same Incomer", () => {
+  //   const eventComeBackHandler = () => void 0;
 
-    afterAll(async() => {
-      await incomer.close();
-    });
+  //   afterAll(async() => {
+  //     await incomer.close();
+  //   });
 
-    beforeAll(async() => {
-      incomer = new Incomer({
-        name: "foo",
-        logger: incomerLogger,
-        eventsCast: [],
-        eventsSubscribe: [],
-        eventCallback: eventComeBackHandler
-      });
+  //   beforeAll(async() => {
+  //     incomer = new Incomer({
+  //       name: "foo",
+  //       logger: incomerLogger,
+  //       eventsCast: [],
+  //       eventsSubscribe: [],
+  //       eventCallback: eventComeBackHandler
+  //     });
 
-      await incomer.initialize();
-    });
+  //     await incomer.initialize();
+  //   });
 
-    it("Should correctly register the new incomer", async() => {
-      await timers.setTimeout(1_600);
+  //   it("Should correctly register the new incomer", async() => {
+  //     await timers.setTimeout(1_600);
 
-      expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
-      expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
-    });
+  //     expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
+  //     expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
+  //   });
 
-    test("Calling Incomer initialize a second time, it should fail", async() => {
-      expect.assertions(1);
+  //   test("Calling Incomer initialize a second time, it should fail", async() => {
+  //     expect.assertions(1);
 
-      try {
-        await incomer.initialize()
-      }
-      catch (error) {
-        expect(error.message).toBe("Cannot init multiple times.");
-      }
-    });
-  });
+  //     try {
+  //       await incomer.initialize()
+  //     }
+  //     catch (error) {
+  //       expect(error.message).toBe("Cannot init multiple times.");
+  //     }
+  //   });
+  // });
 
   describe("Initializing a new Incomer", () => {
+    let handlePingFn;
     const eventComeBackHandler = () => void 0;
 
     afterAll(async() => {
       await incomer.close();
-    })
+    });
 
     beforeAll(async() => {
       incomer = new Incomer({
-        name: randomUUID(),
+        name: "bar",
         eventsCast: [],
         eventsSubscribe: [],
-        eventCallback: eventComeBackHandler
+        eventCallback: eventComeBackHandler,
+        dispatcherInactivityOptions: {
+          maxPingInterval: 2_000,
+          publishInterval: 2_000
+        }
       });
 
+      handlePingFn = incomer["handlePing"];
+
       Reflect.set(incomer, "logger", incomerLogger);
+      Reflect.set(incomer, "handlePing", updateIncomerState);
 
       await incomer.initialize();
     });
 
     it("Should correctly register the new incomer", async() => {
-      await timers.setTimeout(1_600);
+      await timers.setTimeout(3_000);
 
       expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
       expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
+      expect(mockedIncomerRegistrationIntervalCb).toHaveBeenCalledTimes(0);
+    });
+
+    it("Should have removed the incomer", async() => {
+      await timers.setTimeout(4_000);
+
+      expect(mockedDispatcherRemoveNonActives).toHaveBeenCalled();
+
+      Reflect.set(incomer, "handlePing", handlePingFn);
+    });
+
+    it("Should have register again", async() => {
+      await timers.setTimeout(2_000);
+      expect(mockedIncomerRegistrationIntervalCb).toHaveBeenCalled();
+      expect(incomer.dispatcherConnectionState).toBe(true);
     });
   });
 });

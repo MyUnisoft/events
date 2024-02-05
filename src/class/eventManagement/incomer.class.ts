@@ -32,7 +32,8 @@ import {
   DispatcherPingMessage,
   DistributedEventMessage,
   EventMessage,
-  GenericEvent
+  GenericEvent,
+  IncomerRegistrationMessage
 } from "../../types/eventManagement/index";
 import {
   CustomEventsValidationFunctions,
@@ -104,12 +105,11 @@ export class Incomer <
   readonly prefix: Prefix | undefined;
   readonly eventCallback: (message: CallBackEventMessage<T>) => void;
 
-  public dispatcherIsAlive = false;
+  public dispatcherConnectionState = false;
   public baseUUID = randomUUID();
 
   private prefixedName: string;
   private isDispatcherInstance: boolean;
-  private registerTransactionId: string | null;
   private eventsCast: EventCast[];
   private eventsSubscribe: EventSubscribe[];
   private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
@@ -117,7 +117,8 @@ export class Incomer <
   private providedUUID: string;
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
   private incomerChannelName: string;
-  private incomerTransactionStore: TransactionStore<"incomer">;
+  private defaultIncomerTransactionStore: TransactionStore<"incomer">;
+  private newTransactionStore: TransactionStore<"incomer">;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
   private publishInterval: number;
   private maxPingInterval: number;
@@ -162,7 +163,7 @@ export class Incomer <
       prefix: this.prefix
     });
 
-    this.incomerTransactionStore = new TransactionStore({
+    this.defaultIncomerTransactionStore = new TransactionStore({
       prefix: this.prefixedName + this.baseUUID,
       instance: "incomer"
     });
@@ -177,18 +178,22 @@ export class Incomer <
   }
 
   private async checkDispatcherState() {
-    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < Date.now()) {
-      this.dispatcherIsAlive = false;
+    const date = Date.now();
+
+    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date) {
+      this.dispatcherConnectionState = false;
 
       return;
     }
 
-    this.dispatcherIsAlive = true;
+    this.dispatcherConnectionState = true;
 
     try {
-      for await (const transactionKeys of this.incomerTransactionStore.transactionLazyFetch()) {
+      const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
+
+      for await (const transactionKeys of store.transactionLazyFetch()) {
         const transactions = await Promise.all(transactionKeys.map(
-          (transactionKey) => this.incomerTransactionStore.getValue(transactionKey)
+          (transactionKey) => store.getValue(transactionKey)
         ));
 
         await Promise.race([
@@ -215,6 +220,10 @@ export class Incomer <
     }
   }
 
+  get redis() {
+    return getRedis();
+  }
+
   get subscriber() {
     return getRedis("subscriber");
   }
@@ -236,7 +245,7 @@ export class Incomer <
       }
     };
 
-    const transaction = await this.incomerTransactionStore.setTransaction({
+    const transaction = await this.defaultIncomerTransactionStore.setTransaction({
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
@@ -246,15 +255,15 @@ export class Incomer <
       }
     });
 
-    this.registerTransactionId = transaction.redisMetadata.transactionId;
-
-    await this.dispatcherChannel.publish({
+    const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
-        transactionId: this.registerTransactionId
+        transactionId: transaction.redisMetadata.transactionId
       }
-    });
+    };
+
+    await this.dispatcherChannel.publish(fullyFormattedEvent);
 
     try {
       await Promise.race([
@@ -270,54 +279,90 @@ export class Incomer <
         await this.checkDispatcherState();
       }, this.maxPingInterval).unref();
 
-      this.dispatcherIsAlive = true;
+      this.dispatcherConnectionState = true;
+      this.checkRegistrationInterval = setInterval(
+        async() => this.registrationIntervalCb(),
+        this.publishInterval * 2
+      ).unref();
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch {
       this.logger.error("Failed to register in time.");
-      this.dispatcherIsAlive = false;
+      this.dispatcherConnectionState = false;
 
-      this.checkRegistrationInterval = setInterval(async() => {
-        if (this.dispatcherIsAlive) {
+      this.checkRegistrationInterval = setInterval(
+        async() => this.registrationIntervalCb(),
+        this.publishInterval * 2
+      ).unref();
+
+      return;
+    }
+  }
+
+  private async registrationIntervalCb() {
+    if (this.dispatcherConnectionState) {
+      return;
+    }
+
+    if (this.providedUUID) {
+      this.subscriber.unsubscribe(`${this.prefix ? `${this.prefix}-` : ""}${this.providedUUID}`);
+    }
+
+    const event = {
+      name: "register" as const,
+      data: {
+        name: this.name,
+        eventsCast: this.eventsCast,
+        eventsSubscribe: this.eventsSubscribe
+      },
+      redisMetadata: {
+        origin: this.baseUUID,
+        incomerName: this.name,
+        prefix: this.prefix
+      }
+    };
+
+    const transaction = await this.defaultIncomerTransactionStore.setTransaction({
+      ...event,
+      redisMetadata: {
+        ...event.redisMetadata,
+        mainTransaction: true,
+        relatedTransaction: null,
+        resolved: false
+      }
+    });
+
+    const fullyFormattedEvent: IncomerRegistrationMessage = {
+      ...event,
+      redisMetadata: {
+        ...event.redisMetadata,
+        transactionId: transaction.redisMetadata.transactionId
+      }
+    };
+
+    await this.dispatcherChannel.publish(fullyFormattedEvent);
+
+    try {
+      await Promise.race([
+        once(this, "registered"),
+        new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
+      ]);
+
+      this.checkTransactionsStateInterval = setInterval(async() => {
+        if (!this.lastPingDate || this.isDispatcherInstance) {
           return;
         }
 
-        await this.dispatcherChannel.publish({
-          ...event,
-          redisMetadata: {
-            ...event.redisMetadata,
-            transactionId: this.registerTransactionId
-          }
-        });
+        await this.checkDispatcherState();
+      }, this.maxPingInterval).unref();
 
-        try {
-          await Promise.race([
-            once(this, "registered"),
-            new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
-          ]);
+      this.dispatcherConnectionState = true;
+      this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
+    }
+    catch {
+      this.logger.error("Failed to register in time.");
 
-          clearInterval(this.checkRegistrationInterval);
-
-          this.checkTransactionsStateInterval = setInterval(async() => {
-            if (!this.lastPingDate || this.isDispatcherInstance) {
-              return;
-            }
-
-            await this.checkDispatcherState();
-          }, this.maxPingInterval).unref();
-
-          this.dispatcherIsAlive = true;
-          this.checkRegistrationInterval = undefined;
-          this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
-        }
-        catch {
-          this.logger.error("Failed to register in time.");
-
-          this.dispatcherIsAlive = false;
-
-          return;
-        }
-      }, this.publishInterval * 2).unref();
+      this.dispatcherConnectionState = false;
 
       return;
     }
@@ -392,7 +437,9 @@ export class Incomer <
       this.validationCbFn(event);
     }
 
-    const transaction = await this.incomerTransactionStore.setTransaction({
+    const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
+
+    const transaction = await store.setTransaction({
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
@@ -411,7 +458,7 @@ export class Incomer <
       }
     } as unknown as EventMessage<T>;
 
-    if (!this.dispatcherIsAlive) {
+    if (!this.dispatcherConnectionState) {
       this.logger.info(this.standardLogFn({
         ...finalEvent, redisMetadata: {
           ...finalEvent.redisMetadata,
@@ -498,34 +545,15 @@ export class Incomer <
     const { name } = message;
 
     match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
-      .with({ name: "ping" }, async(res: { name: "ping", message: DispatcherPingMessage }) => {
-        this.lastPingDate = Date.now();
-        this.dispatcherIsAlive = true;
-
-        const { message } = res;
-
-        const logData = {
-          channel,
-          ...message
-        };
-
-        await this.incomerTransactionStore.setTransaction({
-          ...message,
-          redisMetadata: {
-            ...message.redisMetadata,
-            origin: message.redisMetadata.to,
-            incomerName: this.name,
-            mainTransaction: false,
-            relatedTransaction: message.redisMetadata.transactionId,
-            resolved: true
-          }
-        });
-
-        this.logger.debug(this.standardLogFn(logData as any)("Resolved Ping event"));
-      })
-      .with(P._, async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
-        ...res, channel
-      }))
+      .with({
+        name: "ping"
+      },
+      async(res: { name: "ping", message: DispatcherPingMessage }) => this.handlePing(channel, res.message))
+      .with(P._,
+        async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
+          ...res, channel
+        })
+      )
       .exhaustive()
       .catch((error) => {
         this.logger.error({
@@ -534,6 +562,32 @@ export class Incomer <
           message
         });
       });
+  }
+
+  private async handlePing(channel: string, message: DispatcherPingMessage) {
+    this.lastPingDate = Date.now();
+    this.dispatcherConnectionState = true;
+
+    const logData = {
+      channel,
+      ...message
+    };
+
+    const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
+
+    await store.setTransaction({
+      ...message,
+      redisMetadata: {
+        ...message.redisMetadata,
+        origin: message.redisMetadata.to,
+        incomerName: this.name,
+        mainTransaction: false,
+        relatedTransaction: message.redisMetadata.transactionId,
+        resolved: true
+      }
+    });
+
+    this.logger.debug(this.standardLogFn(logData as any)("Resolved Ping event"));
   }
 
   private async customEvent(opts: { name: string, channel: string, message: DistributedEventMessage<T> }) {
@@ -567,11 +621,13 @@ export class Incomer <
       }
     };
 
-    const formattedTransaction = await this.incomerTransactionStore.setTransaction(transaction);
+    const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
+
+    const formattedTransaction = await store.setTransaction(transaction);
 
     await Promise.all([
       this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
-      this.incomerTransactionStore.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+      store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
         ...formattedTransaction,
         redisMetadata: {
           ...formattedTransaction.redisMetadata,
@@ -596,7 +652,7 @@ export class Incomer <
       prefix: this.prefix
     });
 
-    const oldTransactions = await this.incomerTransactionStore.getTransactions();
+    const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
 
     const newTransactionStore = new TransactionStore({
       prefix: this.prefixedName + this.providedUUID,
@@ -608,7 +664,7 @@ export class Incomer <
       if (transaction.name === "register") {
         transactionToUpdate.push([
           Promise.all([
-            this.incomerTransactionStore.deleteTransaction(transactionId),
+            this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
             newTransactionStore.setTransaction({
               ...transaction,
               redisMetadata: {
@@ -626,7 +682,7 @@ export class Incomer <
       }
 
       transactionToUpdate.push(Promise.all([
-        this.incomerTransactionStore.deleteTransaction(transactionId),
+        this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
         newTransactionStore.setTransaction({
           ...transaction,
           redisMetadata: {
@@ -639,7 +695,7 @@ export class Incomer <
 
     await Promise.all(transactionToUpdate);
 
-    this.incomerTransactionStore = newTransactionStore;
+    this.newTransactionStore = newTransactionStore;
 
     this.lastPingDate = Date.now();
     this.emit("registered");
