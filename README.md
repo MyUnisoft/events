@@ -141,7 +141,7 @@ if (isDeleteOperation(event.operation)) {
 | --- | --- | --- |
 | `MYUNISOFT_INCOMER_INIT_TIMEOUT` | Incomer initialisation timeout | `3_500` |
 | `MYUNISOFT_EVENTS_INIT_EXTERNAL` | Weither Incomer should initialise an external Dispatcher | `false` |
-| `MYUNISOFT_EVENTS_SILENT_LOGGER` | Disable logs | `false` |
+| `MYUNISOFT_EVENTS_LOGGER_MODE` | Set log level for the default logger | `info` |
 | `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` | Maximum ping interval | `60_000` |
 | `MYUNISOFT_INCOMER_PUBLISH_INTERVAL` | Publish interval | `60_000` |
 | `MYUNISOFT_INCOMER_IS_DISPATCHER` | Weither Incomer is a Dispatcher | `false` |

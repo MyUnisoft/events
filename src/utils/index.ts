@@ -44,21 +44,6 @@ function logValueFallback(value: string): string {
   return value ?? "none";
 }
 
-export function defaultStandardLog<
-  T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { redisMetadata: { transactionId: string; origin?: string; to?: string, eventTransactionId?: string } }) {
-  const logs = Array.from(mapped<T>(event)).join("|");
-
-  // eslint-disable-next-line max-len
-  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}`;
-
-  function log(message: string) {
-    return `(${logs})(${eventMeta}) ${message}`;
-  }
-
-  return log;
-}
-
 function* mapped<
   T extends GenericEvent = EventOptions<keyof Events>
 >(event: T & { redisMetadata: { transactionId: string } }) {
@@ -91,4 +76,23 @@ function* mapped<
 
     yield `${formattedKey}:${logValueFallback(event[kScopeKey][key])}`;
   }
+}
+
+export function defaultStandardLog<
+  T extends GenericEvent = EventOptions<keyof Events>
+>(event: T & { redisMetadata: { transactionId: string; origin?: string; to?: string, eventTransactionId?: string } }) {
+  const logs = Array.from(mapped<T>(event)).join("|");
+
+  // eslint-disable-next-line max-len
+  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}`;
+
+  function log(message: string) {
+    return `(${logs})(${eventMeta}) ${message}`;
+  }
+
+  return log;
+}
+
+export function handleLoggerMode(mode: string): string {
+  return (mode === "info" || mode === "debug" || mode === "warn" || mode === "silent") ? mode : "info";
 }
