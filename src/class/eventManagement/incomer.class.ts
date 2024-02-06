@@ -37,18 +37,22 @@ import {
 import {
   CustomEventsValidationFunctions,
   StandardLog,
-  defaultStandardLog
+  defaultStandardLog,
+  handleLoggerMode
 } from "../../utils/index";
 import { Externals } from "./externals.class";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
 // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
-const kDefaultStartTime = Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT ?? 3_500);
+const kDefaultStartTime = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT)) ? 3_500 :
+  Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT);
 const kExternalInit = (process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL ?? "false") === "true";
-const kSilentLogger = (process.env.MYUNISOFT_EVENTS_SILENT_LOGGER ?? "false") === "true";
-const kMaxPingInterval = Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL ?? 60_000);
-const kPublishInterval = Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL ?? 60_000);
+const kLoggerMode = (handleLoggerMode(process.env.MYUNISOFT_EVENTS_LOGGER_MODE));
+const kMaxPingInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL)) ? 60_000 :
+  Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL);
+const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL)) ? 60_000 :
+  Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
 const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
 type DispatcherChannelEvents = { name: "approvement" };
@@ -74,7 +78,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
   prefix?: Prefix;
-  logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
@@ -111,7 +115,7 @@ export class Incomer <
   private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
   private providedUUID: string;
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
   private incomerChannelName: string;
   private incomerTransactionStore: TransactionStore<"incomer">;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
@@ -147,7 +151,7 @@ export class Incomer <
     }
 
     this.logger = options.logger ?? pino({
-      level: kSilentLogger ? "silent" : "info",
+      level: kLoggerMode,
       transport: {
         target: "pino-pretty"
       }
@@ -173,7 +177,7 @@ export class Incomer <
   }
 
   private async checkDispatcherState() {
-    if (this.lastPingDate + this.maxPingInterval < Date.now()) {
+    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < Date.now()) {
       this.dispatcherIsAlive = false;
 
       return;

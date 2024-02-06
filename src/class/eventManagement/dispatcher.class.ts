@@ -36,23 +36,30 @@ import {
   CloseMessage
 } from "../../types/eventManagement/index";
 import * as eventsSchema from "../../schema/eventManagement/index";
-import { CustomEventsValidationFunctions, defaultStandardLog, StandardLog } from "../../utils/index";
+import { CustomEventsValidationFunctions, defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
 import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
 
 // CONSTANTS
 const ajv = new Ajv();
-const kIdleTime = Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME ?? 60_000 * 10);
-const kCheckLastActivityInterval = Number(process.env.MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL ?? 60_000 * 2);
-const kCheckRelatedTransactionInterval = Number(process.env.MYUNISOFT_DISPATCHER_RESOLVE_TRANSACTION_INTERVAL ?? 60_000 * 3);
+const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
+  Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME);
+const kCheckLastActivityInterval = Number.isNaN(
+  Number(process.env.MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL)
+) ? 60_000 * 2 : Number(process.env.MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL);
+const kCheckRelatedTransactionInterval = Number.isNaN(
+  Number(process.env.MYUNISOFT_DISPATCHER_RESOLVE_TRANSACTION_INTERVAL)
+) ? 60_000 * 3 : Number(process.env.MYUNISOFT_DISPATCHER_RESOLVE_TRANSACTION_INTERVAL);
 const kBackupTransactionStoreName = String(process.env.MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME ?? "backup");
-const kSilentLogger = (process.env.MYUNISOFT_EVENTS_SILENT_LOGGER ?? "false") === "true";
-const kMaxInitTimeout = Number(process.env.MYUNISOFT_DISPATCHER_INIT_TIMEOUT ?? 3_500);
-export const PING_INTERVAL = Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL ?? 60_000 * 5);
+const kLoggerMode = (handleLoggerMode(process.env.MYUNISOFT_EVENTS_LOGGER_MODE));
+const kMaxInitTimeout = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_INIT_TIMEOUT)) ? 3_500 :
+  Number(process.env.MYUNISOFT_DISPATCHER_INIT_TIMEOUT);
+export const PING_INTERVAL = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL)) ? 60_000 * 5 :
+  Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL);
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   /* Prefix for the channel name, commonly used to distinguish envs */
   prefix?: Prefix;
-  logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
   standardLog?: StandardLog<T>;
   eventsValidation?: {
     eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
@@ -122,7 +129,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private backupIncomerTransactionStore: TransactionStore<"incomer">;
   private backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
 
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn">;
+  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
   private incomerChannels: Map<string,
     Channel<IncomerChannelMessages<T>["DispatcherMessages"] | DistributedEventMessage<T>>> = new Map();
 
@@ -168,7 +175,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.logger = options.logger ?? pino({
       name: this.formattedPrefix + this.type,
-      level: kSilentLogger ? "silent" : "info",
+      level: kLoggerMode,
       transport: {
         target: "pino-pretty"
       }
@@ -339,18 +346,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private isIncomerActive(incomer: RegisteredIncomer) {
     const now = Date.now();
 
-    return now < incomer.lastActivity + this.idleTime;
+    return now < (Number(incomer.lastActivity) + Number(this.idleTime));
   }
 
   private async takeLeadBack(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
     const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
 
-    const dispatcherToRemove = [...incomers.values()]
-      .find((incomer) => (incomer.name === this.instanceName &&
-      incomer.baseUUID !== this.selfProvidedUUID &&
-      incomer.isDispatcherActiveInstance) && !(this.isIncomerActive(incomer)));
+    const dispatcherInstances = [...incomers.values()]
+      .filter((incomer) => incomer.name === this.instanceName && incomer.baseUUID !== this.selfProvidedUUID);
+    const dispatcherToRemove = dispatcherInstances
+      .find((incomer) => incomer.isDispatcherActiveInstance && !this.isIncomerActive(incomer));
 
-    if (!dispatcherToRemove) {
+    if (!dispatcherToRemove && dispatcherInstances.length > 0) {
       return;
     }
 
@@ -371,7 +378,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       this.isWorking = true;
 
       try {
-        await Promise.all([this.ping(), dispatcherToRemove && this.removeNonActives([dispatcherToRemove])]);
+        await Promise.all([
+          this.ping(),
+          dispatcherToRemove ? this.removeNonActives([dispatcherToRemove]) : () => void 0
+        ]);
       }
       catch (error) {
         this.logger.error({ error }, "failed while taking back the lead");
@@ -520,7 +530,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const now = Date.now();
 
-    const nonActives = [...incomers].filter((incomer) => now > incomer.lastActivity + this.idleTime);
+    const nonActives = [...incomers].filter((incomer) => now > (Number(incomer.lastActivity) + Number(this.idleTime)));
 
     if (nonActives.length === 0) {
       return;
@@ -539,7 +549,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         .filter((transactionKey) => {
           const transaction = transactions.get(transactionKey);
 
-          return transaction.name === "ping" && now < transaction.aliveSince + this.idleTime;
+          return transaction.name === "ping" && now < (Number(transaction.aliveSince) + Number(this.idleTime));
         });
 
       if (recentPingTransactionKeys.length > 0) {
@@ -1278,6 +1288,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await this.incomerStore.updateIncomer({
       ...relatedIncomer,
+      lastActivity: Date.now(),
       isDispatcherActiveInstance: true
     });
   }
