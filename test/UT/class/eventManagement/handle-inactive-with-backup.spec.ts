@@ -114,7 +114,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
             instance: "incomer"
           });
 
-          Reflect.set(concernedIncomer, "incomerTransactionStore", firstIncomerTransactionStore);
+          Reflect.set(concernedIncomer, "newTransactionStore", firstIncomerTransactionStore);
 
           concernedIncomer["lastPingDate"] = Date.now();
           concernedIncomer.emit("registered");
@@ -136,9 +136,9 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
             instance: "incomer"
           });
 
-          Reflect.set(secondConcernedIncomer, "incomerTransactionStore", secondIncomerTransactionStore);
+          Reflect.set(secondConcernedIncomer, "newTransactionStore", secondIncomerTransactionStore);
 
-          mockedSetTransaction = jest.spyOn(secondConcernedIncomer["incomerTransactionStore"], "setTransaction");
+          mockedSetTransaction = jest.spyOn(secondConcernedIncomer["newTransactionStore"], "setTransaction");
 
           secondConcernedIncomer["lastPingDate"] = Date.now();
           secondConcernedIncomer.emit("registered");
@@ -159,7 +159,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       jest.spyOn(concernedIncomer as any, "customEvent")
         .mockImplementation(async(opts: any) => {
-          handlerTransaction = await concernedIncomer["incomerTransactionStore"].setTransaction({
+          handlerTransaction = await concernedIncomer["newTransactionStore"].setTransaction({
             ...event,
             redisMetadata: {
               ...opts.message.redisMetadata,
@@ -185,7 +185,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       await secondConcernedIncomer.initialize();
 
-      await timers.setTimeout(2_000);
+      await timers.setTimeout(4_000);
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {

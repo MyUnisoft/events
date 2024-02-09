@@ -30,12 +30,11 @@ const mockedEventComeBackHandler = jest.fn();
 
 async function updateRegisterTransactionState(
   publisherOldTransacStore: TransactionStore<"incomer">,
-  publisherRegistrationTransacId: string,
   approvementTransactionId: string
 ) {
-  const registerTransaction = await publisherOldTransacStore.getTransactionById(publisherRegistrationTransacId);
+  const [_, registerTransaction] = [...await publisherOldTransacStore.getTransactions()].find(([id, transac]) => transac.name === "register")!;
 
-  await publisherOldTransacStore.updateTransaction(publisherRegistrationTransacId, {
+  await publisherOldTransacStore.updateTransaction(registerTransaction.redisMetadata.transactionId, {
     ...registerTransaction,
     redisMetadata: {
       ...registerTransaction!.redisMetadata,
@@ -58,8 +57,7 @@ async function handleRegistration(instance: Incomer, message: any) {
   }));
 
   await updateRegisterTransactionState(
-    instance["incomerTransactionStore"],
-    instance["registerTransactionId"]!,
+    instance["defaultIncomerTransactionStore"],
     message.redisMetadata.transactionId
   );
 
@@ -68,7 +66,7 @@ async function handleRegistration(instance: Incomer, message: any) {
     instance: "incomer"
   });
 
-  Reflect.set(instance, "incomerTransactionStore", instanceTransactionStore);
+  Reflect.set(instance, "newTransactionStore", instanceTransactionStore);
 
   return { instanceTransactionStore };
 }
