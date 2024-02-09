@@ -34,14 +34,16 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   beforeAll(async() => {
     await initRedis({
       port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     } as any);
 
     await getRedis()!.flushall();
 
     await initRedis({
       port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({
@@ -71,7 +73,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     await clearAllKeys();
   });
 
-  describe("Inactive incomer with back-up available", () => {
+  describe("Inactive incomer without back-up available", () => {
     let concernedIncomer: Incomer;
     let secondConcernedIncomer: Incomer;
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
@@ -193,13 +195,15 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
 
-      await secondConcernedIncomer.initialize();
-
       await timers.setTimeout(10_000);
+
+      await secondConcernedIncomer.initialize();
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      await timers.setTimeout(20_000);
+      await timers.setTimeout(5_000);
+
+      await dispatcher["transactionHandler"].resolveTransactions();
 
       const mockCalls = mockedSetTransaction.mock.calls.flat();
 

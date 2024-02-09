@@ -16,12 +16,14 @@ const incomerLogger = Logger.pino({
 beforeAll(async() => {
   await initRedis({
     port: Number(process.env.REDIS_PORT),
-    host: process.env.REDIS_HOST
+    host: process.env.REDIS_HOST,
+    enableAutoPipelining: true
   });
 
   await initRedis({
     port: Number(process.env.REDIS_PORT),
-    host: process.env.REDIS_HOST
+    host: process.env.REDIS_HOST,
+    enableAutoPipelining: true
   }, "subscriber");
 
   await getRedis()!.flushall();

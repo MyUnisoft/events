@@ -31,14 +31,16 @@ describe("Ping", () => {
   beforeAll(async() => {
     await initRedis({
       port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     } as any);
 
     await getRedis()!.flushall();
 
     await initRedis({
       port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     } as any, "subscriber");
 
     dispatcher = new Dispatcher({

@@ -14,14 +14,10 @@ import {
   DispatcherChannelMessages,
   IncomerChannelMessages,
   DispatcherPingMessage,
-  EventMessage
+  DistributedEventMessage
 } from "../../types/eventManagement/index";
 
 export type Instance = "dispatcher" | "incomer";
-
-type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "dispatcher" ?
-  Omit<DispatcherTransactionMetadata, "to" | "transactionId"> & { to?: string } & (MainTransaction | SpreadTransaction) :
-  Omit<IncomerTransactionMetadata, "transactionId"> & (MainTransaction | HandlerTransaction);
 
 type MainTransaction = {
   published?: boolean;
@@ -39,30 +35,67 @@ type SpreadTransaction = {
 
 type HandlerTransaction = {
   published?: boolean;
+  eventTransactionId?: string;
   mainTransaction: false;
   relatedTransaction: string;
   resolved: boolean;
 };
 
-type DispatcherTransaction = (
-  DispatcherChannelMessages["DispatcherMessages"] & {
-    redisMetadata: DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction)
-  } | IncomerChannelMessages["DispatcherMessages"] & {
-    redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction)
-  }
-) | (
-  EventMessage & {
-    redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & (SpreadTransaction | MainTransaction);
-  }
-);
+export type DispatcherMainTransaction = DispatcherPingMessage & {
+  redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & MainTransaction
+}
 
-type IncomerTransaction = DispatcherChannelMessages["IncomerMessages"] & {
-  redisMetadata: DispatcherChannelMessages["IncomerMessages"]["redisMetadata"] & (HandlerTransaction | MainTransaction)
-} | EventMessage & {
-  redisMetadata: EventMessage["redisMetadata"] & (HandlerTransaction | MainTransaction)
-} | DispatcherPingMessage & {
-  redisMetadata: DispatcherPingMessage["redisMetadata"] & (HandlerTransaction | MainTransaction)
+type DispatcherApprovementTransaction = DispatcherChannelMessages["DispatcherMessages"] & {
+  redisMetadata: DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"] & SpreadTransaction
 };
+
+type DispatcherDistributedEventTransaction = DistributedEventMessage & {
+  redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & SpreadTransaction
+}
+
+export interface DispatcherSpreadTransaction {
+  dispatcherApprovementTransaction: DispatcherApprovementTransaction;
+  dispatcherDistributedEventTransaction: DispatcherDistributedEventTransaction;
+}
+
+type DispatcherTransaction = (
+  DispatcherSpreadTransaction["dispatcherApprovementTransaction"] |
+  DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"]
+) | DispatcherMainTransaction;
+
+type IncomerApprovementTransaction = DispatcherChannelMessages["IncomerMessages"] & {
+  redisMetadata: DispatcherChannelMessages["IncomerMessages"]["redisMetadata"] & MainTransaction
+};
+
+type IncomerEventCastTransaction = IncomerChannelMessages["IncomerMessages"] & {
+  redisMetadata: IncomerChannelMessages["IncomerMessages"]["redisMetadata"] & MainTransaction
+}
+
+export interface IncomerMainTransaction {
+  incomerApprovementTransaction: IncomerApprovementTransaction;
+  incomerEventCastTransaction: IncomerEventCastTransaction;
+}
+
+type IncomerDistributedEventTransaction = IncomerChannelMessages["IncomerMessages"] & {
+  redisMetadata: IncomerChannelMessages["IncomerMessages"]["redisMetadata"] & HandlerTransaction
+}
+
+type IncomerPongTransaction = DispatcherPingMessage & {
+  redisMetadata: DispatcherPingMessage["redisMetadata"] & HandlerTransaction
+}
+
+export interface IncomerHandlerTransaction {
+  incomerDistributedEventTransaction: IncomerDistributedEventTransaction;
+  incomerPongTransaction: IncomerPongTransaction;
+}
+
+type IncomerTransaction = (
+  IncomerMainTransaction["incomerApprovementTransaction"] |
+  IncomerMainTransaction["incomerEventCastTransaction"]
+) | (
+  IncomerHandlerTransaction["incomerDistributedEventTransaction"] |
+  IncomerHandlerTransaction["incomerPongTransaction"]
+);
 
 export type Transaction<
   T extends Instance = Instance
@@ -71,6 +104,10 @@ export type Transaction<
 ) & {
   aliveSince: number;
 };
+
+type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "dispatcher" ?
+  Omit<DispatcherTransactionMetadata, "to" | "transactionId"> & { to?: string } & (MainTransaction | SpreadTransaction) :
+  Omit<IncomerTransactionMetadata, "transactionId"> & (MainTransaction | HandlerTransaction);
 
 export type PartialTransaction<
   T extends Instance = Instance
@@ -165,5 +202,9 @@ export class TransactionStore<
 
   async deleteTransaction(transactionId: string): Promise<void> {
     await this.deleteValue(`${this.key}-${transactionId}`);
+  }
+
+  async deleteTransactions(transactionIds: string[]): Promise<void> {
+    await this.redis.del(transactionIds);
   }
 }

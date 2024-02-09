@@ -29,94 +29,108 @@ const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
 
 
 describe("Registration", () => {
-  let dispatcher: Dispatcher;
-  let incomer: Incomer;
-
-  function updateIncomerState(...args) {
-    incomer["lastPingDate"] = Date.now();
-    incomer["dispatcherConnectionState"] = true;
-  }
-
   beforeAll(async() => {
     await initRedis({
       port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     } as any);
-
-    await getRedis()!.flushall();
 
     await initRedis({
       port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     } as any, "subscriber");
-
-    dispatcher = new Dispatcher({
-      logger: dispatcherLogger,
-      pingInterval: 1_000,
-      checkLastActivityInterval: 1_000,
-      checkTransactionInterval: 1_500,
-      idleTime: 2_000
-     });
-
-    await dispatcher.initialize();
   });
 
   afterAll(async() => {
-    await dispatcher.close();
     await closeAllRedis();
   });
 
-  afterEach(async() => {
-    await clearAllKeys();
+  beforeEach(async() => {
+    await getRedis()!.flushall();
   });
 
-  // describe("Initializing consecutively the same Incomer", () => {
-  //   const eventComeBackHandler = () => void 0;
-
-  //   afterAll(async() => {
-  //     await incomer.close();
-  //   });
-
-  //   beforeAll(async() => {
-  //     incomer = new Incomer({
-  //       name: "foo",
-  //       logger: incomerLogger,
-  //       eventsCast: [],
-  //       eventsSubscribe: [],
-  //       eventCallback: eventComeBackHandler
-  //     });
-
-  //     await incomer.initialize();
-  //   });
-
-  //   it("Should correctly register the new incomer", async() => {
-  //     await timers.setTimeout(1_600);
-
-  //     expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
-  //     expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
-  //   });
-
-  //   test("Calling Incomer initialize a second time, it should fail", async() => {
-  //     expect.assertions(1);
-
-  //     try {
-  //       await incomer.initialize()
-  //     }
-  //     catch (error) {
-  //       expect(error.message).toBe("Cannot init multiple times.");
-  //     }
-  //   });
-  // });
-
-  describe("Initializing a new Incomer", () => {
-    let handlePingFn;
+  describe("Initializing consecutively the same Incomer", () => {
     const eventComeBackHandler = () => void 0;
+
+    let dispatcher: Dispatcher;
+    let incomer: Incomer;
 
     afterAll(async() => {
       await incomer.close();
+      await dispatcher.close();
     });
 
     beforeAll(async() => {
+      dispatcher = new Dispatcher({
+        logger: dispatcherLogger,
+        pingInterval: 1_000,
+        checkLastActivityInterval: 1_000,
+        checkTransactionInterval: 1_500,
+        idleTime: 2_000
+       });
+
+      await dispatcher.initialize();
+
+      incomer = new Incomer({
+        name: "foo",
+        logger: incomerLogger,
+        eventsCast: [],
+        eventsSubscribe: [],
+        eventCallback: eventComeBackHandler
+      });
+
+      await incomer.initialize();
+    });
+
+    it("Should correctly register the new incomer", async() => {
+      await timers.setTimeout(1_600);
+
+      expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
+      expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
+    });
+
+    test("Calling Incomer initialize a second time, it should fail", async() => {
+      expect.assertions(1);
+
+      try {
+        await incomer.initialize()
+      }
+      catch (error) {
+        expect(error.message).toBe("Cannot init multiple times.");
+      }
+    });
+  });
+
+  describe("Initializing a new Incomer", () => {
+    const eventComeBackHandler = () => void 0;
+
+    function updateIncomerState(...args) {
+      incomer["lastPingDate"] = Date.now();
+      incomer["dispatcherConnectionState"] = true;
+    }
+
+    let dispatcher: Dispatcher;
+    let incomer: Incomer;
+    let handlePingFn: (...args: any[]) => Promise<void>;
+
+    afterAll(async() => {
+      await incomer.close();
+      await dispatcher.close();
+    });
+
+    beforeAll(async() => {
+      dispatcher = new Dispatcher({
+        logger: dispatcherLogger,
+        pingInterval: 1_000,
+        checkLastActivityInterval: 1_000,
+        checkTransactionInterval: 1_500,
+        idleTime: 2_000
+       });
+
+      await dispatcher.initialize();
+
       incomer = new Incomer({
         name: "bar",
         eventsCast: [],

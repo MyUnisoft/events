@@ -12,7 +12,8 @@ let transactionStore: TransactionStore<"dispatcher">;
 beforeAll(async() => {
   const redis = await initRedis({
     port: process.env.REDIS_PORT,
-    host: process.env.REDIS_HOST
+    host: process.env.REDIS_HOST,
+    enableAutoPipelining: true
   } as any);
 
   await redis.flushall();

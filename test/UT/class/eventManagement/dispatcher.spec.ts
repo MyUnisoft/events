@@ -18,6 +18,7 @@ import Ajv from "ajv";
 import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
+import { TransactionHandler } from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
@@ -30,7 +31,7 @@ const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "
 const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
 const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
-const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "InactiveIncomerTransactionsResolution");
+const mockedHandleInactiveIncomer =  jest.spyOn(TransactionHandler.prototype, "resolveInactiveIncomerTransactions");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
 
@@ -45,7 +46,8 @@ describe("Dispatcher", () => {
   beforeAll(async() => {
     await initRedis({
       port: Number(process.env.REDIS_PORT),
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     });
 
     await getRedis()!.flushall();
@@ -62,8 +64,11 @@ describe("Dispatcher", () => {
     beforeAll(async() => {
       subscriber = await initRedis({
         port: Number(process.env.REDIS_PORT),
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       }, "subscriber");
+
+      await subscriber.flushall();
 
       dispatcher = new Dispatcher({
         logger,
@@ -339,7 +344,7 @@ describe("Dispatcher", () => {
       test("It should have update the update the incomer last activity", async () => {
         await timers.setTimeout(10_000);
 
-        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
+        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
 
         expect(pongTransactionToRetrieve).toBeNull();
@@ -357,8 +362,11 @@ describe("Dispatcher", () => {
     beforeAll(async() => {
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       } as any, "subscriber");
+
+      await subscriber.flushall();
 
       dispatcher = new Dispatcher({
         logger,
@@ -567,7 +575,7 @@ describe("Dispatcher", () => {
       test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
         await timers.setTimeout(4_000);
 
-        const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
+        const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
 
         expect(transaction).toBeNull();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
@@ -592,8 +600,11 @@ describe("Dispatcher", () => {
 
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       } as any, "subscriber");
+
+      await subscriber.flushall();
 
       const eventsValidationFn = new Map();
 
@@ -1035,8 +1046,11 @@ describe("Dispatcher", () => {
 
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       } as any, "subscriber");
+
+      await subscriber.flushall();
 
       const eventsValidationFn = new Map();
 

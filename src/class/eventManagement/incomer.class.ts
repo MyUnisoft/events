@@ -14,9 +14,6 @@ import { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import {
-  channels
-} from "../../utils/config";
-import {
   PartialTransaction,
   Transaction,
   TransactionStore
@@ -42,6 +39,7 @@ import {
   handleLoggerMode
 } from "../../utils/index";
 import { Externals } from "./externals.class";
+import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -79,7 +77,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
   prefix?: Prefix;
-  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
+  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
@@ -115,7 +113,7 @@ export class Incomer <
   private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
   private providedUUID: string;
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
+  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
   private incomerChannelName: string;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
@@ -138,7 +136,7 @@ export class Incomer <
     Object.assign(this, {}, options);
 
     this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
-    this.dispatcherChannelName = this.prefixedName + channels.dispatcher;
+    this.dispatcherChannelName = this.prefixedName + DISPATCHER_CHANNEL_NAME;
     this.standardLogFn = options.standardLog ?? defaultStandardLog;
     this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
     this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
@@ -159,7 +157,7 @@ export class Incomer <
     }).child({ incomer: this.prefixedName + this.name });
 
     this.dispatcherChannel = new Channel({
-      name: channels.dispatcher,
+      name: DISPATCHER_CHANNEL_NAME,
       prefix: this.prefix
     });
 
@@ -197,7 +195,7 @@ export class Incomer <
         ));
 
         await Promise.race([
-          transactions.map((transaction) => {
+          Promise.all(transactions.map((transaction) => {
             if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
               return this.incomerChannel.publish({
                 ...transaction,
@@ -210,7 +208,7 @@ export class Incomer <
             }
 
             return void 0;
-          }),
+          })),
           new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
         ]);
       }
@@ -266,10 +264,9 @@ export class Incomer <
     await this.dispatcherChannel.publish(fullyFormattedEvent);
 
     try {
-      await Promise.race([
-        once(this, "registered"),
-        new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
-      ]);
+      await once(this, "registered", {
+        signal: AbortSignal.timeout(kDefaultStartTime)
+      });
 
       this.checkTransactionsStateInterval = setInterval(async() => {
         if (!this.lastPingDate || this.isDispatcherInstance) {
@@ -343,10 +340,9 @@ export class Incomer <
     await this.dispatcherChannel.publish(fullyFormattedEvent);
 
     try {
-      await Promise.race([
-        once(this, "registered"),
-        new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
-      ]);
+      await once(this, "registered", {
+        signal: AbortSignal.timeout(kDefaultStartTime)
+      });
 
       this.checkTransactionsStateInterval = setInterval(async() => {
         if (!this.lastPingDate || this.isDispatcherInstance) {

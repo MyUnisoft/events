@@ -38,7 +38,15 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
   eventsValidationFn.set(name, operationsValidationFunctions);
 }
 
-export type StandardLog<T extends GenericEvent = GenericEvent> = (data: T) => (message: string) => string;
+export type StandardLog<T extends GenericEvent = GenericEvent> = (data: StandardLogOpts<T>) => (message: string) => string;
+export type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
+  redisMetadata: {
+    transactionId: string;
+    origin?: string;
+    to?: string;
+    eventTransactionId?: string;
+  }
+}
 
 function logValueFallback(value: string): string {
   return value ?? "none";
