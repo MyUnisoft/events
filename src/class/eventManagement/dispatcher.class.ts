@@ -31,7 +31,7 @@ import {
   CloseMessage
 } from "../../types/eventManagement/index";
 import * as eventsSchema from "../../schema/eventManagement/index";
-import { CustomEventsValidationFunctions, defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
+import { NestedValidationFunctions, defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
 import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
 import { TransactionHandler } from "./dispatcher/transaction-handler.class";
 import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class";
@@ -78,7 +78,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
   /* Commonly used to distinguish envs */
   prefix?: Prefix;
   eventsValidation?: {
-    eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+    eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
     validationCbFn?: (event: T) => void;
   };
   /** Used to avoid self ping & as discriminant for dispatcher instance that scale */
@@ -163,7 +163,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
   private maxTimeout = kMaxInitTimeout;
 
-  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
   private validationCbFn: (event: T) => void = null;
   private standardLogFn: StandardLog<T>;
 
@@ -202,7 +202,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       idleTime: this.idleTime
     });
 
-    this.eventsHandler = new EventsHandler();
+    this.eventsHandler = new EventsHandler({ privateUUID: this.privateUUID });
 
     this.backupDispatcherTransactionStore = new TransactionStore({
       prefix: this.formattedPrefix + kBackupTransactionStoreName,
@@ -284,7 +284,30 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   public async initialize() {
     await this.subscriber.subscribe(this.dispatcherChannelName);
-    this.subscriber.on("message", (channel, message) => this.handleMessages(channel, message));
+    this.subscriber.on("message", (channel, message) => async() => {
+      let parsedMessage: DispatcherChannelMessages["IncomerMessages"] |
+        IncomerChannelMessages<T>["IncomerMessages"];
+
+      try {
+        parsedMessage = JSON.parse(message);
+      }
+      catch (error) {
+        this.logger.error({ channel, error: error.message });
+
+        return;
+      }
+
+      try {
+        this.eventsHandler.handleEvents(channel, parsedMessage);
+      }
+      catch (error) {
+        this.logger.error({
+          channel,
+          message: parsedMessage,
+          error: error.message
+        });
+      }
+    });
 
     const incomers = await this.incomerStore.getIncomers();
 

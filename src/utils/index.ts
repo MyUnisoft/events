@@ -20,16 +20,14 @@ const kScopeKeys = Object.freeze({
   requestId: "req-id"
 });
 
-export type OperationFunctions = Record<string, any>;
+export type NestedValidationFunctions = Map<string, ValidateFunction<Record<string, any>>>;
 
-export type CustomEventsValidationFunctions = Map<string, ValidateFunction<OperationFunctions>>;
+type MappedEventsValidationFn = Map<string, NestedValidationFunctions>;
 
-type MappedEventsValidationFn = Map<string, CustomEventsValidationFunctions>;
-
-export const eventsValidationFn: MappedEventsValidationFn = new Map<string, CustomEventsValidationFunctions>();
+export const eventsValidationFn: MappedEventsValidationFn = new Map<string, NestedValidationFunctions>();
 
 for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas)) {
-  const operationsValidationFunctions: Map<string, ValidateFunction<OperationFunctions>> = new Map();
+  const operationsValidationFunctions: Map<string, ValidateFunction<Record<string, any>>> = new Map();
 
   for (const [operation, validationSchema] of Object.entries(validationSchemas)) {
     operationsValidationFunctions.set(operation, ajv.compile(validationSchema));

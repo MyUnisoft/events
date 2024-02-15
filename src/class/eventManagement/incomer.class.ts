@@ -33,7 +33,7 @@ import {
   IncomerRegistrationMessage
 } from "../../types/eventManagement/index";
 import {
-  CustomEventsValidationFunctions,
+  NestedValidationFunctions,
   StandardLog,
   defaultStandardLog,
   handleLoggerMode
@@ -82,7 +82,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   eventsValidation?: {
-    eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>
+    eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>
     validationCbFn: (event: T) => void;
   };
   eventCallback: (message: CallBackEventMessage<T>) => void;
@@ -125,7 +125,7 @@ export class Incomer <
   private checkTransactionsStateInterval: NodeJS.Timer;
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
-  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
+  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
   private validationCbFn: (event: T) => void;
 
   public externals: Externals<T> | undefined;
