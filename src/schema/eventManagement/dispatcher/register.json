@@ -1,10 +1,10 @@
 {
-  "register": {
+  "REGISTER": {
     "type": "object",
     "properties": {
       "name": {
         "type": "string",
-        "pattern": "register"
+        "pattern": "REGISTER"
       },
       "data": {
         "type": "object",

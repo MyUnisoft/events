@@ -32,9 +32,9 @@ async function updateRegisterTransactionState(
   publisherOldTransacStore: TransactionStore<"incomer">,
   approvementTransactionId: string
 ) {
-  const [_, registerTransaction] = [...await publisherOldTransacStore.getTransactions()].find(([id, transac]) => transac.name === "register")!;
+  const [_, registerTransaction] = [...await publisherOldTransacStore.getTransactions()].find(([id, transac]) => transac.name === "REGISTER")!;
 
-  await publisherOldTransacStore.updateTransaction(registerTransaction.redisMetadata.transactionId, {
+  await publisherOldTransacStore.updateTransaction(registerTransaction.redisMetadata.transactionId!, {
     ...registerTransaction,
     redisMetadata: {
       ...registerTransaction!.redisMetadata,

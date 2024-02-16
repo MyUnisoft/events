@@ -23,7 +23,7 @@ import {
   Prefix,
   DispatcherChannelMessages,
   IncomerChannelMessages,
-  DispatcherRegistrationMessage,
+  DispatcherApprovementMessage,
   IncomerRegistrationMessage,
   DispatcherPingMessage,
   EventMessage,
@@ -89,7 +89,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
   checkTransactionInterval?: number;
 };
 
-type DispatcherChannelEvents = { name: "register" };
+export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" | "ABORT_TAKING_LEAD" | "ABORT_TAKING_LEAD_BACK" };
 
 function isIncomerCloseMessage<T extends GenericEvent = GenericEvent>(
   value: IncomerChannelMessages<T>["IncomerMessages"]
@@ -107,20 +107,20 @@ function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(
   value: DispatcherChannelMessages["IncomerMessages"] |
   IncomerChannelMessages<T>["IncomerMessages"]
 ): value is DispatcherChannelMessages["IncomerMessages"] {
-  return value.name === "register";
+  return value.name === "REGISTER";
 }
 
 function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(
   value: DispatcherChannelMessages["IncomerMessages"] |
   IncomerChannelMessages<T>["IncomerMessages"]
 ): value is IncomerChannelMessages<T>["IncomerMessages"] {
-  return value.name !== "register" && value.name !== "ping";
+  return value.name !== "REGISTER" && value.name !== "PING";
 }
 
 function isIncomerRegistrationMessage(
   value: DispatcherChannelMessages["IncomerMessages"]
 ): value is IncomerRegistrationMessage {
-  return value.name === "register";
+  return value.name === "REGISTER";
 }
 
 export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
@@ -202,7 +202,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       idleTime: this.idleTime
     });
 
-    this.eventsHandler = new EventsHandler({ privateUUID: this.privateUUID });
+    this.eventsHandler = new EventsHandler({ ...this });
 
     this.backupDispatcherTransactionStore = new TransactionStore({
       prefix: this.formattedPrefix + kBackupTransactionStoreName,
@@ -284,7 +284,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   public async initialize() {
     await this.subscriber.subscribe(this.dispatcherChannelName);
-    this.subscriber.on("message", (channel, message) => async() => {
+    this.subscriber.on("message", async(channel, message) => {
       let parsedMessage: DispatcherChannelMessages["IncomerMessages"] |
         IncomerChannelMessages<T>["IncomerMessages"];
 
@@ -298,7 +298,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       try {
-        this.eventsHandler.handleEvents(channel, parsedMessage);
+        await this.handleMessages(channel, message);
+        // this.eventsHandler.handleEvents(channel, parsedMessage);
       }
       catch (error) {
         this.logger.error({
@@ -395,7 +396,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private updateState(state: boolean) {
     this.isWorking = state;
-    this.transactionHandler.isWorking = state;
   }
 
   private async takeLeadBack(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
@@ -505,7 +505,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const event: Omit<DispatcherPingMessage, "redisMetadata"> & {
         redisMetadata: Omit<DispatcherPingMessage["redisMetadata"], "transactionId">
       } = {
-        name: "ping",
+        name: "PING",
         data: null,
         redisMetadata: {
           origin: this.privateUUID,
@@ -576,7 +576,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       const transactions = await transactionStore.getTransactions();
       const recentPingTransactionKeys = [...(Object.entries(transactions) as [string, Transaction<"incomer">][])
-        .filter(([, transaction]) => transaction.name === "ping" &&
+        .filter(([, transaction]) => transaction.name === "PING" &&
           Date.now() < (Number(transaction.aliveSince) + Number(this.idleTime)))]
         .map(([transactionId]) => transactionId);
 
@@ -693,8 +693,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       const abortMessage = match(formattedMessage.name)
-        .with("Abort_taking_lead", () => "ABORT_TAKING_LEAD")
-        .with("Abort_taking_lead_back", () => "ABORT_TAKING_LEAD_BACK")
+        .with("ABORT_TAKING_LEAD", () => "ABORT_TAKING_LEAD")
+        .with("ABORT_TAKING_LEAD_BACK", () => "ABORT_TAKING_LEAD_BACK")
         .otherwise(() => null);
 
       if (abortMessage !== null) {
@@ -741,14 +741,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     };
 
     match<DispatcherChannelEvents>({ name })
-      .with({ name: "register" }, async() => {
+      .with({ name: "REGISTER" }, async() => {
         this.logger.info(logData, "Registration asked");
 
         if (isIncomerRegistrationMessage(message)) {
           await this.approveIncomer(message);
         }
       })
-      .exhaustive()
+      .otherwise(() => {
+        throw new Error("No good event");
+      })
       .catch((error) => {
         this.logger.error({ channel: "dispatcher", message, error: error.message });
       });
@@ -805,7 +807,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       );
 
     if (concernedIncomers.length === 0) {
-      if (name === "ping") {
+      if (name === "PING") {
         this.logger.warn(this.standardLogFn(logData)("No concerned Incomer found"));
       }
       else {
@@ -954,10 +956,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
 
-    const event: Omit<DispatcherRegistrationMessage, "redisMetadata"> & {
-      redisMetadata: Omit<DispatcherRegistrationMessage["redisMetadata"], "transactionId">
+    const event: Omit<DispatcherApprovementMessage, "redisMetadata"> & {
+      redisMetadata: Omit<DispatcherApprovementMessage["redisMetadata"], "transactionId">
     } = {
-      name: "approvement",
+      name: "APPROVEMENT",
       data: {
         uuid: providedUUID
       },

@@ -39,7 +39,7 @@ describe("Transaction options", () => {
 
     beforeAll(async() => {
       const partialTransaction: PartialTransaction<"dispatcher"> = {
-        name: "ping",
+        name: "PING",
         data: null,
         redisMetadata: {
           origin: "foo",
@@ -67,7 +67,7 @@ describe("Transaction options", () => {
   describe("setTransaction", () => {
     test("calling setTransaction, it should add a new transaction to the transaction tree", async() => {
       const partialTransaction: PartialTransaction<"dispatcher"> = {
-        name: "ping",
+        name: "PING",
         data: null,
         redisMetadata: {
           origin: "foo",
@@ -91,7 +91,7 @@ describe("Transaction options", () => {
 
     beforeAll(async() => {
       const partialTransaction: PartialTransaction<"dispatcher"> = {
-        name: "ping",
+        name: "PING",
         data: null,
         redisMetadata: {
           origin: "foo",
@@ -120,7 +120,7 @@ describe("Transaction options", () => {
   describe("getTransactions", () => {
     beforeAll(async() => {
       const transaction: PartialTransaction<"dispatcher"> = {
-        name: "ping",
+        name: "PING",
         data: null,
         redisMetadata: {
           origin: "foo",

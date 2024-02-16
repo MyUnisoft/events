@@ -75,8 +75,6 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   public backupIncomerTransactionStore: TransactionStore<"incomer">;
   public backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
 
-  public isWorking = false;
-
   private incomerChannelHandler: IncomerChannelHandler<T>;
   private eventsHandler: EventsHandler<T>;
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
@@ -126,7 +124,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         continue;
       }
 
-      if (incomerTransaction.name === "register") {
+      if (incomerTransaction.name === "REGISTER") {
         const approvementRelatedTransaction = Object.keys(dispatcherTransactions)
           .find(
             (dispatcherTransactionId) => dispatcherTransactions[dispatcherTransactionId].redisMetadata.relatedTransaction ===
@@ -236,7 +234,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
       const handlerTransaction = incomerTransaction as IncomerHandlerTransaction["incomerDistributedEventTransaction"];
 
-      if (handlerTransaction.name === "ping") {
+      if (handlerTransaction.name === "PING") {
         await Promise.all([
           inactiveIncomerTransactionStore.deleteTransaction(incomerTransactionId),
           this.dispatcherTransactionStore.deleteTransaction(handlerTransaction.redisMetadata.relatedTransaction)
@@ -379,7 +377,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         continue;
       }
 
-      if (dispatcherTransaction.name === "ping" || dispatcherTransaction.name === "approvement") {
+      if (dispatcherTransaction.name === "PING" || dispatcherTransaction.name === "APPROVEMENT") {
         await this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
 
         continue;
@@ -710,7 +708,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         continue;
       }
 
-      if (dispatcherTransaction.name === "approvement") {
+      if (dispatcherTransaction.name === "APPROVEMENT") {
         const transaction = relatedIncomerTransactions.get(relatedIncomerTransactionId);
 
         // What if service asked for registration but won't never resolve the approvement

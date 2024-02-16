@@ -24,7 +24,7 @@ import {
   EventSubscribe,
   DispatcherChannelMessages,
   IncomerChannelMessages,
-  DispatcherRegistrationMessage,
+  DispatcherApprovementMessage,
   CallBackEventMessage,
   DispatcherPingMessage,
   DistributedEventMessage,
@@ -39,7 +39,7 @@ import {
   handleLoggerMode
 } from "../../utils/index";
 import { Externals } from "./externals.class";
-import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class";
+import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents } from "./dispatcher.class";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -54,23 +54,22 @@ const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLI
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
 const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
-type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
   T extends GenericEvent = GenericEvent
-> = { name: "ping"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
+> = { name: "PING"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
 
 function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is DispatcherChannelMessages["DispatcherMessages"] {
-  return value.name === "approvement";
+  return value.name === "APPROVEMENT";
 }
 
 function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is IncomerChannelMessages<T>["DispatcherMessages"] {
-  return value.name !== "approvement";
+  return value.name !== "APPROVEMENT";
 }
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
@@ -230,7 +229,7 @@ export class Incomer <
     this.logger.info("Registering as a new incomer on dispatcher");
 
     const event = {
-      name: "register" as const,
+      name: "REGISTER" as const,
       data: {
         name: this.name,
         eventsCast: this.eventsCast,
@@ -306,7 +305,7 @@ export class Incomer <
     }
 
     const event = {
-      name: "register" as const,
+      name: "REGISTER" as const,
       data: {
         name: this.name,
         eventsCast: this.eventsCast,
@@ -519,12 +518,14 @@ export class Incomer <
     const { name } = message;
 
     match<DispatcherChannelEvents>({ name })
-      .with({ name: "approvement" }, async() => {
+      .with({ name: "APPROVEMENT" }, async() => {
         this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-        await this.handleApprovement(message);
+        await this.handleApprovement(message as DispatcherApprovementMessage);
       })
-      .exhaustive()
+      .otherwise(() => {
+        throw new Error("No good event");
+      })
       .catch((error) => {
         this.logger.error({
           channel: "dispatcher",
@@ -542,9 +543,9 @@ export class Incomer <
 
     match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
       .with({
-        name: "ping"
+        name: "PING"
       },
-      async(res: { name: "ping", message: DispatcherPingMessage }) => this.handlePing(channel, res.message))
+      async(res: { name: "PING", message: DispatcherPingMessage }) => this.handlePing(channel, res.message))
       .with(P._,
         async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
           ...res, channel
@@ -635,7 +636,7 @@ export class Incomer <
     this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
   }
 
-  private async handleApprovement(message: DispatcherRegistrationMessage) {
+  private async handleApprovement(message: DispatcherApprovementMessage) {
     const { data } = message;
 
     this.incomerChannelName = this.prefixedName + data.uuid;
@@ -657,7 +658,7 @@ export class Incomer <
 
     const transactionToUpdate = [];
     for (const [transactionId, transaction] of oldTransactions.entries()) {
-      if (transaction.name === "register") {
+      if (transaction.name === "REGISTER") {
         transactionToUpdate.push([
           Promise.all([
             this.defaultIncomerTransactionStore.deleteTransaction(transactionId),

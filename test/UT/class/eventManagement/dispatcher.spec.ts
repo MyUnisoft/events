@@ -121,7 +121,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -150,7 +150,7 @@ describe("Dispatcher", () => {
         let incomerTransactionStore: TransactionStore<"incomer">;
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -257,7 +257,7 @@ describe("Dispatcher", () => {
         subscriber.on("message", async(channel, message) => {
           const formattedMessage = JSON.parse(message);
 
-          if (formattedMessage.name === "approvement") {
+          if (formattedMessage.name === "APPROVEMENT") {
             const providedUUID = formattedMessage.data.uuid;
 
             await subscriber.subscribe(providedUUID);
@@ -267,7 +267,7 @@ describe("Dispatcher", () => {
               instance: "incomer"
             });
           }
-          else if (formattedMessage.name === "ping" && index === 0) {
+          else if (formattedMessage.name === "PING" && index === 0) {
             pingTransactionId = formattedMessage.redisMetadata.transactionId;
             pongTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
@@ -293,7 +293,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -321,7 +321,7 @@ describe("Dispatcher", () => {
         });
 
         await channel.publish({
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -405,7 +405,7 @@ describe("Dispatcher", () => {
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
 
-            if (formattedMessage.name && formattedMessage.name === "approvement") {
+            if (formattedMessage.name && formattedMessage.name === "APPROVEMENT") {
               approved = true;
             }
           });
@@ -416,7 +416,7 @@ describe("Dispatcher", () => {
           });
 
           const event = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: incomerName,
               eventsCast: [],
@@ -487,7 +487,7 @@ describe("Dispatcher", () => {
         subscriber.on("message", async(channel, message) => {
           const formattedMessage = JSON.parse(message);
 
-          if (formattedMessage.name === "approvement") {
+          if (formattedMessage.name === "APPROVEMENT") {
             const providedUUid = formattedMessage.data.uuid;
 
             incomerTransactionStore = new TransactionStore({
@@ -497,7 +497,7 @@ describe("Dispatcher", () => {
 
             await subscriber.subscribe(`${prefix}-${providedUUid}`);
           }
-          else if (formattedMessage.name === "ping" && index === 0) {
+          else if (formattedMessage.name === "PING" && index === 0) {
             pongTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
               redisMetadata: {
@@ -520,7 +520,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -549,7 +549,7 @@ describe("Dispatcher", () => {
         });
 
         await channel.publish({
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -730,7 +730,7 @@ describe("Dispatcher", () => {
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
 
-            if (formattedMessage.name && formattedMessage.name === "approvement") {
+            if (formattedMessage.name && formattedMessage.name === "APPROVEMENT") {
               approved = true;
             }
           });
@@ -740,7 +740,7 @@ describe("Dispatcher", () => {
           });
 
           const event = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: incomerName,
               eventsCast: [],
@@ -867,7 +867,7 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (channel === "dispatcher") {
-              if (formattedMessage.name === "approvement") {
+              if (formattedMessage.name === "APPROVEMENT") {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.redisMetadata.to === firstUuid) {
@@ -947,7 +947,7 @@ describe("Dispatcher", () => {
           });
 
           const firstEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: firstIncomerName,
               eventsCast: ["foo"],
@@ -959,7 +959,7 @@ describe("Dispatcher", () => {
           };
 
           const secondEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: secondIncomerName,
               eventsCast: [],
@@ -1144,7 +1144,7 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (channel === `${prefix}-dispatcher`) {
-              if (formattedMessage.name === "approvement") {
+              if (formattedMessage.name === "APPROVEMENT") {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.redisMetadata.to === firstIncomerUuid) {
@@ -1254,7 +1254,7 @@ describe("Dispatcher", () => {
           });
 
           const firstEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: firstIncomerName,
               eventsCast: ["foo"],
@@ -1267,7 +1267,7 @@ describe("Dispatcher", () => {
           };
 
           const secondEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: secondIncomerName,
               eventsCast: [],
@@ -1280,7 +1280,7 @@ describe("Dispatcher", () => {
           };
 
           const thirdEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: thirdIncomerName,
               eventsCast: [],
