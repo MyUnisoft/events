@@ -5,9 +5,7 @@ import {
   GenericEvent
 } from "../../types";
 import {
-  AVAILABLE_EVENTS,
-  eventsValidationFn,
-  validate
+  AVAILABLE_EVENTS
 } from "../../index";
 
 export class Externals<T extends GenericEvent = GenericEvent> {
@@ -28,11 +26,7 @@ export class Externals<T extends GenericEvent = GenericEvent> {
       pingInterval: Number(process.env.MYUNISOFT_DISPATCHER_PING) || undefined,
       checkLastActivityInterval: Number(process.env.MYUNISOFT_DISPATCHER_ACTIVITY_CHECK) || undefined,
       checkTransactionInterval: Number(process.env.MYUNISOFT_DISPATCHER_TRANSACTION_CHECK) || undefined,
-      idleTime: Number(process.env.MYUNISOFT_IDLE_TIME) || undefined,
-      eventsValidation: {
-        eventsValidationFn,
-        validationCbFn: validate as any
-      }
+      idleTime: Number(process.env.MYUNISOFT_IDLE_TIME) || undefined
     });
   }
 

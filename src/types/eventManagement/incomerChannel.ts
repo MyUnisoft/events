@@ -26,7 +26,7 @@ export type EventMessage<
 };
 
 export type CloseMessage = {
-  name: string;
+  name: "CLOSE";
   redisMetadata: {
     origin: string;
     incomerName: string;

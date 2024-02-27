@@ -1,5 +1,3 @@
-/* eslint-disable max-lines */
-
 // Import Third-party Dependencies
 import { Logger } from "pino";
 import { Channel } from "@myunisoft/redis";

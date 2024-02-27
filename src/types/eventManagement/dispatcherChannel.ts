@@ -7,9 +7,7 @@ import {
 } from "./index";
 
 // Send by the a Dispatcher
-type DispatcherMessages = DispatcherApprovementMessage |
-  AbortTakingLeadMessage |
-  AbortTakingLeadBackMessage;
+type DispatcherMessages = DispatcherApprovementMessage;
 
 interface DispatcherApprovementData {
   uuid: string;
@@ -19,18 +17,6 @@ export type DispatcherApprovementMessage = {
   name: "APPROVEMENT";
   data: DispatcherApprovementData;
   redisMetadata: DispatcherTransactionMetadata;
-}
-
-export type AbortTakingLeadMessage = {
-  name: "ABORT_TAKING_LEAD";
-  data: null;
-  redisMetadata: null;
-}
-
-export type AbortTakingLeadBackMessage = {
-  name: "ABORT_TAKING_LEAD_BACK";
-  data: null;
-  redisMetadata: null;
 }
 
 // Send by an Incomer

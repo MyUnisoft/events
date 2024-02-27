@@ -40,6 +40,7 @@ import {
 } from "../../utils/index";
 import { Externals } from "./externals.class";
 import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents } from "./dispatcher.class";
+import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -81,8 +82,8 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   eventsValidation?: {
-    eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>
-    validationCbFn: (event: T) => void;
+    eventsValidationFn?: eventsValidationFn<T>;
+    customValidationCbFn?: customValidationCbFn<T>;
   };
   eventCallback: (message: CallBackEventMessage<T>) => void;
   dispatcherInactivityOptions?: {
@@ -125,7 +126,7 @@ export class Incomer <
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
-  private validationCbFn: (event: T) => void;
+  private customValidationCbFn: (event: T) => void;
 
   public externals: Externals<T> | undefined;
 
@@ -145,7 +146,7 @@ export class Incomer <
 
     if (options.eventsValidation) {
       this.eventsValidationFn = options.eventsValidation.eventsValidationFn;
-      this.validationCbFn = options.eventsValidation.validationCbFn;
+      this.customValidationCbFn = options.eventsValidation.customValidationCbFn;
     }
 
     this.logger = options.logger ?? pino({
@@ -177,7 +178,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date) {
+    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date && !this.isDispatcherInstance) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -395,7 +396,7 @@ export class Incomer <
 
     if (this.incomerChannel) {
       await this.incomerChannel.publish({
-        name: "close",
+        name: "CLOSE",
         redisMetadata: {
           origin: this.providedUUID,
           incomerName: this.name,
@@ -429,7 +430,7 @@ export class Incomer <
         throw new Error(`Unknown Event ${event.name}`);
       }
 
-      this.validationCbFn(event);
+      this.customValidationCbFn(event);
     }
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
@@ -604,7 +605,7 @@ export class Incomer <
         throw new Error(`Unknown Event ${event.name}`);
       }
 
-      this.validationCbFn(event as unknown as T);
+      this.customValidationCbFn(event as unknown as T);
     }
 
     const transaction: PartialTransaction<"incomer"> = {

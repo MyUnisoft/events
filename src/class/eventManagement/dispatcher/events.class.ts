@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 // Import Third-party Dependencies
 import { Channel } from "@myunisoft/redis";
 import Ajv, { ValidateFunction } from "ajv";
+import { Logger } from "pino";
 import { match } from "ts-pattern";
 
 // Import Internal Dependencies
@@ -14,16 +15,17 @@ import {
   EventMessage,
   GenericEvent,
   IncomerChannelMessages,
-  IncomerRegistrationMessage
+  IncomerRegistrationMessage,
+  CloseMessage
 } from "../../../types";
-import { NestedValidationFunctions } from "../../../utils";
 import * as eventsSchema from "../../../schema/eventManagement/index";
-import { DispatcherChannelEvents } from "../dispatcher.class";
+import { NestedValidationFunctions, StandardLog, defaultStandardLog } from "../../../utils";
 
 // CONSTANTS
 const ajv = new Ajv();
+const kDispatcherChannelEvents = ["REGISTER", "APPROVEMENT"];
 
-const kDispatcherChannelEvents = ["REGISTER", "APPROVEMENT", "ABORT_TAKING_LEAD", "ABORT_TAKING_LEAD_BACK"];
+export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" };
 
 type AnyDispatcherChannelMessage = (
   DispatcherChannelMessages["DispatcherMessages"] | DispatcherChannelMessages["IncomerMessages"]
@@ -38,7 +40,7 @@ function isIncomerChannelMessage<
 >(
   event: AnyDispatcherChannelMessage |
     AnyIncomerChannelMessage<T>
-): event is AnyIncomerChannelMessage<T> {
+): event is IncomerChannelMessages<T>["IncomerMessages"] {
   return kDispatcherChannelEvents.find((message) => message === event.name) === undefined;
 }
 
@@ -51,10 +53,16 @@ function isDispatcherChannelMessage<
   return kDispatcherChannelEvents.find((message) => message === event.name) !== undefined;
 }
 
-function isEventMessage<T extends GenericEvent>(
+function isCustomEventMessage<T extends GenericEvent>(
   event: IncomerChannelMessages<T>["IncomerMessages"]
 ): event is EventMessage<T> {
-  return event.name !== "REGISTER";
+  return event.name !== "CLOSE";
+}
+
+function isCloseMessage<T extends GenericEvent>(
+  event: IncomerChannelMessages<T>["IncomerMessages"]
+): event is CloseMessage {
+  return event.name === "CLOSE";
 }
 
 type DispatchedEvent<T extends GenericEvent> = (
@@ -75,7 +83,7 @@ export interface DispatchEventOptions<T extends GenericEvent> {
   store: TransactionStore<"incomer"> | TransactionStore<"dispatcher">;
 }
 
-export type ValidationCbFn<T extends GenericEvent> = (event: T) => void;
+export type customValidationCbFn<T extends GenericEvent> = (event: T) => void;
 export type eventsValidationFn<T extends GenericEvent> = Map<string, ValidateFunction<T> | NestedValidationFunctions>;
 
 export interface EventsHandlerOptions<T extends GenericEvent> {
@@ -83,8 +91,10 @@ export interface EventsHandlerOptions<T extends GenericEvent> {
   dispatcherChannelName: string;
   eventsValidation?: {
     eventsValidationFn?: eventsValidationFn<T>;
-    validationCbFn?: ValidationCbFn<T>;
-  }
+    customValidationCbFn?: customValidationCbFn<T>;
+  };
+  standardLog?: StandardLog<T>;
+  parentLogger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
 }
 
 export class EventsHandler<T extends GenericEvent> extends EventEmitter {
@@ -92,15 +102,21 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   readonly dispatcherChannelName: string;
 
   #eventsValidationFn: eventsValidationFn<T>;
-  #validationCbFn: ValidationCbFn<T>;
+  #customValidationCbFn: customValidationCbFn<T>;
+
+  #logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
+  #standardLogFn: StandardLog<T>;
 
   constructor(options: EventsHandlerOptions<T>) {
     super();
 
     Object.assign(this, { ...options });
 
+    this.#logger = options.parentLogger.child({ module: "events-handler" });
+    this.#standardLogFn = options.standardLog ?? defaultStandardLog;
+
     this.#eventsValidationFn = options.eventsValidation?.eventsValidationFn ?? new Map();
-    this.#validationCbFn = options?.eventsValidation?.validationCbFn;
+    this.#customValidationCbFn = options.eventsValidation?.customValidationCbFn;
 
     for (const [eventName, validationSchema] of Object.entries(eventsSchema)) {
       this.#eventsValidationFn.set(eventName, ajv.compile(validationSchema));
@@ -133,38 +149,46 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     event: AnyDispatcherChannelMessage |
     AnyIncomerChannelMessage<T>
   ) {
+    if (!event.name || !event.redisMetadata) {
+      throw new Error("Malformed message");
+    }
+
     if (event.redisMetadata.origin === this.privateUUID) {
       return;
     }
 
     if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(event)) {
+      try {
+        this.dispatcherChannelMessagesSchemaValidation(event);
+      }
+      catch (error) {
+        this.#logger.error({
+          channel,
+          message: event,
+          error: error.stack
+        });
+      }
+
       match<DispatcherChannelEvents>({ name: event.name })
-        .with({ name: "ABORT_TAKING_LEAD" }, async() => {
-          // if (this.isWorking) {
-          //   this.updateState(false);
-          //   await this.setAsInactiveDispatcher();
-          // }
+        .with({ name: "REGISTER" }, async() => {
+          this.#logger.info({ channel, event }, "Registration asked");
 
-          // this.emit(abortMessage);
+          this.emit("APPROVEMENT", event);
         })
-        .with({ name: "ABORT_TAKING_LEAD_BACK" }, async() => {
-          // if (this.isWorking) {
-          //   this.updateState(false);
-          //   await this.setAsInactiveDispatcher();
-          // }
-
-          // this.emit(abortMessage);
-        })
-        .otherwise(async(cbEvent: IncomerRegistrationMessage | DispatcherApprovementMessage) => {
-          this.redisMetadataValidation(cbEvent);
-
-          this.dispatcherMessageSchemaValidation(cbEvent);
-
-          // Then do the work
+        .otherwise(() => {
+          throw new Error("Unknown Event");
         });
     }
     else if (isIncomerChannelMessage(event)) {
-      //
+      this.IncomerChannelMessagesSchemaValidation(event);
+
+      if (isCloseMessage(event)) {
+        this.emit("CLOSE", channel, event);
+
+        return;
+      }
+
+      this.emit("CUSTOM_EVENT", channel, event);
     }
     else {
       throw new Error("Unknown event for the given Channel");
@@ -174,7 +198,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   private redisMetadataValidation(event: AnyDispatcherChannelMessage | AnyIncomerChannelMessage<T>) {
     const { redisMetadata } = event;
 
-    const redisMetadataValidationFn = this.#eventsValidationFn.get("redisMetadata") as ValidateFunction<Record<string, any>>;
+    const redisMetadataValidationFn = this.#eventsValidationFn.get("redisMetadata") as ValidateFunction<T>;
 
     if (!redisMetadataValidationFn(redisMetadata)) {
       throw new Error(
@@ -184,39 +208,55 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     }
   }
 
-  private dispatcherMessageSchemaValidation(
+  private dispatcherChannelMessagesSchemaValidation(
     event: IncomerRegistrationMessage | DispatcherApprovementMessage
   ): void {
     const { redisMetadata, ...eventRest } = event;
 
-    const eventValidation = this.#eventsValidationFn.get(eventRest.name);
+    this.redisMetadataValidation(event);
+
+    const eventValidation = this.#eventsValidationFn.get(eventRest.name) as ValidateFunction<T>;
 
     if (!eventValidation) {
-      //
+      throw new Error(`Cannot find the related validation schema for the event: ${event.name}`);
+    }
+
+    if (!eventValidation(eventRest)) {
+      throw new Error(
+        `Malformed event: [${[...eventValidation.errors]
+          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+      );
     }
   }
 
-  private IncomerMessageSchemaValidation(
+  private IncomerChannelMessagesSchemaValidation(
     event: IncomerChannelMessages<T>["IncomerMessages"]
   ): void {
-    // if (this.isIncomerChannelMessage(event)) {
-    //   if (this.isEventMessage(event)) {
-    //     if (this.#validationCbFn) {
-    //       return this.#validationCbFn(event);
-    //     }
+    const { redisMetadata, ...eventRest } = event;
 
-    //     return eventValidation(event);
-    //   }
-    // }
+    this.redisMetadataValidation(event);
 
-    // if (!eventValidation && !this.#validationCbFn) {
-    //   if (!this.#validationCbFn) {
-    //     throw new Error(`Unknown Event ${eventRest.name}`);
-    //   }
+    if (event.name === "CLOSE") {
+      return;
+    }
 
-    //   if (this.isIncomerChannelMessage(event)) {
-    //     return this.#validationCbFn(eventRest as EventMessage<T>);
-    //   }
-    // }
+    const eventValidation = this.#eventsValidationFn.get(eventRest.name) as ValidateFunction<T>;
+
+    if (!eventValidation) {
+      throw new Error(`Unknown Event ${event.name}`);
+    }
+
+    if (this.#customValidationCbFn && isCustomEventMessage(event)) {
+      this.#customValidationCbFn({ ...event });
+
+      return;
+    }
+
+    if (!eventValidation(eventRest)) {
+      throw new Error(
+        `Malformed event: [${[...eventValidation.errors]
+          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+      );
+    }
   }
 }

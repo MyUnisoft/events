@@ -10,8 +10,6 @@ import {
   getRedis
 } from "@myunisoft/redis";
 import { Logger, pino } from "pino";
-import Ajv, { ValidateFunction } from "ajv";
-import { match } from "ts-pattern";
 
 // Import Internal Dependencies
 import {
@@ -30,15 +28,13 @@ import {
   GenericEvent,
   CloseMessage
 } from "../../types/eventManagement/index";
-import * as eventsSchema from "../../schema/eventManagement/index";
-import { NestedValidationFunctions, defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
+import { defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
 import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
 import { TransactionHandler } from "./dispatcher/transaction-handler.class";
 import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class";
-import { EventsHandler } from "./dispatcher/events.class";
+import { EventsHandler, customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
 
 // CONSTANTS
-const ajv = new Ajv();
 const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
   Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME);
 const kCheckLastActivityInterval = Number.isNaN(
@@ -78,8 +74,8 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
   /* Commonly used to distinguish envs */
   prefix?: Prefix;
   eventsValidation?: {
-    eventsValidationFn?: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
-    validationCbFn?: (event: T) => void;
+    eventsValidationFn?: eventsValidationFn<T>;
+    customValidationCbFn?: customValidationCbFn<T>;
   };
   /** Used to avoid self ping & as discriminant for dispatcher instance that scale */
   incomerUUID?: string;
@@ -90,38 +86,6 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
 };
 
 export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" | "ABORT_TAKING_LEAD" | "ABORT_TAKING_LEAD_BACK" };
-
-function isIncomerCloseMessage<T extends GenericEvent = GenericEvent>(
-  value: IncomerChannelMessages<T>["IncomerMessages"]
-): value is CloseMessage {
-  return value.name === "close";
-}
-
-function isRegistrationOrCustomIncomerMessage<T extends GenericEvent = GenericEvent>(
-  value: IncomerChannelMessages<T>["IncomerMessages"] | IncomerRegistrationMessage
-): value is EventMessage<T> | IncomerRegistrationMessage {
-  return value.name !== "close";
-}
-
-function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(
-  value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages<T>["IncomerMessages"]
-): value is DispatcherChannelMessages["IncomerMessages"] {
-  return value.name === "REGISTER";
-}
-
-function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(
-  value: DispatcherChannelMessages["IncomerMessages"] |
-  IncomerChannelMessages<T>["IncomerMessages"]
-): value is IncomerChannelMessages<T>["IncomerMessages"] {
-  return value.name !== "REGISTER" && value.name !== "PING";
-}
-
-function isIncomerRegistrationMessage(
-  value: DispatcherChannelMessages["IncomerMessages"]
-): value is IncomerRegistrationMessage {
-  return value.name === "REGISTER";
-}
 
 export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
   readonly type = "dispatcher";
@@ -135,8 +99,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private isWorking = false;
   private dispatcherChannel: Channel<
     DispatcherChannelMessages["DispatcherMessages"] |
-    { name: "Abort_taking_lead", redisMetadata: { origin: string } } |
-    { name: "Abort_taking_lead_back", redisMetadata: { origin: string } }
+    { name: "ABORT_TAKING_LEAD", redisMetadata: { origin: string } } |
+    { name: "ABORT_TAKING_LEAD_BACK", redisMetadata: { origin: string } }
   >;
   private incomerStore: IncomerStore;
   private eventsHandler: EventsHandler<T>;
@@ -163,8 +127,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
   private maxTimeout = kMaxInitTimeout;
 
-  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
-  private validationCbFn: (event: T) => void = null;
   private standardLogFn: StandardLog<T>;
 
   constructor(options: DispatcherOptions<T>) {
@@ -182,13 +144,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.resolveTransactionInterval = options.checkTransactionInterval ?? RESOLVE_TRANSACTION_INTERVAL;
     this.checkLastActivityInterval = options.checkLastActivityInterval ?? kCheckLastActivityInterval;
 
-    this.eventsValidationFn = options?.eventsValidation?.eventsValidationFn ?? new Map();
-    this.validationCbFn = options?.eventsValidation?.validationCbFn;
-
-    for (const [name, validationSchema] of Object.entries(eventsSchema)) {
-      this.eventsValidationFn.set(name, ajv.compile(validationSchema));
-    }
-
     this.logger = options.logger ?? pino({
       name: this.formattedPrefix + this.type,
       level: kLoggerMode,
@@ -202,7 +157,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       idleTime: this.idleTime
     });
 
-    this.eventsHandler = new EventsHandler({ ...this });
+    this.eventsHandler = new EventsHandler({
+      ...this,
+      ...options,
+      parentLogger: this.logger,
+      standardLog: this.standardLogFn
+    });
 
     this.backupDispatcherTransactionStore = new TransactionStore({
       prefix: this.formattedPrefix + kBackupTransactionStoreName,
@@ -244,6 +204,32 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       ...sharedOptions,
       eventsHandler: this.eventsHandler
     });
+
+    this.eventsHandler
+      .on("APPROVEMENT", async(registrationEvent: IncomerRegistrationMessage) => {
+        try {
+          await this.approveIncomer(registrationEvent);
+        }
+        catch (error) {
+          this.logger.error({ channel: "dispatcher", registrationEvent, error: error.message });
+        }
+      })
+      .on("CLOSE", async(channel: string, closeEvent: CloseMessage) => {
+        const { redisMetadata } = closeEvent;
+
+        const relatedIncomer = await this.incomerStore.getIncomer(redisMetadata.origin);
+
+        if (!relatedIncomer) {
+          this.logger.warn({ channel }, "Unable to find the Incomer closing the connection");
+
+          return;
+        }
+
+        await this.removeNonActives([relatedIncomer]);
+      })
+      .on("CUSTOM_EVENT", async(channel: string, customEvent: EventMessage<T>) => {
+        await this.handleCustomEvents(channel, customEvent);
+      });
 
     this.resolveTransactionsInterval = setInterval(async() => {
       if (!this.isWorking) {
@@ -297,9 +283,28 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         return;
       }
 
+      // Avoid reacting to his own message
+      if (parsedMessage.redisMetadata.origin === this.privateUUID) {
+        return;
+      }
+
+      if (parsedMessage.name === "ABORT_TAKING_LEAD" || parsedMessage.name === "ABORT_TAKING_LEAD_BACK") {
+        if (this.isWorking) {
+          this.isWorking = false;
+          await this.setAsInactiveDispatcher();
+        }
+
+        this.emit(parsedMessage.name);
+
+        return;
+      }
+
+      if (!this.isWorking) {
+        return;
+      }
+
       try {
-        await this.handleMessages(channel, message);
-        // this.eventsHandler.handleEvents(channel, parsedMessage);
+        await this.eventsHandler.handleEvents(channel, parsedMessage);
       }
       catch (error) {
         this.logger.error({
@@ -347,6 +352,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       this.checkDispatcherStateInterval = undefined;
     }
 
+    this.eventsHandler.removeAllListeners();
+    this.removeAllListeners();
+
     await this.subscriber.unsubscribe(this.dispatcherChannelName, ...this.incomerChannelHandler.channels.keys());
 
     this.updateState(false);
@@ -362,13 +370,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         signal: AbortSignal.timeout(this.randomIntFromRange())
       });
 
+      if (this.isWorking) {
+        this.updateState(false);
+        await this.setAsInactiveDispatcher();
+      }
+
       this.logger.warn("Dispatcher Timed out on taking lead");
 
       this.checkDispatcherStateInterval = setInterval(async() => await this.takeLeadBack(), this.pingInterval).unref();
     }
     catch {
       await this.dispatcherChannel.publish({
-        name: "Abort_taking_lead",
+        name: "ABORT_TAKING_LEAD",
         redisMetadata: {
           origin: this.privateUUID
         }
@@ -378,6 +391,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         await once(this, "ABORT_TAKING_LEAD", {
           signal: AbortSignal.timeout(this.randomIntFromRange())
         });
+
+        if (this.isWorking) {
+          this.updateState(false);
+          await this.setAsInactiveDispatcher();
+        }
 
         await this.takeLead();
       }
@@ -415,11 +433,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         signal: AbortSignal.timeout(this.randomIntFromRange())
       });
 
+      if (this.isWorking) {
+        this.updateState(false);
+        await this.setAsInactiveDispatcher();
+      }
+
       this.logger.warn("Dispatcher Timed out on taking back the lead");
     }
     catch {
       await this.setAsActiveDispatcher();
-      await this.dispatcherChannel.publish({ name: "Abort_taking_lead_back", redisMetadata: { origin: this.privateUUID } });
+      await this.dispatcherChannel.publish({ name: "ABORT_TAKING_LEAD_BACK", redisMetadata: { origin: this.privateUUID } });
 
       clearInterval(this.checkLastActivityIntervalTimer);
       this.updateState(true);
@@ -595,8 +618,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await Promise.all(toResolve);
 
     await this.removeNonActives(nonActives);
-
-    this.logger.info({ uuids: [...nonActives.map((incomer) => incomer.providedUUID)].join(",") }, "Removed nonactives incomers");
   }
 
   private async updateIncomerState(origin: string) {
@@ -643,149 +664,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
   }
 
-  private schemaValidation(message: IncomerRegistrationMessage | EventMessage<T>) {
-    const { redisMetadata, ...event } = message;
-
-    const eventValidations = this.eventsValidationFn.get(event.name) as ValidateFunction<Record<string, any>>;
-    const redisMetadataValidationFn = this.eventsValidationFn.get("redisMetadata") as ValidateFunction<Record<string, any>>;
-
-    if (!eventValidations) {
-      throw new Error(`Unknown Event ${event.name}`);
-    }
-
-    if (!redisMetadataValidationFn(redisMetadata)) {
-      throw new Error(
-        `Malformed redis metadata: [${[...redisMetadataValidationFn.errors]
-          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
-      );
-    }
-
-    if (this.validationCbFn && isIncomerChannelMessage(message)) {
-      this.validationCbFn({ ...message } as EventMessage<T>);
-
-      return;
-    }
-
-    if (!eventValidations(event)) {
-      throw new Error(
-        `Malformed event: [${[...eventValidations.errors]
-          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
-      );
-    }
-  }
-
-  private async handleMessages(channel: string, message: string) {
-    if (!message) {
-      return;
-    }
-
-    const formattedMessage: DispatcherChannelMessages["IncomerMessages"] |
-      IncomerChannelMessages<T>["IncomerMessages"] = JSON.parse(message);
-
-    try {
-      if (!formattedMessage.name || !formattedMessage.redisMetadata) {
-        throw new Error("Malformed message");
-      }
-
-      // Avoid reacting to his own message
-      if (formattedMessage.redisMetadata.origin === this.privateUUID) {
-        return;
-      }
-
-      const abortMessage = match(formattedMessage.name)
-        .with("ABORT_TAKING_LEAD", () => "ABORT_TAKING_LEAD")
-        .with("ABORT_TAKING_LEAD_BACK", () => "ABORT_TAKING_LEAD_BACK")
-        .otherwise(() => null);
-
-      if (abortMessage !== null) {
-        if (this.isWorking) {
-          this.updateState(false);
-          await this.setAsInactiveDispatcher();
-        }
-
-        this.emit(abortMessage);
-
-        return;
-      }
-
-      if (isRegistrationOrCustomIncomerMessage(formattedMessage)) {
-        this.schemaValidation(formattedMessage);
-      }
-
-      if (channel === this.dispatcherChannelName) {
-        if (isDispatcherChannelMessage(formattedMessage)) {
-          await this.handleDispatcherMessages(channel, formattedMessage);
-        }
-        else {
-          throw new Error("Unknown event on Dispatcher Channel");
-        }
-      }
-      else if (isIncomerChannelMessage(formattedMessage)) {
-        await this.handleIncomerMessages(channel, formattedMessage);
-      }
-    }
-    catch (error) {
-      this.logger.error({ channel, message: formattedMessage, error: error.message });
-    }
-  }
-
-  private async handleDispatcherMessages(
-    channel: string,
-    message: DispatcherChannelMessages["IncomerMessages"]
-  ) {
-    const { name } = message;
-
-    const logData = {
-      channel,
-      ...message
-    };
-
-    match<DispatcherChannelEvents>({ name })
-      .with({ name: "REGISTER" }, async() => {
-        this.logger.info(logData, "Registration asked");
-
-        if (isIncomerRegistrationMessage(message)) {
-          await this.approveIncomer(message);
-        }
-      })
-      .otherwise(() => {
-        throw new Error("No good event");
-      })
-      .catch((error) => {
-        this.logger.error({ channel: "dispatcher", message, error: error.message });
-      });
-  }
-
-  private async handleIncomerMessages(
-    channel: string,
-    message: IncomerChannelMessages<T>["IncomerMessages"]
-  ) {
-    const { redisMetadata, ...event } = message;
+  private async handleCustomEvents(channel: string, customEvent: EventMessage<T>) {
+    const { redisMetadata, ...event } = customEvent;
     const { name } = event;
     const { transactionId } = redisMetadata;
 
-    if (isIncomerCloseMessage(message)) {
-      const logData = {
-        channel,
-        ...message as CloseMessage
-      };
-
-      const relatedIncomer = await this.incomerStore.getIncomer(redisMetadata.origin);
-
-      if (!relatedIncomer) {
-        this.logger.warn(logData, "Unable to find the Incomer closing the connection");
-
-        return;
-      }
-
-      await this.removeNonActives([relatedIncomer]);
-
-      return;
-    }
-
     const logData = {
       channel,
-      ...message as EventMessage<T>
+      ...customEvent as EventMessage<T>
     };
 
     const senderTransactionStore = new TransactionStore({
@@ -865,7 +751,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         this.incomerChannelHandler.set({ uuid: providedUUID, prefix });
 
       const formattedEvent = {
-        ...message,
+        ...customEvent,
         redisMetadata: {
           origin: this.privateUUID,
           to: providedUUID,
