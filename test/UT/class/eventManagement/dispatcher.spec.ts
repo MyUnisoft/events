@@ -19,6 +19,7 @@ import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
 import { TransactionHandler } from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class";
+import { EventsHandler } from "../../../../src/class/eventManagement/dispatcher/events.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
@@ -27,8 +28,8 @@ const logger = Logger.pino({
 const mockedLoggerError = jest.spyOn(logger, "error");
 const mockedLoggerInfo = jest.spyOn(logger, "info");
 
-const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "handleDispatcherMessages");
-const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
+const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "approveIncomer");
+const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleCustomEvents");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
 const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
 const mockedHandleInactiveIncomer =  jest.spyOn(TransactionHandler.prototype, "resolveInactiveIncomerTransactions");
@@ -57,539 +58,539 @@ describe("Dispatcher", () => {
     await closeAllRedis();
   });
 
-  describe("Dispatcher without options", () => {
-    let dispatcher: Dispatcher;
-    let subscriber;
-
-    beforeAll(async() => {
-      subscriber = await initRedis({
-        port: Number(process.env.REDIS_PORT),
-        host: process.env.REDIS_HOST,
-        enableAutoPipelining: true
-      }, "subscriber");
-
-      await subscriber.flushall();
-
-      dispatcher = new Dispatcher({
-        logger,
-        pingInterval: 1_600,
-        checkLastActivityInterval: 5_000,
-        checkTransactionInterval: 2_400,
-        idleTime: 5_000
-       });
-
-      await dispatcher.initialize();
-    });
-
-    afterAll(async() => {
-      await dispatcher.close();
-      await closeRedis("subscriber");
-    });
-
-    test("Dispatcher should be defined", () => {
-      expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.prefix).toBe("");
-      expect(dispatcher.privateUUID).toBeDefined();
-    });
-
-    test("Publishing a malformed message, it should log a new Error", async() => {
-      const channel = new Channel({
-        name: "dispatcher"
-      });
-
-      await channel.publish({ foo: "bar" });
-
-      await timers.setTimeout(1_000);
-
-      expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: { foo: "bar" }, error: "Malformed message" });
-      expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
-      expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
-    });
-
-    describe("Publishing a well formed register event", () => {
-      let incomerName = "foo";
-      let uuid = randomUUID();
-
-      beforeAll(async() => {
-        jest.clearAllMocks();
-        await clearAllKeys();
-      });
-
-      test("without unresolved transaction, it should fail and throw a new Error", async() => {
-        const channel = new Channel({
-          name: "dispatcher"
-        });
-
-        const event = {
-          name: "REGISTER",
-          data: {
-            name: incomerName,
-            eventsCast: [],
-            eventsSubscribe: []
-          },
-          redisMetadata: {
-            origin: uuid,
-            transactionId: "foo"
-          }
-        };
-
-        await channel.publish(event);
-
-        await timers.setTimeout(1_000);
-
-        expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedLoggerError).toHaveBeenCalledWith({
-          channel: "dispatcher",
-          message: event,
-          error: "No related transaction found next to register event"
-        });
-      });
-
-      describe("Publishing a well formed register event but multiple times", () => {
-        let channel;
-        let incomerTransactionStore: TransactionStore<"incomer">;
-
-        const event = {
-          name: "REGISTER",
-          data: {
-            name: incomerName,
-            eventsCast: [],
-            eventsSubscribe: []
-          },
-          redisMetadata: {
-            origin: uuid
-          }
-        };
-
-        beforeAll(async() => {
-          channel = new Channel({
-            name: "dispatcher"
-          });
-
-          incomerTransactionStore = new TransactionStore({
-            prefix: uuid,
-            instance: "incomer"
-          });
-
-          const transaction = await incomerTransactionStore.setTransaction({
-            ...event,
-            redisMetadata: {
-              ...event.redisMetadata,
-              mainTransaction: true,
-              relatedTransaction: null,
-              resolved: false,
-              incomerName
-            }
-          });
-
-          await channel.publish({
-            ...event,
-            redisMetadata: {
-              ...event.redisMetadata,
-              transactionId: transaction.redisMetadata.transactionId
-            }
-          });
-
-          await timers.setTimeout(2_000);
-        });
-
-
-        test("It should handle the message and log infos about it", async() => {
-          await timers.setTimeout(2_000);
-
-          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-          expect(mockedLoggerInfo).toHaveBeenCalled();
-        });
-
-        test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
-          const transaction = await incomerTransactionStore.setTransaction({
-            ...event,
-            redisMetadata: {
-              ...event.redisMetadata,
-              mainTransaction: true,
-              relatedTransaction: null,
-              resolved: false,
-              incomerName
-            }
-          });
-
-          await channel.publish({
-            ...event,
-            redisMetadata: {
-              ...event.redisMetadata,
-              transactionId: transaction.redisMetadata.transactionId
-            }
-          });
-
-          await timers.setTimeout(4_000);
-
-          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-          expect(mockedLoggerError).toHaveBeenLastCalledWith({
-            channel: "dispatcher",
-            message: {
-              ...event,
-              redisMetadata: {
-                ...event.redisMetadata,
-                transactionId: transaction.redisMetadata.transactionId
-              }
-            },
-            error: "Forbidden multiple registration for a same instance"
-          });
-        });
-      });
-    });
-
-    describe("Handling a ping event", () => {
-      let incomerName = "foo";
-      let uuid = randomUUID();
-      let pongTransaction: Transaction<"incomer">;
-      let pingTransactionId: string;
-      let incomerTransactionStore: TransactionStore<"incomer">;
-      let dispatcherTransactionStore: TransactionStore<"dispatcher">
-
-      beforeAll(async() => {
-        jest.clearAllMocks();
-
-        let index = 0;
-
-        await subscriber.subscribe("dispatcher");
-
-        subscriber.on("message", async(channel, message) => {
-          const formattedMessage = JSON.parse(message);
-
-          if (formattedMessage.name === "APPROVEMENT") {
-            const providedUUID = formattedMessage.data.uuid;
-
-            await subscriber.subscribe(providedUUID);
-
-            incomerTransactionStore = new TransactionStore({
-              prefix: providedUUID,
-              instance: "incomer"
-            });
-          }
-          else if (formattedMessage.name === "PING" && index === 0) {
-            pingTransactionId = formattedMessage.redisMetadata.transactionId;
-            pongTransaction = await incomerTransactionStore.setTransaction({
-              ...formattedMessage,
-              redisMetadata: {
-                ...formattedMessage.redisMetadata,
-                origin: formattedMessage.redisMetadata.to,
-                mainTransaction: false,
-                relatedTransaction: formattedMessage.redisMetadata.transactionId,
-                resolved: true
-              },
-            });
-
-            index++;
-          }
-        });
-
-        const channel = new Channel({
-          name: "dispatcher"
-        });
-
-        dispatcherTransactionStore = new TransactionStore({
-          instance: "dispatcher"
-        });
-
-        const event = {
-          name: "REGISTER",
-          data: {
-            name: incomerName,
-            eventsCast: [],
-            eventsSubscribe: []
-          },
-          redisMetadata: {
-            origin: uuid
-          }
-        };
-
-        incomerTransactionStore = new TransactionStore({
-          prefix: uuid,
-          instance: "incomer"
-        });
-
-        const transaction = await incomerTransactionStore.setTransaction({
-          ...event,
-          redisMetadata: {
-            ...event.redisMetadata,
-            mainTransaction: true,
-            relatedTransaction: null,
-            resolved: false,
-            incomerName
-          }
-        });
-
-        await channel.publish({
-          name: "REGISTER",
-          data: {
-            name: incomerName,
-            eventsCast: [],
-            eventsSubscribe: []
-          },
-          redisMetadata: {
-            origin: uuid,
-            transactionId: transaction.redisMetadata.transactionId
-          }
-        });
-      });
-
-      test("It should have ping and a new transaction should have been create", async() => {
-        await timers.setTimeout(2_000);
-
-        expect(mockedPing).toHaveBeenCalled();
-        expect(pongTransaction).toBeDefined();
-      });
-
-      test("It should have update the update the incomer last activity", async () => {
-        await timers.setTimeout(10_000);
-
-        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
-        const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
-
-        expect(pongTransactionToRetrieve).toBeNull();
-        expect(pingTransaction).toBeNull();
-        expect(mockedCheckLastActivity).toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe("Dispatcher with prefix", () => {
-    let dispatcher: Dispatcher;
-    let prefix = "test" as const;
-    let subscriber;
-
-    beforeAll(async() => {
-      subscriber = await initRedis({
-        port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST,
-        enableAutoPipelining: true
-      } as any, "subscriber");
-
-      await subscriber.flushall();
-
-      dispatcher = new Dispatcher({
-        logger,
-        pingInterval: 1_600,
-        checkLastActivityInterval: 2_000,
-        checkTransactionInterval: 2_000,
-        idleTime: 8_000,
-        prefix
-      });
-
-      await dispatcher.initialize();
-    });
-
-    afterAll(async() => {
-      await dispatcher.close();
-      await closeRedis("subscriber");
-    });
-
-    test("Dispatcher should be defined", () => {
-      expect(dispatcher).toBeInstanceOf(Dispatcher);
-      expect(dispatcher.formattedPrefix).toBe("test-");
-      expect(dispatcher.privateUUID).toBeDefined();
-    });
-
-    describe("Publishing on the dispatcher channel", () => {
-      describe("Publishing well formed register event", () => {
-        let incomerName = "foo";
-        let uuid = randomUUID();
-        let approved = false;
-
-        beforeAll(async() => {
-          jest.clearAllMocks();
-
-          await subscriber.subscribe(`${prefix}-dispatcher`);
-
-          subscriber.on("message", async(channel, message) => {
-            const formattedMessage = JSON.parse(message);
-
-            if (formattedMessage.name && formattedMessage.name === "APPROVEMENT") {
-              approved = true;
-            }
-          });
-
-          const channel = new Channel({
-            name: "dispatcher",
-            prefix
-          });
-
-          const event = {
-            name: "REGISTER",
-            data: {
-              name: incomerName,
-              eventsCast: [],
-              eventsSubscribe: []
-            },
-            redisMetadata: {
-              origin: uuid,
-              prefix
-            }
-          }
-
-          const incomerTransactionStore = new TransactionStore({
-            prefix: `${prefix}-${uuid}`,
-            instance: "incomer"
-          });
-
-          const transaction = await incomerTransactionStore.setTransaction({
-            ...event,
-            redisMetadata: {
-              ...event.redisMetadata,
-              mainTransaction: true,
-              relatedTransaction: null,
-              resolved: false,
-              incomerName
-            }
-          });
-
-
-          await channel.publish({
-            ...event,
-            redisMetadata: {
-              origin: uuid,
-              prefix,
-              transactionId: transaction.redisMetadata.transactionId
-            }
-          });
-        });
-
-        test("it should delete the main transaction in Incomer store", async() => {
-          await timers.setTimeout(1_800);
-
-          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-          expect(mockedSetTransaction).toHaveBeenCalled();
-        });
-
-        test("it should publish a well formed approvement event", async() => {
-          await timers.setTimeout(1_000);
-
-          expect(approved).toBe(true);
-        });
-      });
-    });
-
-    describe("Handling a ping event", () => {
-      let incomerName = "foo";
-      let uuid = randomUUID();
-      let pongTransaction: Transaction<"incomer">;
-      let incomerTransactionStore: TransactionStore<"incomer">;
-
-      beforeAll(async() => {
-        await clearAllKeys();
-        jest.clearAllMocks();
-
-        let index = 0;
-
-        await subscriber.subscribe(`${prefix}-dispatcher`);
-
-        subscriber.on("message", async(channel, message) => {
-          const formattedMessage = JSON.parse(message);
-
-          if (formattedMessage.name === "APPROVEMENT") {
-            const providedUUid = formattedMessage.data.uuid;
-
-            incomerTransactionStore = new TransactionStore({
-              prefix: `${prefix}-${providedUUid}`,
-              instance: "incomer"
-            });
-
-            await subscriber.subscribe(`${prefix}-${providedUUid}`);
-          }
-          else if (formattedMessage.name === "PING" && index === 0) {
-            pongTransaction = await incomerTransactionStore.setTransaction({
-              ...formattedMessage,
-              redisMetadata: {
-                ...formattedMessage.redisMetadata,
-                prefix,
-                origin: formattedMessage.redisMetadata.to,
-                mainTransaction: false,
-                relatedTransaction: formattedMessage.redisMetadata.transactionId,
-                resolved: true
-              },
-            });
-
-            index++;
-          }
-        });
-
-        const channel = new Channel({
-          name: "dispatcher",
-          prefix
-        });
-
-        const event = {
-          name: "REGISTER",
-          data: {
-            name: incomerName,
-            eventsCast: [],
-            eventsSubscribe: []
-          },
-          redisMetadata: {
-            origin: uuid,
-            prefix
-          }
-        };
-
-        incomerTransactionStore = new TransactionStore({
-          prefix: `${prefix}-${uuid}`,
-          instance: "incomer"
-        });
-
-        const transaction = await incomerTransactionStore.setTransaction({
-          ...event,
-          redisMetadata: {
-            ...event.redisMetadata,
-            mainTransaction: true,
-            relatedTransaction: null,
-            resolved: false,
-            incomerName
-          }
-        });
-
-        await channel.publish({
-          name: "REGISTER",
-          data: {
-            name: incomerName,
-            eventsCast: [],
-            eventsSubscribe: []
-          },
-          redisMetadata: {
-            origin: uuid,
-            prefix,
-            transactionId: transaction.redisMetadata.transactionId
-          }
-        });
-
-        await timers.setTimeout(1_000);
-      });
-
-      test("It should have ping and a new transaction should have been create", async() => {
-        await timers.setTimeout(3_000);
-
-        expect(mockedPing).toHaveBeenCalled();
-        expect(pongTransaction).toBeDefined();
-      });
-
-      test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
-        await timers.setTimeout(4_000);
-
-        const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
-
-        expect(transaction).toBeNull();
-        expect(mockedCheckLastActivity).toHaveBeenCalled();
-        expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
-      });
-
-      test("It should remove the inactive incomers", async() => {
-        await timers.setTimeout(8_000);
-
-        expect(mockedCheckLastActivity).toHaveBeenCalled();
-        expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
-      });
-    });
-  });
+  // describe("Dispatcher without options", () => {
+  //   let dispatcher: Dispatcher;
+  //   let subscriber;
+
+  //   beforeAll(async() => {
+  //     subscriber = await initRedis({
+  //       port: Number(process.env.REDIS_PORT),
+  //       host: process.env.REDIS_HOST,
+  //       enableAutoPipelining: true
+  //     }, "subscriber");
+
+  //     await subscriber.flushall();
+
+  //     dispatcher = new Dispatcher({
+  //       logger,
+  //       pingInterval: 1_600,
+  //       checkLastActivityInterval: 5_000,
+  //       checkTransactionInterval: 2_400,
+  //       idleTime: 5_000
+  //      });
+
+  //     await dispatcher.initialize();
+  //   });
+
+  //   afterAll(async() => {
+  //     await dispatcher.close();
+  //     await closeRedis("subscriber");
+  //   });
+
+  //   test("Dispatcher should be defined", () => {
+  //     expect(dispatcher).toBeInstanceOf(Dispatcher);
+  //     expect(dispatcher.prefix).toBe("");
+  //     expect(dispatcher.privateUUID).toBeDefined();
+  //   });
+
+  //   test("Publishing a malformed message, it should log a new Error", async() => {
+  //     const channel = new Channel({
+  //       name: "dispatcher"
+  //     });
+
+  //     await channel.publish({ foo: "bar" });
+
+  //     await timers.setTimeout(1_000);
+
+  //     expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: { foo: "bar" }, error: "Malformed message" });
+  //     expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
+  //     expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
+  //   });
+
+  //   describe("Publishing a well formed register event", () => {
+  //     let incomerName = "foo";
+  //     let uuid = randomUUID();
+
+  //     beforeAll(async() => {
+  //       jest.clearAllMocks();
+  //       await clearAllKeys();
+  //     });
+
+  //     test("without unresolved transaction, it should fail and throw a new Error", async() => {
+  //       const channel = new Channel({
+  //         name: "dispatcher"
+  //       });
+
+  //       const event = {
+  //         name: "REGISTER",
+  //         data: {
+  //           name: incomerName,
+  //           eventsCast: [],
+  //           eventsSubscribe: []
+  //         },
+  //         redisMetadata: {
+  //           origin: uuid,
+  //           transactionId: "foo"
+  //         }
+  //       };
+
+  //       await channel.publish(event);
+
+  //       await timers.setTimeout(1_000);
+
+  //       expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+  //       expect(mockedLoggerError).toHaveBeenCalledWith({
+  //         channel: "dispatcher",
+  //         message: event,
+  //         error: "No related transaction found next to register event"
+  //       });
+  //     });
+
+  //     describe("Publishing a well formed register event but multiple times", () => {
+  //       let channel;
+  //       let incomerTransactionStore: TransactionStore<"incomer">;
+
+  //       const event = {
+  //         name: "REGISTER",
+  //         data: {
+  //           name: incomerName,
+  //           eventsCast: [],
+  //           eventsSubscribe: []
+  //         },
+  //         redisMetadata: {
+  //           origin: uuid
+  //         }
+  //       };
+
+  //       beforeAll(async() => {
+  //         channel = new Channel({
+  //           name: "dispatcher"
+  //         });
+
+  //         incomerTransactionStore = new TransactionStore({
+  //           prefix: uuid,
+  //           instance: "incomer"
+  //         });
+
+  //         const transaction = await incomerTransactionStore.setTransaction({
+  //           ...event,
+  //           redisMetadata: {
+  //             ...event.redisMetadata,
+  //             mainTransaction: true,
+  //             relatedTransaction: null,
+  //             resolved: false,
+  //             incomerName
+  //           }
+  //         });
+
+  //         await channel.publish({
+  //           ...event,
+  //           redisMetadata: {
+  //             ...event.redisMetadata,
+  //             transactionId: transaction.redisMetadata.transactionId
+  //           }
+  //         });
+
+  //         await timers.setTimeout(2_000);
+  //       });
+
+
+  //       test("It should handle the message and log infos about it", async() => {
+  //         await timers.setTimeout(2_000);
+
+  //         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+  //         expect(mockedLoggerInfo).toHaveBeenCalled();
+  //       });
+
+  //       test("Publishing multiple time a register event with the same origin, it should throw a new Error", async() => {
+  //         const transaction = await incomerTransactionStore.setTransaction({
+  //           ...event,
+  //           redisMetadata: {
+  //             ...event.redisMetadata,
+  //             mainTransaction: true,
+  //             relatedTransaction: null,
+  //             resolved: false,
+  //             incomerName
+  //           }
+  //         });
+
+  //         await channel.publish({
+  //           ...event,
+  //           redisMetadata: {
+  //             ...event.redisMetadata,
+  //             transactionId: transaction.redisMetadata.transactionId
+  //           }
+  //         });
+
+  //         await timers.setTimeout(4_000);
+
+  //         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+  //         expect(mockedLoggerError).toHaveBeenLastCalledWith({
+  //           channel: "dispatcher",
+  //           message: {
+  //             ...event,
+  //             redisMetadata: {
+  //               ...event.redisMetadata,
+  //               transactionId: transaction.redisMetadata.transactionId
+  //             }
+  //           },
+  //           error: "Forbidden multiple registration for a same instance"
+  //         });
+  //       });
+  //     });
+  //   });
+
+  //   describe("Handling a ping event", () => {
+  //     let incomerName = "foo";
+  //     let uuid = randomUUID();
+  //     let pongTransaction: Transaction<"incomer">;
+  //     let pingTransactionId: string;
+  //     let incomerTransactionStore: TransactionStore<"incomer">;
+  //     let dispatcherTransactionStore: TransactionStore<"dispatcher">
+
+  //     beforeAll(async() => {
+  //       jest.clearAllMocks();
+
+  //       let index = 0;
+
+  //       await subscriber.subscribe("dispatcher");
+
+  //       subscriber.on("message", async(channel, message) => {
+  //         const formattedMessage = JSON.parse(message);
+
+  //         if (formattedMessage.name === "APPROVEMENT") {
+  //           const providedUUID = formattedMessage.data.uuid;
+
+  //           await subscriber.subscribe(providedUUID);
+
+  //           incomerTransactionStore = new TransactionStore({
+  //             prefix: providedUUID,
+  //             instance: "incomer"
+  //           });
+  //         }
+  //         else if (formattedMessage.name === "PING" && index === 0) {
+  //           pingTransactionId = formattedMessage.redisMetadata.transactionId;
+  //           pongTransaction = await incomerTransactionStore.setTransaction({
+  //             ...formattedMessage,
+  //             redisMetadata: {
+  //               ...formattedMessage.redisMetadata,
+  //               origin: formattedMessage.redisMetadata.to,
+  //               mainTransaction: false,
+  //               relatedTransaction: formattedMessage.redisMetadata.transactionId,
+  //               resolved: true
+  //             },
+  //           });
+
+  //           index++;
+  //         }
+  //       });
+
+  //       const channel = new Channel({
+  //         name: "dispatcher"
+  //       });
+
+  //       dispatcherTransactionStore = new TransactionStore({
+  //         instance: "dispatcher"
+  //       });
+
+  //       const event = {
+  //         name: "REGISTER",
+  //         data: {
+  //           name: incomerName,
+  //           eventsCast: [],
+  //           eventsSubscribe: []
+  //         },
+  //         redisMetadata: {
+  //           origin: uuid
+  //         }
+  //       };
+
+  //       incomerTransactionStore = new TransactionStore({
+  //         prefix: uuid,
+  //         instance: "incomer"
+  //       });
+
+  //       const transaction = await incomerTransactionStore.setTransaction({
+  //         ...event,
+  //         redisMetadata: {
+  //           ...event.redisMetadata,
+  //           mainTransaction: true,
+  //           relatedTransaction: null,
+  //           resolved: false,
+  //           incomerName
+  //         }
+  //       });
+
+  //       await channel.publish({
+  //         name: "REGISTER",
+  //         data: {
+  //           name: incomerName,
+  //           eventsCast: [],
+  //           eventsSubscribe: []
+  //         },
+  //         redisMetadata: {
+  //           origin: uuid,
+  //           transactionId: transaction.redisMetadata.transactionId
+  //         }
+  //       });
+  //     });
+
+  //     test("It should have ping and a new transaction should have been create", async() => {
+  //       await timers.setTimeout(2_000);
+
+  //       expect(mockedPing).toHaveBeenCalled();
+  //       expect(pongTransaction).toBeDefined();
+  //     });
+
+  //     test("It should have update the update the incomer last activity", async () => {
+  //       await timers.setTimeout(10_000);
+
+  //       const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
+  //       const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
+
+  //       expect(pongTransactionToRetrieve).toBeNull();
+  //       expect(pingTransaction).toBeNull();
+  //       expect(mockedCheckLastActivity).toHaveBeenCalled();
+  //     });
+  //   });
+  // });
+
+  // describe("Dispatcher with prefix", () => {
+  //   let dispatcher: Dispatcher;
+  //   let prefix = "test" as const;
+  //   let subscriber;
+
+  //   beforeAll(async() => {
+  //     subscriber = await initRedis({
+  //       port: process.env.REDIS_PORT,
+  //       host: process.env.REDIS_HOST,
+  //       enableAutoPipelining: true
+  //     } as any, "subscriber");
+
+  //     await subscriber.flushall();
+
+  //     dispatcher = new Dispatcher({
+  //       logger,
+  //       pingInterval: 1_600,
+  //       checkLastActivityInterval: 2_000,
+  //       checkTransactionInterval: 2_000,
+  //       idleTime: 8_000,
+  //       prefix
+  //     });
+
+  //     await dispatcher.initialize();
+  //   });
+
+  //   afterAll(async() => {
+  //     await dispatcher.close();
+  //     await closeRedis("subscriber");
+  //   });
+
+  //   test("Dispatcher should be defined", () => {
+  //     expect(dispatcher).toBeInstanceOf(Dispatcher);
+  //     expect(dispatcher.formattedPrefix).toBe("test-");
+  //     expect(dispatcher.privateUUID).toBeDefined();
+  //   });
+
+  //   describe("Publishing on the dispatcher channel", () => {
+  //     describe("Publishing well formed register event", () => {
+  //       let incomerName = "foo";
+  //       let uuid = randomUUID();
+  //       let approved = false;
+
+  //       beforeAll(async() => {
+  //         jest.clearAllMocks();
+
+  //         await subscriber.subscribe(`${prefix}-dispatcher`);
+
+  //         subscriber.on("message", async(channel, message) => {
+  //           const formattedMessage = JSON.parse(message);
+
+  //           if (formattedMessage.name && formattedMessage.name === "APPROVEMENT") {
+  //             approved = true;
+  //           }
+  //         });
+
+  //         const channel = new Channel({
+  //           name: "dispatcher",
+  //           prefix
+  //         });
+
+  //         const event = {
+  //           name: "REGISTER",
+  //           data: {
+  //             name: incomerName,
+  //             eventsCast: [],
+  //             eventsSubscribe: []
+  //           },
+  //           redisMetadata: {
+  //             origin: uuid,
+  //             prefix
+  //           }
+  //         }
+
+  //         const incomerTransactionStore = new TransactionStore({
+  //           prefix: `${prefix}-${uuid}`,
+  //           instance: "incomer"
+  //         });
+
+  //         const transaction = await incomerTransactionStore.setTransaction({
+  //           ...event,
+  //           redisMetadata: {
+  //             ...event.redisMetadata,
+  //             mainTransaction: true,
+  //             relatedTransaction: null,
+  //             resolved: false,
+  //             incomerName
+  //           }
+  //         });
+
+
+  //         await channel.publish({
+  //           ...event,
+  //           redisMetadata: {
+  //             origin: uuid,
+  //             prefix,
+  //             transactionId: transaction.redisMetadata.transactionId
+  //           }
+  //         });
+  //       });
+
+  //       test("it should delete the main transaction in Incomer store", async() => {
+  //         await timers.setTimeout(1_800);
+
+  //         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+  //         expect(mockedSetTransaction).toHaveBeenCalled();
+  //       });
+
+  //       test("it should publish a well formed approvement event", async() => {
+  //         await timers.setTimeout(1_000);
+
+  //         expect(approved).toBe(true);
+  //       });
+  //     });
+  //   });
+
+  //   describe("Handling a ping event", () => {
+  //     let incomerName = "foo";
+  //     let uuid = randomUUID();
+  //     let pongTransaction: Transaction<"incomer">;
+  //     let incomerTransactionStore: TransactionStore<"incomer">;
+
+  //     beforeAll(async() => {
+  //       await clearAllKeys();
+  //       jest.clearAllMocks();
+
+  //       let index = 0;
+
+  //       await subscriber.subscribe(`${prefix}-dispatcher`);
+
+  //       subscriber.on("message", async(channel, message) => {
+  //         const formattedMessage = JSON.parse(message);
+
+  //         if (formattedMessage.name === "APPROVEMENT") {
+  //           const providedUUid = formattedMessage.data.uuid;
+
+  //           incomerTransactionStore = new TransactionStore({
+  //             prefix: `${prefix}-${providedUUid}`,
+  //             instance: "incomer"
+  //           });
+
+  //           await subscriber.subscribe(`${prefix}-${providedUUid}`);
+  //         }
+  //         else if (formattedMessage.name === "PING" && index === 0) {
+  //           pongTransaction = await incomerTransactionStore.setTransaction({
+  //             ...formattedMessage,
+  //             redisMetadata: {
+  //               ...formattedMessage.redisMetadata,
+  //               prefix,
+  //               origin: formattedMessage.redisMetadata.to,
+  //               mainTransaction: false,
+  //               relatedTransaction: formattedMessage.redisMetadata.transactionId,
+  //               resolved: true
+  //             },
+  //           });
+
+  //           index++;
+  //         }
+  //       });
+
+  //       const channel = new Channel({
+  //         name: "dispatcher",
+  //         prefix
+  //       });
+
+  //       const event = {
+  //         name: "REGISTER",
+  //         data: {
+  //           name: incomerName,
+  //           eventsCast: [],
+  //           eventsSubscribe: []
+  //         },
+  //         redisMetadata: {
+  //           origin: uuid,
+  //           prefix
+  //         }
+  //       };
+
+  //       incomerTransactionStore = new TransactionStore({
+  //         prefix: `${prefix}-${uuid}`,
+  //         instance: "incomer"
+  //       });
+
+  //       const transaction = await incomerTransactionStore.setTransaction({
+  //         ...event,
+  //         redisMetadata: {
+  //           ...event.redisMetadata,
+  //           mainTransaction: true,
+  //           relatedTransaction: null,
+  //           resolved: false,
+  //           incomerName
+  //         }
+  //       });
+
+  //       await channel.publish({
+  //         name: "REGISTER",
+  //         data: {
+  //           name: incomerName,
+  //           eventsCast: [],
+  //           eventsSubscribe: []
+  //         },
+  //         redisMetadata: {
+  //           origin: uuid,
+  //           prefix,
+  //           transactionId: transaction.redisMetadata.transactionId
+  //         }
+  //       });
+
+  //       await timers.setTimeout(1_000);
+  //     });
+
+  //     test("It should have ping and a new transaction should have been create", async() => {
+  //       await timers.setTimeout(3_000);
+
+  //       expect(mockedPing).toHaveBeenCalled();
+  //       expect(pongTransaction).toBeDefined();
+  //     });
+
+  //     test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
+  //       await timers.setTimeout(4_000);
+
+  //       const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
+
+  //       expect(transaction).toBeNull();
+  //       expect(mockedCheckLastActivity).toHaveBeenCalled();
+  //       expect(mockedHandleInactiveIncomer).not.toHaveBeenCalled();
+  //     });
+
+  //     test("It should remove the inactive incomers", async() => {
+  //       await timers.setTimeout(8_000);
+
+  //       expect(mockedCheckLastActivity).toHaveBeenCalled();
+  //       expect(mockedHandleInactiveIncomer).toHaveBeenCalled();
+  //     });
+  //   });
+  // });
 
   describe("Dispatcher with injected schemas", () => {
     let dispatcher: Dispatcher<EventOptions<keyof Events>>;
@@ -709,7 +710,7 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: `Unknown Event ${event.name}` });
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });

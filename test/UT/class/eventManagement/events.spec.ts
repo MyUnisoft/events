@@ -68,7 +68,7 @@ async function initDispatcherInstance(
     idleTime,
     eventsValidation: {
       eventsValidationFn,
-      validationCbFn: validate
+      customValidationCbFn: validate
     }
    });
 
