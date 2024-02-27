@@ -157,7 +157,11 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
       return;
     }
 
-    if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(event)) {
+    if (channel === this.dispatcherChannelName) {
+      if (!isDispatcherChannelMessage(event)) {
+        throw new Error("Unknown event on Dispatcher Channel");
+      }
+
       try {
         this.dispatcherChannelMessagesSchemaValidation(event);
       }
@@ -176,11 +180,11 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
           this.emit("APPROVEMENT", event);
         })
         .otherwise(() => {
-          throw new Error("Unknown Event");
+          throw new Error("Unknown event on Dispatcher Channel");
         });
     }
     else if (isIncomerChannelMessage(event)) {
-      this.IncomerChannelMessagesSchemaValidation(event);
+      this.incomerChannelMessagesSchemaValidation(event);
 
       if (isCloseMessage(event)) {
         this.emit("CLOSE", channel, event);
@@ -229,7 +233,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     }
   }
 
-  private IncomerChannelMessagesSchemaValidation(
+  private incomerChannelMessagesSchemaValidation(
     event: IncomerChannelMessages<T>["IncomerMessages"]
   ): void {
     const { redisMetadata, ...eventRest } = event;

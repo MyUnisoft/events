@@ -211,7 +211,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           await this.approveIncomer(registrationEvent);
         }
         catch (error) {
-          this.logger.error({ channel: "dispatcher", registrationEvent, error: error.message });
+          this.logger.error({ channel: "dispatcher", message: registrationEvent, error: error.message });
         }
       })
       .on("CLOSE", async(channel: string, closeEvent: CloseMessage) => {
@@ -271,48 +271,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   public async initialize() {
     await this.subscriber.subscribe(this.dispatcherChannelName);
     this.subscriber.on("message", async(channel, message) => {
-      let parsedMessage: DispatcherChannelMessages["IncomerMessages"] |
-        IncomerChannelMessages<T>["IncomerMessages"];
-
-      try {
-        parsedMessage = JSON.parse(message);
-      }
-      catch (error) {
-        this.logger.error({ channel, error: error.message });
-
-        return;
-      }
-
-      // Avoid reacting to his own message
-      if (parsedMessage.redisMetadata.origin === this.privateUUID) {
-        return;
-      }
-
-      if (parsedMessage.name === "ABORT_TAKING_LEAD" || parsedMessage.name === "ABORT_TAKING_LEAD_BACK") {
-        if (this.isWorking) {
-          this.isWorking = false;
-          await this.setAsInactiveDispatcher();
-        }
-
-        this.emit(parsedMessage.name);
-
-        return;
-      }
-
-      if (!this.isWorking) {
-        return;
-      }
-
-      try {
-        await this.eventsHandler.handleEvents(channel, parsedMessage);
-      }
-      catch (error) {
-        this.logger.error({
-          channel,
-          message: parsedMessage,
-          error: error.message
-        });
-      }
+      await this.handleMessages(channel, message);
     });
 
     const incomers = await this.incomerStore.getIncomers();
@@ -360,6 +319,55 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.updateState(false);
 
     await timers.setImmediate();
+  }
+
+  async handleMessages(channel: string, message: string) {
+    let parsedMessage: DispatcherChannelMessages["IncomerMessages"] |
+        IncomerChannelMessages<T>["IncomerMessages"];
+
+    try {
+      parsedMessage = JSON.parse(message);
+    }
+    catch (error) {
+      this.logger.error({ channel, error: error.message });
+
+      return;
+    }
+    
+    try {
+      if (!parsedMessage.name || !parsedMessage.redisMetadata) {
+        throw new Error("Malformed message");
+      }
+
+      // Avoid reacting to his own message
+      if (parsedMessage.redisMetadata.origin === this.privateUUID) {
+        return;
+      }
+
+      if (parsedMessage.name === "ABORT_TAKING_LEAD" || parsedMessage.name === "ABORT_TAKING_LEAD_BACK") {
+        if (this.isWorking) {
+          this.isWorking = false;
+          await this.setAsInactiveDispatcher();
+        }
+
+        this.emit(parsedMessage.name);
+
+        return;
+      }
+
+      if (!this.isWorking) {
+        return;
+      }
+
+      await this.eventsHandler.handleEvents(channel, parsedMessage);
+    }
+    catch (error) {
+      this.logger.error({
+        channel,
+        message: parsedMessage,
+        error: error.message
+      });
+    }
   }
 
   async takeLead(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
