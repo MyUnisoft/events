@@ -12,6 +12,9 @@
           "name": {
             "type": "string"
           },
+          "providedUUID": {
+            "type": "string"
+          },
           "eventsCast": {
             "type": "array",
             "items": {

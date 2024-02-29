@@ -2,7 +2,6 @@
 // Import Node.js Dependencies
 import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -300,14 +299,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   async takeLead(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
-    const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
+    const incomers = [...opts.incomers.values()].length > 0 ? opts.incomers : await this.incomerStore.getIncomers();
 
     try {
-      await Promise.race([
-        once(this, "ABORT_TAKING_LEAD"),
-        // We want to reject if we reach the timer
-        new Promise((_, reject) => timers.setTimeout(this.randomIntFromRange()).then(() => reject(new Error())))
-      ]);
+      await once(this, "ABORT_TAKING_LEAD", {
+        signal: AbortSignal.timeout(this.randomIntFromRange())
+      });
 
       this.logger.warn("Dispatcher Timed out on taking lead");
 
@@ -322,11 +319,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       });
 
       try {
-        await Promise.race([
-          once(this, "ABORT_TAKING_LEAD"),
-          // We want to reject if we reach the timer
-          new Promise((_, reject) => timers.setTimeout(this.randomIntFromRange()).then(() => reject(new Error())))
-        ]);
+        await once(this, "ABORT_TAKING_LEAD", {
+          signal: AbortSignal.timeout(this.randomIntFromRange())
+        });
 
         await this.takeLead();
       }
@@ -362,11 +357,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     try {
-      await Promise.race([
-        once(this, "ABORT_TAKING_LEAD_BACK"),
-        // We want to reject if we reach the timer
-        new Promise((_, reject) => timers.setTimeout(this.randomIntFromRange()).then(() => reject(new Error())))
-      ]);
+      await once(this, "ABORT_TAKING_LEAD_BACK", {
+        signal: AbortSignal.timeout(this.randomIntFromRange())
+      });
 
       this.logger.warn("Dispatcher Timed out on taking back the lead");
     }
@@ -1633,7 +1626,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       prefix
     });
 
-    const providedUUID = await this.incomerStore.setIncomer(incomer);
+    const providedUUID = await this.incomerStore.setIncomer(incomer, data.providedUUID);
 
     // Subscribe to the exclusive service channel
     this.incomerChannels.set(providedUUID, new Channel({

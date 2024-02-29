@@ -28,6 +28,7 @@ interface IncomerRegistrationDataIn {
   name: string;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
+  providedUUID?: string;
 }
 
 export type IncomerRegistrationMessage = {
