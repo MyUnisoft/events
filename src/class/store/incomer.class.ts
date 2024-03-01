@@ -31,9 +31,7 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     this.key = `${options.prefix ? `${options.prefix}-` : ""}incomer`;
   }
 
-  async setIncomer(incomer: Omit<RegisteredIncomer, "providedUUID">): Promise<string> {
-    const providedUUID = randomUUID();
-
+  async setIncomer(incomer: Omit<RegisteredIncomer, "providedUUID">, providedUUID: string = randomUUID()): Promise<string> {
     const key = `${this.key}-${providedUUID}`;
 
     await this.setValue({ key,
@@ -47,7 +45,7 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
   }
 
   async* incomerLazyFetch() {
-    const count = 5000;
+    const count = 10000;
     let cursor = 0;
 
     do {

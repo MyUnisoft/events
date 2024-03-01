@@ -178,6 +178,10 @@ export class Incomer <
   }
 
   private async checkDispatcherState() {
+    if (!this.lastPingDate || this.isDispatcherInstance) {
+      return;
+    }
+
     const date = Date.now();
 
     if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date) {
@@ -198,7 +202,11 @@ export class Incomer <
 
         await Promise.race([
           transactions.map((transaction) => {
-            if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
+            if (
+              transaction.redisMetadata.mainTransaction &&
+              !transaction.redisMetadata.published &&
+              transaction.name !== "ping"
+            ) {
               return this.incomerChannel.publish({
                 ...transaction,
                 redisMetadata: {
@@ -266,18 +274,16 @@ export class Incomer <
     await this.dispatcherChannel.publish(fullyFormattedEvent);
 
     try {
-      await Promise.race([
-        once(this, "registered"),
-        new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
-      ]);
+      await once(this, "registered", {
+        signal: AbortSignal.timeout(kDefaultStartTime)
+      });
 
-      this.checkTransactionsStateInterval = setInterval(async() => {
-        if (!this.lastPingDate || this.isDispatcherInstance) {
-          return;
-        }
-
-        await this.checkDispatcherState();
-      }, this.maxPingInterval).unref();
+      clearTimeout(this.checkDispatcherStateTimeout);
+      this.checkDispatcherStateTimeout = undefined;
+      this.checkTransactionsStateInterval = setInterval(
+        async() => await this.checkDispatcherState(),
+        this.maxPingInterval
+      ).unref();
 
       this.dispatcherConnectionState = true;
       this.checkRegistrationInterval = setInterval(
@@ -312,6 +318,7 @@ export class Incomer <
       name: "register" as const,
       data: {
         name: this.name,
+        providedUUID: this.providedUUID,
         eventsCast: this.eventsCast,
         eventsSubscribe: this.eventsSubscribe
       },
@@ -343,18 +350,16 @@ export class Incomer <
     await this.dispatcherChannel.publish(fullyFormattedEvent);
 
     try {
-      await Promise.race([
-        once(this, "registered"),
-        new Promise((_, reject) => timers.setTimeout(kDefaultStartTime).then(() => reject(new Error())))
-      ]);
+      await once(this, "registered", {
+        signal: AbortSignal.timeout(kDefaultStartTime)
+      });
 
-      this.checkTransactionsStateInterval = setInterval(async() => {
-        if (!this.lastPingDate || this.isDispatcherInstance) {
-          return;
-        }
-
-        await this.checkDispatcherState();
-      }, this.maxPingInterval).unref();
+      clearTimeout(this.checkDispatcherStateTimeout);
+      this.checkDispatcherStateTimeout = undefined;
+      this.checkTransactionsStateInterval = setInterval(
+        async() => await this.checkDispatcherState(),
+        this.maxPingInterval
+      ).unref();
 
       this.dispatcherConnectionState = true;
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
@@ -654,7 +659,7 @@ export class Incomer <
 
     const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
 
-    const newTransactionStore = new TransactionStore({
+    this.newTransactionStore = new TransactionStore({
       prefix: this.prefixedName + this.providedUUID,
       instance: "incomer"
     });
@@ -665,7 +670,7 @@ export class Incomer <
         transactionToUpdate.push([
           Promise.all([
             this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
-            newTransactionStore.setTransaction({
+            this.newTransactionStore.setTransaction({
               ...transaction,
               redisMetadata: {
                 ...transaction.redisMetadata,
@@ -683,7 +688,7 @@ export class Incomer <
 
       transactionToUpdate.push(Promise.all([
         this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
-        newTransactionStore.setTransaction({
+        this.newTransactionStore.setTransaction({
           ...transaction,
           redisMetadata: {
             ...transaction.redisMetadata,
@@ -694,8 +699,6 @@ export class Incomer <
     }
 
     await Promise.all(transactionToUpdate);
-
-    this.newTransactionStore = newTransactionStore;
 
     this.lastPingDate = Date.now();
     this.emit("registered");
