@@ -134,9 +134,7 @@ export class TransactionStore<
     return mappedTransactions;
   }
 
-  async setTransaction(transaction: PartialTransaction<T>): Promise<Transaction<T>> {
-    const transactionId = randomUUID();
-
+  async setTransaction(transaction: PartialTransaction<T>, transactionId: string = randomUUID()): Promise<Transaction<T>> {
     const transactionKey = `${this.key}-${transactionId}`;
 
     const formattedTransaction = {
