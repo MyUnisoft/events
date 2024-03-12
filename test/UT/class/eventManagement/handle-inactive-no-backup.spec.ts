@@ -199,7 +199,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      await timers.setTimeout(20_000);
+      await timers.setTimeout(18_000);
 
       const mockCalls = mockedSetTransaction.mock.calls.flat();
 
@@ -209,6 +209,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           redisMetadata: {
             origin: expect.anything(),
             to: expect.anything(),
+            eventTransactionId: expect.anything(),
             transactionId: expect.anything(),
             incomerName: concernedIncomer.name,
             mainTransaction: false,
