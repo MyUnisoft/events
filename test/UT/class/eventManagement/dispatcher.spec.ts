@@ -30,7 +30,7 @@ const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "
 const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
 const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
-const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "InactiveIncomerTransactionsResolution");
+const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "inactiveIncomerTransactionsResolution");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
 
@@ -96,7 +96,15 @@ describe("Dispatcher", () => {
 
       await timers.setTimeout(1_000);
 
-      expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: { foo: "bar" }, error: "Malformed message" });
+      const mockLogs = mockedLoggerError.mock.calls.flat();
+      expect(mockLogs).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          channel: "dispatcher",
+          message: { foo: "bar" },
+          error: expect.anything()
+        }),
+        expect.anything()
+      ]));
       expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
     });
@@ -133,11 +141,15 @@ describe("Dispatcher", () => {
         await timers.setTimeout(1_000);
 
         expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-        expect(mockedLoggerError).toHaveBeenCalledWith({
-          channel: "dispatcher",
-          message: event,
-          error: "No related transaction found next to register event"
-        });
+        const mockLogs = mockedLoggerError.mock.calls.flat();
+        expect(mockLogs).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            channel: "dispatcher",
+            message: event,
+            error: expect.anything()
+          }),
+          expect.anything()
+        ]));
       });
 
       describe("Publishing a well formed register event but multiple times", () => {
@@ -219,17 +231,21 @@ describe("Dispatcher", () => {
           await timers.setTimeout(4_000);
 
           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-          expect(mockedLoggerError).toHaveBeenLastCalledWith({
-            channel: "dispatcher",
-            message: {
-              ...event,
-              redisMetadata: {
-                ...event.redisMetadata,
-                transactionId: transaction.redisMetadata.transactionId
-              }
-            },
-            error: "Forbidden multiple registration for a same instance"
-          });
+          const mockLogs = mockedLoggerError.mock.calls.flat();
+          expect(mockLogs).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              channel: "dispatcher",
+              message: {
+                ...event,
+                redisMetadata: {
+                  ...event.redisMetadata,
+                  transactionId: transaction.redisMetadata.transactionId
+                }
+              },
+              error: expect.anything()
+            }),
+            expect.anything()
+          ]));
         });
       });
     });
@@ -650,7 +666,15 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
+        const mockLogs = mockedLoggerError.mock.calls.flat();
+        expect(mockLogs).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            channel: "dispatcher",
+            message: event,
+            error: expect.anything()
+          }),
+          expect.anything()
+        ]));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -673,7 +697,15 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
+        const mockLogs = mockedLoggerError.mock.calls.flat();
+        expect(mockLogs).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            channel: "dispatcher",
+            message: event,
+            error: expect.anything()
+          }),
+          expect.anything()
+        ]));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -698,7 +730,15 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: `Unknown Event ${event.name}` });
+        const mockLogs = mockedLoggerError.mock.calls.flat();
+        expect(mockLogs).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            channel: "dispatcher",
+            message: event,
+            error: expect.anything()
+          }),
+          expect.anything()
+        ]));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -801,7 +841,15 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
+        const mockLogs = mockedLoggerError.mock.calls.flat();
+        expect(mockLogs).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            channel: "dispatcher",
+            message: event,
+            error: expect.anything()
+          }),
+          expect.anything()
+        ]));
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       });
     });

@@ -209,7 +209,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           redisMetadata: {
             origin: expect.anything(),
             to: expect.anything(),
-            eventTransactionId: expect.anything(),
             transactionId: expect.anything(),
             incomerName: concernedIncomer.name,
             mainTransaction: false,
