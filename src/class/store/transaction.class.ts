@@ -141,6 +141,7 @@ export class TransactionStore<
       ...transaction,
       redisMetadata: {
         ...transaction.redisMetadata,
+        eventTransactionId: transaction.redisMetadata.eventTransactionId ?? transactionId,
         transactionId
       },
       aliveSince: Date.now()

@@ -606,6 +606,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         to: formattedEvent.data.uuid,
         mainTransaction,
         relatedTransaction,
+        eventTransactionId,
         resolved
       }
     }) : await concernedStore.setTransaction({
@@ -614,6 +615,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         ...formattedEvent.redisMetadata,
         mainTransaction,
         relatedTransaction,
+        eventTransactionId,
         resolved
       }
     });
@@ -622,7 +624,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
-        eventTransactionId,
+        eventTransactionId: transaction.redisMetadata.eventTransactionId,
         transactionId: transaction.redisMetadata.transactionId
       }
     });
@@ -993,7 +995,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
               transactionMeta: {
                 mainTransaction: backupIncomerTransaction.redisMetadata.mainTransaction,
                 relatedTransaction: backupIncomerTransaction.redisMetadata.relatedTransaction,
-                eventTransactionId: null,
+                eventTransactionId: backupIncomerTransaction.redisMetadata.eventTransactionId,
                 resolved: backupIncomerTransaction.redisMetadata.resolved
               },
               formattedEvent: {
