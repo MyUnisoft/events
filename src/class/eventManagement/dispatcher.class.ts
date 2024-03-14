@@ -164,6 +164,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
   private incomerChannels: Map<string,
     Channel<IncomerChannelMessages<T>["DispatcherMessages"] | DistributedEventMessage<T>>> = new Map();
+  private channelsToUnsubscribe = new Set<string>();
 
   private pingInterval: number;
   private pingIntervalTimer: NodeJS.Timer;
@@ -321,7 +322,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       this.checkDispatcherStateInterval = undefined;
     }
 
-    await this.subscriber.unsubscribe(this.dispatcherChannelName, ...this.incomerChannels.keys());
+    await this.subscriber.unsubscribe(
+      this.dispatcherChannelName,
+      ...this.incomerChannels.keys(),
+      ...this.channelsToUnsubscribe.values()
+    );
 
     this.isWorking = false;
   }
@@ -529,7 +534,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           incomerToRemove: inactive,
           incomerTransactionStore: transactionStore
         }),
-        this.subscriber.unsubscribe(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
+        this.channelsToUnsubscribe.add(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
       ]));
     }
 
@@ -635,11 +640,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     transactionId: string,
     mainTransaction: Transaction<"incomer">
   ) {
-    const [, newlyTransaction] = await Promise.all([
-      incomerTransactionStore.deleteTransaction(transactionId),
+    const [newlyTransaction] = await Promise.all([
       this.backupIncomerTransactionStore.setTransaction({
         ...mainTransaction
-      }, transactionId)
+      }, transactionId),
+      incomerTransactionStore.deleteTransaction(transactionId)
     ]);
 
     this.logger.debug(this.standardLogFn(newlyTransaction as any)("Main transaction has been backup"));
@@ -1390,29 +1395,24 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const { name } = event;
     const { transactionId } = redisMetadata;
 
-    if (isIncomerCloseMessage(message)) {
-      const logData = {
-        channel,
-        ...message as CloseMessage
-      };
+    const logData = {
+      channel,
+      ...message
+    };
 
-      const relatedIncomer = await this.incomerStore.getIncomer(redisMetadata.origin);
+    const relatedIncomer = await this.incomerStore.getIncomer(redisMetadata.origin);
 
-      if (!relatedIncomer) {
-        this.logger.warn(logData, "Unable to find the Incomer closing the connection");
-
-        return;
-      }
-
-      await this.removeNonActives([relatedIncomer]);
+    if (!relatedIncomer) {
+      this.logger.warn(this.standardLogFn(logData as any)("Unable to find the Incomer on new event"));
 
       return;
     }
 
-    const logData = {
-      channel,
-      ...message as EventMessage<T>
-    };
+    if (isIncomerCloseMessage(message)) {
+      await this.removeNonActives([relatedIncomer]);
+
+      return;
+    }
 
     const senderTransactionStore = new TransactionStore({
       prefix: `${redisMetadata.prefix ? `${redisMetadata.prefix}-` : ""}${redisMetadata.origin}`,
@@ -1422,7 +1422,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const relatedTransaction = await senderTransactionStore.getTransactionById(transactionId);
 
     if (!relatedTransaction) {
-      throw new Error(this.standardLogFn(logData)(`Couldn't find the related main transaction for: ${transactionId}`));
+      throw new Error(this.standardLogFn(logData as any)(`Couldn't find the related main transaction for: ${transactionId}`));
     }
 
     const incomers = await this.incomerStore.getIncomers();
@@ -1434,7 +1434,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     if (concernedIncomers.length === 0) {
       if (name === "ping") {
-        this.logger.warn(this.standardLogFn(logData)("No concerned Incomer found"));
+        this.logger.warn(this.standardLogFn(logData as any)("No concerned Incomer found"));
       }
       else {
         await Promise.all([
@@ -1457,7 +1457,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           } as unknown as PartialTransaction<"dispatcher">)
         ]);
 
-        this.logger.warn(this.standardLogFn(logData)("Backed-up event"));
+        this.logger.warn(this.standardLogFn(logData as any)("Backed-up event"));
       }
 
       return;
@@ -1536,7 +1536,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           eventTransactionId: transactionId,
           to: `[${filteredConcernedIncomers.map((incomer) => incomer.providedUUID)}]`
         }
-      })
+      }) as any
     )("Custom event distributed"));
   }
 
@@ -1586,7 +1586,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       prefix
     }));
 
-    await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
+    if (!this.channelsToUnsubscribe.has(`${prefix ? `${prefix}-` : ""}${providedUUID}`)) {
+      await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
+    }
 
     const event: Omit<DispatcherRegistrationMessage, "redisMetadata"> & {
       redisMetadata: Omit<DispatcherRegistrationMessage["redisMetadata"], "transactionId">
