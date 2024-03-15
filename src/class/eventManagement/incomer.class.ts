@@ -508,7 +508,7 @@ export class Incomer <
       }
     }
     catch (error) {
-      this.logger.error({ channel, message: formattedMessage, error: error.message });
+      this.logger.error({ channel, message: formattedMessage, error: error.stack });
     }
   }
 
@@ -537,7 +537,7 @@ export class Incomer <
       .catch((error) => {
         this.logger.error({
           channel: "dispatcher",
-          error: error.message,
+          error: error.stack,
           message
         });
       });
@@ -563,7 +563,7 @@ export class Incomer <
       .catch((error) => {
         this.logger.error({
           channel: "incomer",
-          error: error.message,
+          error: error.stack,
           message
         });
       });

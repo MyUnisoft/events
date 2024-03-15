@@ -25,6 +25,7 @@ export interface IncomerTransactionMetadata {
   to?: string;
   prefix?: Prefix;
   transactionId: string;
+  eventTransactionId?: string;
 }
 
 export type GenericEvent = {
