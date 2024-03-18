@@ -52,7 +52,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       idleTime: 5_000,
       eventsValidation: {
         eventsValidationFn,
-        validationCbFn: validate
+        customValidationCbFn: validate
       }
      });
 
@@ -152,7 +152,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         eventsSubscribe: [{ name: "accountingFolder" }],
         eventsValidation: {
           eventsValidationFn,
-          validationCbFn: validate
+          customValidationCbFn: validate
         },
         eventCallback: mockedEventComeBackHandler
       });
