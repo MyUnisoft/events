@@ -1,3 +1,4 @@
-export { register } from "./register.json";
+export { REGISTER } from "./dispatcher/register.json";
+export { APPROVEMENT } from "./dispatcher/approvement.json";
 export { redisMetadata } from "./redisMetadata.json";
-export { ping } from "./ping.json";
+export { PING } from "./ping.json";
