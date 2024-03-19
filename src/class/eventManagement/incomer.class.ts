@@ -14,6 +14,7 @@ import { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import {
+  IncomerMainTransaction,
   PartialTransaction,
   Transaction,
   TransactionStore
@@ -251,13 +252,14 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    });
+    }) as IncomerMainTransaction["incomerApprovementTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        transactionId: transaction.redisMetadata.transactionId,
+        eventTransactionId: transaction.redisMetadata.eventTransactionId
       }
     };
 
@@ -328,13 +330,14 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    });
+    }) as IncomerMainTransaction["incomerApprovementTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        transactionId: transaction.redisMetadata.transactionId,
+        eventTransactionId: transaction.redisMetadata.eventTransactionId
       }
     };
 

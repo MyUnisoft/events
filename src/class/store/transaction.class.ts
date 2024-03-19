@@ -42,15 +42,15 @@ type HandlerTransaction = {
 };
 
 export type DispatcherMainTransaction = DispatcherPingMessage & {
-  redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & MainTransaction
+  redisMetadata: MainTransaction & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
 }
 
 type DispatcherApprovementTransaction = DispatcherChannelMessages["DispatcherMessages"] & {
-  redisMetadata: DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"] & SpreadTransaction
+  redisMetadata: SpreadTransaction & DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"];
 };
 
 type DispatcherDistributedEventTransaction = DistributedEventMessage & {
-  redisMetadata: IncomerChannelMessages["DispatcherMessages"]["redisMetadata"] & SpreadTransaction
+  redisMetadata: SpreadTransaction & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
 }
 
 export interface DispatcherSpreadTransaction {
@@ -64,11 +64,11 @@ type DispatcherTransaction = (
 ) | DispatcherMainTransaction;
 
 type IncomerApprovementTransaction = DispatcherChannelMessages["IncomerMessages"] & {
-  redisMetadata: DispatcherChannelMessages["IncomerMessages"]["redisMetadata"] & MainTransaction
+  redisMetadata: MainTransaction & DispatcherChannelMessages["IncomerMessages"]["redisMetadata"];
 };
 
 type IncomerEventCastTransaction = IncomerChannelMessages["IncomerMessages"] & {
-  redisMetadata: IncomerChannelMessages["IncomerMessages"]["redisMetadata"] & MainTransaction
+  redisMetadata: MainTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
 }
 
 export interface IncomerMainTransaction {
@@ -77,11 +77,11 @@ export interface IncomerMainTransaction {
 }
 
 type IncomerDistributedEventTransaction = IncomerChannelMessages["IncomerMessages"] & {
-  redisMetadata: IncomerChannelMessages["IncomerMessages"]["redisMetadata"] & HandlerTransaction
+  redisMetadata: HandlerTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
 }
 
 type IncomerPongTransaction = DispatcherPingMessage & {
-  redisMetadata: DispatcherPingMessage["redisMetadata"] & HandlerTransaction
+  redisMetadata: HandlerTransaction & DispatcherPingMessage["redisMetadata"];
 }
 
 export interface IncomerHandlerTransaction {
