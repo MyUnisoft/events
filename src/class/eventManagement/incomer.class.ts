@@ -408,6 +408,15 @@ export class Incomer <
         }
       });
     }
+    else {
+      const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
+
+      await Promise.all(
+        [...oldTransactions.entries()]
+          .filter(([__, transaction]) => transaction.name === "REGISTER")
+          .map(([id]) => this.defaultIncomerTransactionStore.deleteTransaction(id))
+      );
+    }
 
     await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
     this.subscriber.removeAllListeners("message");
