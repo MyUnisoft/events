@@ -280,7 +280,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
     }, this.pingInterval).unref();
 
-    this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
+    this.checkLastActivityIntervalTimer = setInterval(async() => {
+      await this.checkLastActivityIntervalFn();
+    }, this.checkLastActivityInterval).unref();
   }
 
   get redis() {
@@ -489,7 +491,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         ]);
       }
       catch (error) {
-        this.logger.error({ error: error.stack }, "failed while taking back the lead");
+        this.logger.error({ error: error.stack }, `${this.selfProvidedUUID} failed while taking back the lead`);
 
         return;
       }
@@ -499,7 +501,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           await this.transactionHandler.resolveTransactions();
 
           clearInterval(this.checkLastActivityIntervalTimer);
-          this.checkLastActivityIntervalTimer = this.checkLastActivityIntervalFn();
+          this.checkLastActivityIntervalTimer = setInterval(async() => {
+            await this.checkLastActivityIntervalFn();
+          }, this.checkLastActivityInterval).unref();
         }
         catch (error) {
           this.logger.error({ error: error.stack }, "failed at resolving transaction while taking back the lead");
@@ -525,19 +529,59 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     return Math.floor((Math.random() * (this.maxTimeout - this.minTimeout)) + this.minTimeout);
   }
 
-  private checkLastActivityIntervalFn() {
-    return setInterval(async() => {
-      try {
-        if (!this.isWorking) {
-          return;
+  private async checkLastActivityIntervalFn() {
+    if (!this.isWorking) {
+      return;
+    }
+
+    let inactiveIncomers;
+
+    try {
+      inactiveIncomers = await this.incomerStore.getNonActives();
+    }
+    catch (error) {
+      this.logger.error({ error: error.stack }, "Failed while checking last activity");
+
+      return;
+    }
+
+    try {
+      const toResolve = [];
+
+      let index = 0;
+      for (const inactive of inactiveIncomers) {
+        const transactionStore = new TransactionStore({
+          prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
+          instance: "incomer"
+        });
+
+        const transactions = await transactionStore.getTransactions();
+        const recentPingTransactionKeys = [...(Object.entries(transactions) as [string, Transaction<"incomer">][])
+          .filter(([, transaction]) => transaction.name === "PING" &&
+            Date.now() < (Number(transaction.aliveSince) + Number(this.idleTime)))]
+          .map(([transactionId]) => transactionId);
+
+        if (recentPingTransactionKeys.length > 0) {
+          toResolve.push(Promise.all([
+            this.updateIncomerState(inactive.providedUUID),
+            transactionStore.deleteTransactions(recentPingTransactionKeys)
+          ]));
+
+          inactiveIncomers.splice(index, 1);
         }
 
-        await this.checkLastActivity();
+        index++;
       }
-      catch (error) {
-        this.logger.error({ error: error.stack }, "Failed at check last activity");
-      }
-    }, this.checkLastActivityInterval).unref();
+
+      await Promise.all(toResolve);
+
+      await this.removeNonActives(inactiveIncomers);
+    }
+    catch (error) {
+      const uuids = [...inactiveIncomers.map((incomer) => incomer?.providedUUID ?? incomer?.baseUUID)].join(",");
+
+      this.logger.error({ error: error.stack }, `[${uuids}], Failed to remove nonactives incomers`);
+    }
   }
 
   private async ping() {
@@ -594,65 +638,21 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async removeNonActives(inactiveIncomers: RegisteredIncomer[]) {
-    try {
-      const toHandle = [];
+    const toHandle = [];
 
-      for (const inactive of inactiveIncomers) {
-        toHandle.push(Promise.all([
-          this.incomerStore.deleteIncomer(inactive.providedUUID),
-          this.transactionHandler.resolveInactiveIncomerTransactions(inactive),
-          this.channelsToUnsubscribe.add(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
-        ]));
-      }
-
-      await Promise.all(toHandle);
-
-      this.logger.info(`[${inactiveIncomers.map(
-        (incomer) => `(name:${incomer.name}|uuid:${incomer.providedUUID ?? incomer.baseUUID})`
-      ).join(",")}], Removed Incomer`);
-    }
-    catch (error) {
-      const uuids = [...inactiveIncomers.map((incomer) => incomer?.providedUUID ?? incomer?.baseUUID)].join(",");
-
-      throw new Error(`[${uuids}], Failed to remove nonactives incomers`);
-    }
-  }
-
-  private async checkLastActivity() {
-    const nonActives = await this.incomerStore.getNonActives();
-    if (nonActives.length === 0) {
-      return;
+    for (const inactive of inactiveIncomers) {
+      toHandle.push(Promise.all([
+        this.incomerStore.deleteIncomer(inactive.providedUUID),
+        this.transactionHandler.resolveInactiveIncomerTransactions(inactive),
+        this.channelsToUnsubscribe.add(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
+      ]));
     }
 
-    const toResolve = [];
-    let index = 0;
-    for (const inactive of nonActives) {
-      const transactionStore = new TransactionStore({
-        prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
-        instance: "incomer"
-      });
+    await Promise.all(toHandle);
 
-      const transactions = await transactionStore.getTransactions();
-      const recentPingTransactionKeys = [...(Object.entries(transactions) as [string, Transaction<"incomer">][])
-        .filter(([, transaction]) => transaction.name === "PING" &&
-          Date.now() < (Number(transaction.aliveSince) + Number(this.idleTime)))]
-        .map(([transactionId]) => transactionId);
-
-      if (recentPingTransactionKeys.length > 0) {
-        toResolve.push(Promise.all([
-          this.updateIncomerState(inactive.providedUUID),
-          transactionStore.deleteTransactions(recentPingTransactionKeys)
-        ]));
-
-        nonActives.splice(index, 1);
-      }
-
-      index++;
-    }
-
-    await Promise.all(toResolve);
-
-    await this.removeNonActives(nonActives);
+    this.logger.info(`[${inactiveIncomers.map(
+      (incomer) => `(name:${incomer.name}|uuid:${incomer.providedUUID ?? incomer.baseUUID})`
+    ).join(",")}], Removed Incomer`);
   }
 
   private async updateIncomerState(origin: string) {
