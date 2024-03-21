@@ -413,8 +413,13 @@ export class Incomer <
 
       await Promise.all(
         [...oldTransactions.entries()]
-          .filter(([__, transaction]) => transaction.name === "REGISTER")
-          .map(([id]) => this.defaultIncomerTransactionStore.deleteTransaction(id))
+          .map(([id, transaction]) => {
+            if (transaction.name === "REGISTER") {
+              return this.defaultIncomerTransactionStore.deleteTransaction(id);
+            }
+
+            return void 0;
+          })
       );
     }
 
