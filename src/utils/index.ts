@@ -46,8 +46,8 @@ export type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
   }
 }
 
-export function concatErrors(errors: ErrorObject<string, Record<string, any>, unknown>[]) {
-  return errors.map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`);
+export function concatErrors(errors: ErrorObject<string, Record<string, any>, unknown>[]): string {
+  return errors.map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|");
 }
 
 function logValueFallback(value: string): string {

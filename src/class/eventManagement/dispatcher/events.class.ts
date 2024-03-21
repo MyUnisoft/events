@@ -208,7 +208,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     if (!redisMetadataValidationFn(redisMetadata)) {
       throw new Error(
-        `Malformed redis metadata: [${concatErrors(redisMetadataValidationFn.errors).join("|")}]`
+        `Malformed redis metadata: [${concatErrors(redisMetadataValidationFn.errors)}]`
       );
     }
   }
@@ -229,7 +229,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     if (!eventValidation(eventRest)) {
       throw new Error(
-        `Malformed event: [${concatErrors(eventValidation.errors).join("|")}]`
+        `Malformed event: [${concatErrors(eventValidation.errors)}]`
       );
     }
   }
@@ -259,7 +259,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     if (!eventValidation(eventRest)) {
       throw new Error(
-        `Malformed event: [${concatErrors(eventValidation.errors).join("|")}]`
+        `Malformed event: [${concatErrors(eventValidation.errors)}]`
       );
     }
   }

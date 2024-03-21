@@ -32,22 +32,22 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
 
   const operationValidationFunction = event.get(operation?.toLocaleLowerCase());
   if (!operationValidationFunction(data)) {
-    throw new Error(`data: [${concatErrors(operationValidationFunction.errors).join("|")}]`);
+    throw new Error(`data: [${concatErrors(operationValidationFunction.errors)}]`);
   }
 
   if (!metadataValidationFunction(metadata)) {
-    throw new Error(`metadata: [${concatErrors(metadataValidationFunction.errors).join("|")}]`);
+    throw new Error(`metadata: [${concatErrors(metadataValidationFunction.errors)}]`);
   }
 
   if (!scopeValidationFunction(scope)) {
-    throw new Error(`scope: [${concatErrors(scopeValidationFunction.errors).join("|")}]`);
+    throw new Error(`scope: [${concatErrors(scopeValidationFunction.errors)}]`);
   }
 
   if (event.has("scope")) {
     const eventScopeValidationFn = event.get("scope");
 
     if (!eventScopeValidationFn(scope)) {
-      throw new Error(`scope: [${concatErrors(eventScopeValidationFn.errors).join("|")}]`);
+      throw new Error(`scope: [${concatErrors(eventScopeValidationFn.errors)}]`);
     }
   }
 }
