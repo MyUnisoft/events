@@ -1,5 +1,5 @@
 // Import Third-party Dependencies
-import Ajv, { ValidateFunction } from "ajv";
+import Ajv, { ErrorObject, ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import { eventsValidationSchemas } from "../schema/index";
@@ -44,6 +44,10 @@ export type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
     to?: string;
     eventTransactionId?: string;
   }
+}
+
+export function concatErrors(errors: ErrorObject<string, Record<string, any>, unknown>[]) {
+  return errors.map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`);
 }
 
 function logValueFallback(value: string): string {

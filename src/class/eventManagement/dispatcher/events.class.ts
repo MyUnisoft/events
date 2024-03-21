@@ -19,7 +19,13 @@ import {
   CloseMessage
 } from "../../../types";
 import * as eventsSchema from "../../../schema/eventManagement/index";
-import { NestedValidationFunctions, StandardLog, StandardLogOpts, defaultStandardLog } from "../../../utils";
+import {
+  NestedValidationFunctions,
+  StandardLog,
+  StandardLogOpts,
+  concatErrors,
+  defaultStandardLog
+} from "../../../utils";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -178,7 +184,6 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
       match<DispatcherChannelEvents>({ name: event.name })
         .with({ name: "REGISTER" }, async() => {
           this.#logger.info(this.#standardLogFn(event as any)("Registration asked"));
-          // this.#logger.info({ channel, event }, "Registration asked");
 
           this.emit("APPROVEMENT", event);
         })
@@ -189,13 +194,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     else if (isIncomerChannelMessage(event)) {
       this.incomerChannelMessagesSchemaValidation(event);
 
-      if (isCloseMessage(event)) {
-        this.emit("CLOSE", channel, event);
-
-        return;
-      }
-
-      this.emit("CUSTOM_EVENT", channel, event);
+      this.emit(isCloseMessage(event) ? "CLOSE" : "CUSTOM_EVENT", channel, event);
     }
     else {
       throw new Error("Unknown event for the given Channel");
@@ -209,11 +208,11 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     if (!redisMetadataValidationFn(redisMetadata)) {
       throw new Error(
-        `Malformed redis metadata: [${[...redisMetadataValidationFn.errors]
-          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+        `Malformed redis metadata: [${concatErrors(redisMetadataValidationFn.errors).join("|")}]`
       );
     }
   }
+
 
   private dispatcherChannelMessagesSchemaValidation(
     event: IncomerRegistrationMessage | DispatcherApprovementMessage
@@ -230,8 +229,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     if (!eventValidation(eventRest)) {
       throw new Error(
-        `Malformed event: [${[...eventValidation.errors]
-          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+        `Malformed event: [${concatErrors(eventValidation.errors).join("|")}]`
       );
     }
   }
@@ -261,8 +259,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     if (!eventValidation(eventRest)) {
       throw new Error(
-        `Malformed event: [${[...eventValidation.errors]
-          .map((error) => `${error.instancePath ? `${error.instancePath}:` : ""} ${error.message}`).join("|")}]`
+        `Malformed event: [${concatErrors(eventValidation.errors).join("|")}]`
       );
     }
   }
