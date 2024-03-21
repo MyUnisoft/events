@@ -25,9 +25,7 @@ export type ChannelMessages<T extends GenericEvent> = Channel<
 >;
 
 export class IncomerChannelHandler<T extends GenericEvent = GenericEvent> {
-  public channels: Map<
-    string, ChannelMessages<T>
-  > = new Map();
+  public channels: Map<string, ChannelMessages<T>> = new Map();
 
   constructor(opts: IncomerChannelHandlerOptions<T>) {
     Object.assign(this, opts);

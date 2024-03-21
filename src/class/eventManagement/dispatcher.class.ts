@@ -404,7 +404,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     try {
       await once(this, "ABORT_TAKING_LEAD", {
-        signal: AbortSignal.timeout(this.randomIntFromRange())
+        signal: AbortSignal.timeout(this.randomIntFromTimeoutRange())
       });
 
       if (this.isWorking) {
@@ -426,7 +426,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       try {
         await once(this, "ABORT_TAKING_LEAD", {
-          signal: AbortSignal.timeout(this.randomIntFromRange())
+          signal: AbortSignal.timeout(this.randomIntFromTimeoutRange())
         });
 
         if (this.isWorking) {
@@ -467,7 +467,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     try {
       await once(this, "ABORT_TAKING_LEAD_BACK", {
-        signal: AbortSignal.timeout(this.randomIntFromRange())
+        signal: AbortSignal.timeout(this.randomIntFromTimeoutRange())
       });
 
       if (this.isWorking) {
@@ -525,7 +525,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
   }
 
-  private randomIntFromRange() {
+  private randomIntFromTimeoutRange() {
     return Math.floor((Math.random() * (this.maxTimeout - this.minTimeout)) + this.minTimeout);
   }
 
@@ -650,9 +650,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await Promise.all(toHandle);
 
-    this.logger.info(`[${inactiveIncomers.map(
-      (incomer) => `(name:${incomer.name}|uuid:${incomer.providedUUID ?? incomer.baseUUID})`
-    ).join(",")}], Removed Incomer`);
+    if (inactiveIncomers.length > 0) {
+      this.logger.info(`[${inactiveIncomers.map(
+        (incomer) => `(name:${incomer.name}|uuid:${incomer.providedUUID ?? incomer.baseUUID})`
+      ).join(",")}], Removed Incomer`);
+    }
   }
 
   private async updateIncomerState(origin: string) {
