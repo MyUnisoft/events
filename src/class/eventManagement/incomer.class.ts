@@ -536,22 +536,24 @@ export class Incomer <
 
     const { name } = message;
 
-    match<DispatcherChannelEvents>({ name })
-      .with({ name: "APPROVEMENT" }, async() => {
-        this.logger.info(logData, "New approvement message on Dispatcher Channel");
+    try {
+      match<DispatcherChannelEvents>({ name })
+        .with({ name: "APPROVEMENT" }, async() => {
+          this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-        await this.handleApprovement(message as DispatcherApprovementMessage);
-      })
-      .otherwise(() => {
-        throw new Error("Unknown event");
-      })
-      .catch((error) => {
-        this.logger.error({
-          channel: "dispatcher",
-          error: error.stack,
-          message
+          await this.handleApprovement(message as DispatcherApprovementMessage);
+        })
+        .otherwise(() => {
+          throw new Error("Unknown event");
         });
+    }
+    catch (error) {
+      this.logger.error({
+        channel: "dispatcher",
+        error: error.stack,
+        message
       });
+    }
   }
 
   private async handleIncomerMessages(
