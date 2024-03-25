@@ -29,12 +29,12 @@ import {
 
 // CONSTANTS
 const ajv = new Ajv();
-const kDispatcherChannelEvents = ["REGISTER", "APPROVEMENT"];
+const kDispatcherChannelEvents = ["REGISTER"];
 
-export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" };
+export type DispatcherChannelEvents = { name: "REGISTER"};
 
 type AnyDispatcherChannelMessage = (
-  DispatcherChannelMessages["DispatcherMessages"] | DispatcherChannelMessages["IncomerMessages"]
+  DispatcherChannelMessages["IncomerMessages"]
 );
 
 type AnyIncomerChannelMessage<T extends GenericEvent> = (
@@ -153,7 +153,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   public async handleEvents(
     channel: string,
     event: AnyDispatcherChannelMessage |
-    AnyIncomerChannelMessage<T>
+    AnyIncomerChannelMessage<T> | DispatcherChannelMessages["DispatcherMessages"]
   ) {
     if (!event.name || !event.redisMetadata) {
       throw new Error("Malformed message");
@@ -181,15 +181,9 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
         } as unknown as StandardLogOpts<T>)(error.stack));
       }
 
-      match<DispatcherChannelEvents>({ name: event.name })
-        .with({ name: "REGISTER" }, async() => {
-          this.#logger.info(this.#standardLogFn(event as any)("Registration asked"));
+      this.#logger.info(this.#standardLogFn(event as any)("Registration asked"));
 
-          this.emit("APPROVEMENT", event);
-        })
-        .otherwise(() => {
-          throw new Error("Unknown event on Dispatcher Channel");
-        });
+      this.emit("APPROVEMENT", event);
     }
     else if (isIncomerChannelMessage(event)) {
       this.incomerChannelMessagesSchemaValidation(event);
