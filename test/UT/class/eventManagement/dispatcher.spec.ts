@@ -18,6 +18,7 @@ import Ajv from "ajv";
 import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
+import { TransactionHandler } from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
@@ -26,11 +27,11 @@ const logger = Logger.pino({
 const mockedLoggerError = jest.spyOn(logger, "error");
 const mockedLoggerInfo = jest.spyOn(logger, "info");
 
-const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "handleDispatcherMessages");
-const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleIncomerMessages");
+const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "approveIncomer");
+const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleCustomEvents");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
-const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
-const mockedHandleInactiveIncomer =  jest.spyOn(Dispatcher.prototype as any, "inactiveIncomerTransactionsResolution");
+const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivityIntervalFn");
+const mockedHandleInactiveIncomer =  jest.spyOn(TransactionHandler.prototype, "resolveInactiveIncomerTransactions");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
 
@@ -45,7 +46,8 @@ describe("Dispatcher", () => {
   beforeAll(async() => {
     await initRedis({
       port: Number(process.env.REDIS_PORT),
-      host: process.env.REDIS_HOST
+      host: process.env.REDIS_HOST,
+      enableAutoPipelining: true
     });
 
     await getRedis()!.flushall();
@@ -62,7 +64,8 @@ describe("Dispatcher", () => {
     beforeAll(async() => {
       subscriber = await initRedis({
         port: Number(process.env.REDIS_PORT),
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       }, "subscriber");
 
       dispatcher = new Dispatcher({
@@ -124,7 +127,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -157,7 +160,7 @@ describe("Dispatcher", () => {
         let incomerTransactionStore: TransactionStore<"incomer">;
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -268,7 +271,7 @@ describe("Dispatcher", () => {
         subscriber.on("message", async(channel, message) => {
           const formattedMessage = JSON.parse(message);
 
-          if (formattedMessage.name === "approvement") {
+          if (formattedMessage.name === "APPROVEMENT") {
             const providedUUID = formattedMessage.data.uuid;
 
             await subscriber.subscribe(providedUUID);
@@ -278,7 +281,7 @@ describe("Dispatcher", () => {
               instance: "incomer"
             });
           }
-          else if (formattedMessage.name === "ping" && index === 0) {
+          else if (formattedMessage.name === "PING" && index === 0) {
             pingTransactionId = formattedMessage.redisMetadata.transactionId;
             pongTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
@@ -304,7 +307,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -332,7 +335,7 @@ describe("Dispatcher", () => {
         });
 
         await channel.publish({
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -355,7 +358,7 @@ describe("Dispatcher", () => {
       test("It should have update the update the incomer last activity", async () => {
         await timers.setTimeout(10_000);
 
-        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
+        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
 
         expect(pongTransactionToRetrieve).toBeNull();
@@ -373,8 +376,11 @@ describe("Dispatcher", () => {
     beforeAll(async() => {
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       } as any, "subscriber");
+
+      await subscriber.flushall();
 
       dispatcher = new Dispatcher({
         logger,
@@ -413,7 +419,7 @@ describe("Dispatcher", () => {
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
 
-            if (formattedMessage.name && formattedMessage.name === "approvement") {
+            if (formattedMessage.name && formattedMessage.name === "APPROVEMENT") {
               approved = true;
             }
           });
@@ -424,7 +430,7 @@ describe("Dispatcher", () => {
           });
 
           const event = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: incomerName,
               eventsCast: [],
@@ -495,7 +501,7 @@ describe("Dispatcher", () => {
         subscriber.on("message", async(channel, message) => {
           const formattedMessage = JSON.parse(message);
 
-          if (formattedMessage.name === "approvement") {
+          if (formattedMessage.name === "APPROVEMENT") {
             const providedUUid = formattedMessage.data.uuid;
 
             incomerTransactionStore = new TransactionStore({
@@ -505,7 +511,7 @@ describe("Dispatcher", () => {
 
             await subscriber.subscribe(`${prefix}-${providedUUid}`);
           }
-          else if (formattedMessage.name === "ping" && index === 0) {
+          else if (formattedMessage.name === "PING" && index === 0) {
             pongTransaction = await incomerTransactionStore.setTransaction({
               ...formattedMessage,
               redisMetadata: {
@@ -528,7 +534,7 @@ describe("Dispatcher", () => {
         });
 
         const event = {
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -557,7 +563,7 @@ describe("Dispatcher", () => {
         });
 
         await channel.publish({
-          name: "register",
+          name: "REGISTER",
           data: {
             name: incomerName,
             eventsCast: [],
@@ -583,7 +589,7 @@ describe("Dispatcher", () => {
       test("It should have update the update the incomer last activity & remove the ping transaction", async () => {
         await timers.setTimeout(4_000);
 
-        const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId);
+        const transaction = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
 
         expect(transaction).toBeNull();
         expect(mockedCheckLastActivity).toHaveBeenCalled();
@@ -608,8 +614,11 @@ describe("Dispatcher", () => {
 
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       } as any, "subscriber");
+
+      await subscriber.flushall();
 
       const eventsValidationFn = new Map();
 
@@ -666,15 +675,7 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        const mockLogs = mockedLoggerError.mock.calls.flat();
-        expect(mockLogs).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            channel: "dispatcher",
-            message: event,
-            error: expect.anything()
-          }),
-          expect.anything()
-        ]));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Malformed message" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
         expect(mockedHandleIncomerMessages).not.toHaveBeenCalled();
       });
@@ -759,7 +760,7 @@ describe("Dispatcher", () => {
           subscriber.on("message", async(channel, message) => {
             const formattedMessage = JSON.parse(message);
 
-            if (formattedMessage.name && formattedMessage.name === "approvement") {
+            if (formattedMessage.name && formattedMessage.name === "APPROVEMENT") {
               approved = true;
             }
           });
@@ -769,7 +770,7 @@ describe("Dispatcher", () => {
           });
 
           const event = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: incomerName,
               eventsCast: [],
@@ -841,15 +842,7 @@ describe("Dispatcher", () => {
 
         await timers.setTimeout(1_000);
 
-        const mockLogs = mockedLoggerError.mock.calls.flat();
-        expect(mockLogs).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            channel: "dispatcher",
-            message: event,
-            error: expect.anything()
-          }),
-          expect.anything()
-        ]));
+        expect(mockedLoggerError).toHaveBeenCalledWith({ channel: "dispatcher", message: event, error: "Unknown event on Dispatcher Channel" });
         expect(mockedHandleDispatcherMessages).not.toHaveBeenCalled();
       });
     });
@@ -904,7 +897,7 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (channel === "dispatcher") {
-              if (formattedMessage.name === "approvement") {
+              if (formattedMessage.name === "APPROVEMENT") {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.redisMetadata.to === firstUuid) {
@@ -984,7 +977,7 @@ describe("Dispatcher", () => {
           });
 
           const firstEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: firstIncomerName,
               eventsCast: ["foo"],
@@ -996,7 +989,7 @@ describe("Dispatcher", () => {
           };
 
           const secondEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: secondIncomerName,
               eventsCast: [],
@@ -1083,8 +1076,11 @@ describe("Dispatcher", () => {
 
       subscriber = await initRedis({
         port: process.env.REDIS_PORT,
-        host: process.env.REDIS_HOST
+        host: process.env.REDIS_HOST,
+        enableAutoPipelining: true
       } as any, "subscriber");
+
+      await subscriber.flushall();
 
       const eventsValidationFn = new Map();
 
@@ -1178,7 +1174,7 @@ describe("Dispatcher", () => {
             const formattedMessage = JSON.parse(message);
 
             if (channel === `${prefix}-dispatcher`) {
-              if (formattedMessage.name === "approvement") {
+              if (formattedMessage.name === "APPROVEMENT") {
                 const uuid = formattedMessage.data.uuid;
 
                 if (formattedMessage.redisMetadata.to === firstIncomerUuid) {
@@ -1288,7 +1284,7 @@ describe("Dispatcher", () => {
           });
 
           const firstEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: firstIncomerName,
               eventsCast: ["foo"],
@@ -1301,7 +1297,7 @@ describe("Dispatcher", () => {
           };
 
           const secondEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: secondIncomerName,
               eventsCast: [],
@@ -1314,7 +1310,7 @@ describe("Dispatcher", () => {
           };
 
           const thirdEvent = {
-            name: "register",
+            name: "REGISTER",
             data: {
               name: thirdIncomerName,
               eventsCast: [],

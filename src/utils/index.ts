@@ -1,5 +1,5 @@
 // Import Third-party Dependencies
-import Ajv, { ValidateFunction } from "ajv";
+import Ajv, { ErrorObject, ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import { eventsValidationSchemas } from "../schema/index";
@@ -20,16 +20,14 @@ const kScopeKeys = Object.freeze({
   requestId: "req-id"
 });
 
-export type OperationFunctions = Record<string, any>;
+export type NestedValidationFunctions = Map<string, ValidateFunction<Record<string, any>>>;
 
-export type CustomEventsValidationFunctions = Map<string, ValidateFunction<OperationFunctions>>;
+type MappedEventsValidationFn = Map<string, NestedValidationFunctions>;
 
-type MappedEventsValidationFn = Map<string, CustomEventsValidationFunctions>;
-
-export const eventsValidationFn: MappedEventsValidationFn = new Map<string, CustomEventsValidationFunctions>();
+export const eventsValidationFn: MappedEventsValidationFn = new Map<string, NestedValidationFunctions>();
 
 for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas)) {
-  const operationsValidationFunctions: Map<string, ValidateFunction<OperationFunctions>> = new Map();
+  const operationsValidationFunctions: Map<string, ValidateFunction<Record<string, any>>> = new Map();
 
   for (const [operation, validationSchema] of Object.entries(validationSchemas)) {
     operationsValidationFunctions.set(operation, ajv.compile(validationSchema));
@@ -38,7 +36,19 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
   eventsValidationFn.set(name, operationsValidationFunctions);
 }
 
-export type StandardLog<T extends GenericEvent = GenericEvent> = (data: T) => (message: string) => string;
+export type StandardLog<T extends GenericEvent = GenericEvent> = (data: StandardLogOpts<T>) => (message: string) => string;
+export type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
+  redisMetadata: {
+    transactionId: string;
+    origin?: string;
+    to?: string;
+    eventTransactionId?: string;
+  }
+}
+
+export function concatErrors(errors: ErrorObject<string, Record<string, any>, unknown>[]): string {
+  return errors.map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|");
+}
 
 function logValueFallback(value: string): string {
   return value ?? "none";

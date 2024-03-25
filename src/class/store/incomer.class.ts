@@ -23,16 +23,28 @@ export interface RegisteredIncomer {
 }
 
 export class IncomerStore extends KVPeer<RegisteredIncomer> {
-  private key: string;
+  #key: string;
+  #idleTime: number;
 
-  constructor(options: Partial<KVOptions<RegisteredIncomer>>) {
+  constructor(options: Partial<KVOptions<RegisteredIncomer>> & { idleTime: number; }) {
     super({ ...options, prefix: undefined, type: "object" });
 
-    this.key = `${options.prefix ? `${options.prefix}-` : ""}incomer`;
+    this.#key = `${options.prefix ? `${options.prefix}-` : ""}incomer`;
+    this.#idleTime = options.idleTime;
+  }
+
+  isActive(incomer: RegisteredIncomer, now: number = Date.now()) {
+    return now < (Number(incomer.lastActivity) + Number(this.#idleTime));
+  }
+
+  async getNonActives(): Promise<RegisteredIncomer[]> {
+    const incomers = await this.getIncomers();
+
+    return [...incomers].filter((incomer) => !this.isActive(incomer));
   }
 
   async setIncomer(incomer: Omit<RegisteredIncomer, "providedUUID">, providedUUID: string = randomUUID()): Promise<string> {
-    const key = `${this.key}-${providedUUID}`;
+    const key = `${this.#key}-${providedUUID}`;
 
     await this.setValue({ key,
       value: {
@@ -45,11 +57,11 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
   }
 
   async* incomerLazyFetch() {
-    const count = 10000;
+    const count = 5000;
     let cursor = 0;
 
     do {
-      const [lastCursor, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
+      const [lastCursor, incomerKeys] = await this.redis.scan(cursor, "MATCH", `${this.#key}-*`, "COUNT", count);
 
       cursor = Number(lastCursor);
 
@@ -77,17 +89,17 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
   }
 
   async getIncomer(uuid: string): Promise<RegisteredIncomer> {
-    return await this.getValue(`${this.key}-${uuid}`);
+    return await this.getValue(`${this.#key}-${uuid}`);
   }
 
   async updateIncomer(incomer: RegisteredIncomer) {
-    const incomerKey = `${this.key}-${incomer.providedUUID}`;
+    const incomerKey = `${this.#key}-${incomer.providedUUID}`;
 
     await this.setValue({ key: incomerKey, value: { ...incomer, lastActivity: Date.now() } });
   }
 
   async updateIncomerState(incomerId: string): Promise<void> {
-    const incomerKey = `${this.key}-${incomerId}`;
+    const incomerKey = `${this.#key}-${incomerId}`;
     const incomer = await this.getValue(incomerKey);
 
     if (!incomer) {
@@ -98,6 +110,6 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
   }
 
   async deleteIncomer(incomerId: string): Promise<void> {
-    await this.deleteValue(`${this.key}-${incomerId}`);
+    await this.deleteValue(`${this.#key}-${incomerId}`);
   }
 }

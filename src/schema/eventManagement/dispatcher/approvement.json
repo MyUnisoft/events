@@ -1,13 +1,18 @@
 {
-  "PING": {
+  "APPROVEMENT": {
     "type": "object",
     "properties": {
       "name": {
-        "const": "PING"
+        "const": "APPROVEMENT"
       },
       "data": {
         "type": "object",
-        "nullable": true,
+        "properties": {
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "required": ["uuid"],
         "additionalProperties": false
       }
     },

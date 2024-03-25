@@ -7,15 +7,15 @@ import {
 } from "./index";
 
 // Send by the a Dispatcher
-type DispatcherMessages = DispatcherRegistrationMessage;
+type DispatcherMessages = DispatcherApprovementMessage;
 
-interface DispatcherRegistrationData {
+interface DispatcherApprovementData {
   uuid: string;
 }
 
-export type DispatcherRegistrationMessage = {
-  name: "approvement";
-  data: DispatcherRegistrationData;
+export type DispatcherApprovementMessage = {
+  name: "APPROVEMENT";
+  data: DispatcherApprovementData;
   redisMetadata: DispatcherTransactionMetadata;
 }
 
@@ -23,7 +23,7 @@ export type DispatcherRegistrationMessage = {
 type IncomerMessages = IncomerRegistrationMessage;
 
 
-interface IncomerRegistrationDataIn {
+interface IncomerRegistrationData {
   /* Service name */
   name: string;
   eventsCast: EventCast[];
@@ -32,8 +32,8 @@ interface IncomerRegistrationDataIn {
 }
 
 export type IncomerRegistrationMessage = {
-  name: "register";
-  data: IncomerRegistrationDataIn;
+  name: "REGISTER";
+  data: IncomerRegistrationData;
   redisMetadata: IncomerTransactionMetadata;
 }
 

@@ -2,7 +2,7 @@
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { eventsValidationFn } from "./utils/index";
+import { concatErrors, eventsValidationFn } from "./utils/index";
 import { metadata as metadataSchema, scope as scopeSchema } from "./schema";
 
 // Import Types
@@ -32,26 +32,22 @@ export function validate<T extends keyof Events = keyof Events>(options: EventOp
 
   const operationValidationFunction = event.get(operation?.toLocaleLowerCase());
   if (!operationValidationFunction(data)) {
-    throw new Error(`data: [${[...operationValidationFunction.errors]
-      .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
+    throw new Error(`data: [${concatErrors(operationValidationFunction.errors)}]`);
   }
 
   if (!metadataValidationFunction(metadata)) {
-    throw new Error(`metadata: [${[...metadataValidationFunction.errors]
-      .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
+    throw new Error(`metadata: [${concatErrors(metadataValidationFunction.errors)}]`);
   }
 
   if (!scopeValidationFunction(scope)) {
-    throw new Error(`scope: [${[...scopeValidationFunction.errors]
-      .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
+    throw new Error(`scope: [${concatErrors(scopeValidationFunction.errors)}]`);
   }
 
   if (event.has("scope")) {
     const eventScopeValidationFn = event.get("scope");
 
     if (!eventScopeValidationFn(scope)) {
-      throw new Error(`scope: [${[...eventScopeValidationFn.errors]
-        .map((error) => `${error.instancePath ? `${error.instancePath}: ` : ""}${error.message}`).join("|")}]`);
+      throw new Error(`scope: [${concatErrors(eventScopeValidationFn.errors)}]`);
     }
   }
 }

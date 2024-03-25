@@ -14,9 +14,7 @@ import { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
 import {
-  channels
-} from "../../utils/config";
-import {
+  IncomerMainTransaction,
   PartialTransaction,
   Transaction,
   TransactionStore
@@ -27,7 +25,7 @@ import {
   EventSubscribe,
   DispatcherChannelMessages,
   IncomerChannelMessages,
-  DispatcherRegistrationMessage,
+  DispatcherApprovementMessage,
   CallBackEventMessage,
   DispatcherPingMessage,
   DistributedEventMessage,
@@ -36,12 +34,14 @@ import {
   IncomerRegistrationMessage
 } from "../../types/eventManagement/index";
 import {
-  CustomEventsValidationFunctions,
+  NestedValidationFunctions,
   StandardLog,
   defaultStandardLog,
   handleLoggerMode
 } from "../../utils/index";
 import { Externals } from "./externals.class";
+import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents } from "./dispatcher.class";
+import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -56,36 +56,35 @@ const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLI
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
 const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
-type DispatcherChannelEvents = { name: "approvement" };
 type IncomerChannelEvents<
   T extends GenericEvent = GenericEvent
-> = { name: "ping"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
+> = { name: "PING"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
 
 function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is DispatcherChannelMessages["DispatcherMessages"] {
-  return value.name === "approvement";
+  return value.name === "APPROVEMENT";
 }
 
 function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is IncomerChannelMessages<T>["DispatcherMessages"] {
-  return value.name !== "approvement";
+  return value.name !== "APPROVEMENT";
 }
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
   prefix?: Prefix;
-  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
+  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
   eventsValidation?: {
-    eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>
-    validationCbFn: (event: T) => void;
+    eventsValidationFn?: eventsValidationFn<T>;
+    customValidationCbFn?: customValidationCbFn<T>;
   };
   eventCallback: (message: CallBackEventMessage<T>) => void;
   dispatcherInactivityOptions?: {
@@ -115,7 +114,7 @@ export class Incomer <
   private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
   private providedUUID: string;
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug">;
+  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
   private incomerChannelName: string;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
@@ -127,8 +126,8 @@ export class Incomer <
   private checkTransactionsStateInterval: NodeJS.Timer;
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
-  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | CustomEventsValidationFunctions>;
-  private validationCbFn: (event: T) => void;
+  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
+  private customValidationCbFn: (event: T) => void;
 
   public externals: Externals<T> | undefined;
 
@@ -138,7 +137,7 @@ export class Incomer <
     Object.assign(this, {}, options);
 
     this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
-    this.dispatcherChannelName = this.prefixedName + channels.dispatcher;
+    this.dispatcherChannelName = this.prefixedName + DISPATCHER_CHANNEL_NAME;
     this.standardLogFn = options.standardLog ?? defaultStandardLog;
     this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
     this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
@@ -148,7 +147,7 @@ export class Incomer <
 
     if (options.eventsValidation) {
       this.eventsValidationFn = options.eventsValidation.eventsValidationFn;
-      this.validationCbFn = options.eventsValidation.validationCbFn;
+      this.customValidationCbFn = options.eventsValidation.customValidationCbFn;
     }
 
     this.logger = options.logger ?? pino({
@@ -159,7 +158,7 @@ export class Incomer <
     }).child({ incomer: this.prefixedName + this.name });
 
     this.dispatcherChannel = new Channel({
-      name: channels.dispatcher,
+      name: DISPATCHER_CHANNEL_NAME,
       prefix: this.prefix
     });
 
@@ -178,13 +177,9 @@ export class Incomer <
   }
 
   private async checkDispatcherState() {
-    if (!this.lastPingDate || this.isDispatcherInstance) {
-      return;
-    }
-
     const date = Date.now();
 
-    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date) {
+    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date && !this.isDispatcherInstance) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -201,12 +196,8 @@ export class Incomer <
         ));
 
         await Promise.race([
-          transactions.map((transaction) => {
-            if (
-              transaction.redisMetadata.mainTransaction &&
-              !transaction.redisMetadata.published &&
-              transaction.name !== "ping"
-            ) {
+          Promise.all(transactions.map((transaction) => {
+            if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
               return this.incomerChannel.publish({
                 ...transaction,
                 redisMetadata: {
@@ -218,7 +209,7 @@ export class Incomer <
             }
 
             return void 0;
-          }),
+          })),
           new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
         ]);
       }
@@ -240,7 +231,7 @@ export class Incomer <
     this.logger.info("Registering as a new incomer on dispatcher");
 
     const event = {
-      name: "register" as const,
+      name: "REGISTER" as const,
       data: {
         name: this.name,
         eventsCast: this.eventsCast,
@@ -261,13 +252,14 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    });
+    }) as IncomerMainTransaction["incomerApprovementTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        transactionId: transaction.redisMetadata.transactionId,
+        eventTransactionId: transaction.redisMetadata.eventTransactionId
       }
     };
 
@@ -278,12 +270,13 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      clearTimeout(this.checkDispatcherStateTimeout);
-      this.checkDispatcherStateTimeout = undefined;
-      this.checkTransactionsStateInterval = setInterval(
-        async() => await this.checkDispatcherState(),
-        this.maxPingInterval
-      ).unref();
+      this.checkTransactionsStateInterval = setInterval(async() => {
+        if (!this.lastPingDate || this.isDispatcherInstance) {
+          return;
+        }
+
+        await this.checkDispatcherState();
+      }, this.maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
       this.checkRegistrationInterval = setInterval(
@@ -315,7 +308,7 @@ export class Incomer <
     }
 
     const event = {
-      name: "register" as const,
+      name: "REGISTER" as const,
       data: {
         name: this.name,
         providedUUID: this.providedUUID,
@@ -337,13 +330,14 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    });
+    }) as IncomerMainTransaction["incomerApprovementTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        transactionId: transaction.redisMetadata.transactionId,
+        eventTransactionId: transaction.redisMetadata.eventTransactionId
       }
     };
 
@@ -354,12 +348,13 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      clearTimeout(this.checkDispatcherStateTimeout);
-      this.checkDispatcherStateTimeout = undefined;
-      this.checkTransactionsStateInterval = setInterval(
-        async() => await this.checkDispatcherState(),
-        this.maxPingInterval
-      ).unref();
+      this.checkTransactionsStateInterval = setInterval(async() => {
+        if (!this.lastPingDate || this.isDispatcherInstance) {
+          return;
+        }
+
+        await this.checkDispatcherState();
+      }, this.maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
@@ -405,13 +400,27 @@ export class Incomer <
 
     if (this.incomerChannel) {
       await this.incomerChannel.publish({
-        name: "close",
+        name: "CLOSE",
         redisMetadata: {
           origin: this.providedUUID,
           incomerName: this.name,
           prefix: this.prefix
         }
       });
+    }
+    else {
+      const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
+
+      await Promise.all(
+        [...oldTransactions.entries()]
+          .map(([id, transaction]) => {
+            if (transaction.name === "REGISTER") {
+              return this.defaultIncomerTransactionStore.deleteTransaction(id);
+            }
+
+            return void 0;
+          })
+      );
     }
 
     await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
@@ -439,7 +448,7 @@ export class Incomer <
         throw new Error(`Unknown Event ${event.name}`);
       }
 
-      this.validationCbFn(event);
+      this.customValidationCbFn(event);
     }
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
@@ -527,20 +536,24 @@ export class Incomer <
 
     const { name } = message;
 
-    match<DispatcherChannelEvents>({ name })
-      .with({ name: "approvement" }, async() => {
-        this.logger.info(logData, "New approvement message on Dispatcher Channel");
+    try {
+      match<DispatcherChannelEvents>({ name })
+        .with({ name: "APPROVEMENT" }, async() => {
+          this.logger.info(logData, "New approvement message on Dispatcher Channel");
 
-        await this.handleApprovement(message);
-      })
-      .exhaustive()
-      .catch((error) => {
-        this.logger.error({
-          channel: "dispatcher",
-          error: error.stack,
-          message
+          await this.handleApprovement(message as DispatcherApprovementMessage);
+        })
+        .otherwise(() => {
+          throw new Error("Unknown event");
         });
+    }
+    catch (error) {
+      this.logger.error({
+        channel: "dispatcher",
+        error: error.stack,
+        message
       });
+    }
   }
 
   private async handleIncomerMessages(
@@ -551,9 +564,9 @@ export class Incomer <
 
     match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
       .with({
-        name: "ping"
+        name: "PING"
       },
-      async(res: { name: "ping", message: DispatcherPingMessage }) => this.handlePing(channel, res.message))
+      async(res: { name: "PING", message: DispatcherPingMessage }) => this.handlePing(channel, res.message))
       .with(P._,
         async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
           ...res, channel
@@ -612,7 +625,7 @@ export class Incomer <
         throw new Error(`Unknown Event ${event.name}`);
       }
 
-      this.validationCbFn(event as unknown as T);
+      this.customValidationCbFn(event as unknown as T);
     }
 
     const transaction: PartialTransaction<"incomer"> = {
@@ -644,7 +657,7 @@ export class Incomer <
     this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
   }
 
-  private async handleApprovement(message: DispatcherRegistrationMessage) {
+  private async handleApprovement(message: DispatcherApprovementMessage) {
     const { data } = message;
 
     this.incomerChannelName = this.prefixedName + data.uuid;
@@ -666,7 +679,7 @@ export class Incomer <
 
     const transactionToUpdate = [];
     for (const [transactionId, transaction] of oldTransactions.entries()) {
-      if (transaction.name === "register") {
+      if (transaction.name === "REGISTER") {
         transactionToUpdate.push([
           Promise.all([
             this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
