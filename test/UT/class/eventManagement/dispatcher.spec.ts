@@ -19,7 +19,6 @@ import { Dispatcher, EventOptions, Events } from "../../../../src/index";
 import * as EventsSchemas from "../../schema/index";
 import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
 import { TransactionHandler } from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class";
-import { EventsHandler } from "../../../../src/class/eventManagement/dispatcher/events.class";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({
@@ -234,22 +233,22 @@ describe("Dispatcher", () => {
 
           await timers.setTimeout(4_000);
 
-           expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
-           const mockLogs = mockedLoggerError.mock.calls.flat();
-           expect(mockLogs).toEqual(expect.arrayContaining([
-             expect.objectContaining({
-               channel: "dispatcher",
-               message: {
-                 ...event,
-                 redisMetadata: {
-                   ...event.redisMetadata,
-                   transactionId: transaction.redisMetadata.transactionId
-                 }
-               },
-               error: expect.anything()
-             }),
-             expect.anything()
-           ]));
+          expect(mockedHandleDispatcherMessages).toHaveBeenCalled();
+          const mockLogs = mockedLoggerError.mock.calls.flat();
+          expect(mockLogs).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              channel: "dispatcher",
+              message: {
+                ...event,
+                redisMetadata: {
+                  ...event.redisMetadata,
+                  transactionId: transaction.redisMetadata.transactionId
+                }
+              },
+              error: expect.anything()
+            }),
+            expect.anything()
+          ]));
         });
       });
     });
