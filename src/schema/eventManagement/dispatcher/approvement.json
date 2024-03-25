@@ -3,8 +3,7 @@
     "type": "object",
     "properties": {
       "name": {
-        "type": "string",
-        "pattern": "APPROVEMENT"
+        "const": "APPROVEMENT"
       },
       "data": {
         "type": "object",

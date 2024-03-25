@@ -3,8 +3,7 @@
     "type": "object",
     "properties": {
       "name": {
-        "type": "string",
-        "pattern": "REGISTER"
+        "const": "REGISTER"
       },
       "data": {
         "type": "object",
