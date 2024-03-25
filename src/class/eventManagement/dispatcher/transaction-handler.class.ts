@@ -131,11 +131,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         )
     );
 
-    const incomerPingTransactions = new Map(
-      [...incomerTransactions]
-        .filter(([__, incomerTransaction]) => incomerTransaction.name === "PING")
-        .map(([__, incomerTransaction]) => [incomerTransaction.redisMetadata.relatedTransaction, incomerTransaction])
-    );
+    const incomerPingTransactions = new Map([...incomerTransactions].flatMap(([__, incomerTransaction]) => {
+      if (incomerTransaction.name === "PING") {
+        return [[incomerTransaction.redisMetadata.relatedTransaction, incomerTransaction]];
+      }
+
+      return [];
+    }));
 
     transactionsToResolve.push(
       Promise.all(
@@ -161,9 +163,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     );
 
     const incomerRegistrationTransactions = new Map(
-      [...incomerTransactions]
-        .filter(([__, incomerTransaction]) => incomerTransaction.name === "REGISTER")
-        .map(([__, incomerTransaction]) => [incomerTransaction.redisMetadata.relatedTransaction, incomerTransaction])
+      [...incomerTransactions].flatMap(([__, incomerTransaction]) => {
+        if (incomerTransaction.name === "REGISTER") {
+          return [[incomerTransaction.redisMetadata.relatedTransaction, incomerTransaction]];
+        }
+
+        return [];
+      })
     );
 
     transactionsToResolve.push(
@@ -197,30 +203,29 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         )
     );
 
-    const mainTransactionResolutionPromises = [...restIncomerTransaction]
-      .filter(([__, incomerTransaction]) => incomerTransaction.redisMetadata.mainTransaction)
-      .map(([incomerTransactionId, mainTransaction]) => {
-        const isoPublisherIncomer = findISOIncomer({
-          incomers: [...incomers.values()],
-          incomerName: inactiveIncomer.name,
-          eventName: mainTransaction.name,
-          key: "eventsCast"
-        });
+    const mainTransactionResolutionPromises = [...restIncomerTransaction.entries()]
+      .flatMap(([incomerTransactionId, incomerTransaction]) => {
+        if (incomerTransaction.redisMetadata.mainTransaction) {
+          const isoPublisherIncomer = findISOIncomer({
+            incomers: [...incomers.values()],
+            incomerName: inactiveIncomer.name,
+            eventName: incomerTransaction.name,
+            key: "eventsCast"
+          });
 
-        if (!isoPublisherIncomer) {
-          return this.backupMainTransaction(
+          return [isoPublisherIncomer ? this.distributeMainTransaction({
+            isoPublisherIncomer,
+            incomerTransaction,
+            inactiveIncomerTransactionStore,
+            incomerTransactionId
+          }) : this.backupMainTransaction(
             inactiveIncomerTransactionStore,
             incomerTransactionId,
-            mainTransaction
-          );
+            incomerTransaction
+          )];
         }
 
-        return this.distributeMainTransaction({
-          isoPublisherIncomer,
-          incomerTransaction: mainTransaction,
-          inactiveIncomerTransactionStore,
-          incomerTransactionId
-        });
+        return [];
       });
 
     transactionsToResolve.push(Promise.all(mainTransactionResolutionPromises));
@@ -462,10 +467,10 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
           continue;
         }
 
-        const relatedDispatcherTransactionId = [...dispatcherTransactions.keys()]
+        const [relatedDispatcherTransactionId, relatedDispatcherTransaction] = [...dispatcherTransactions.entries()]
           .find(
-            (dispatcherTransactionId) => dispatcherTransactionId === backupIncomerTransaction.redisMetadata.relatedTransaction
-          );
+            ([id]) => id === backupIncomerTransaction.redisMetadata.relatedTransaction
+          ) || [];
 
         if (!relatedDispatcherTransactionId) {
           continue;
@@ -513,9 +518,17 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             ...backupIncomerTransaction,
             redisMetadata: {
               ...backupIncomerTransaction.redisMetadata,
-              origin: isoListenerIncomer.providedUUID
+              origin: this.privateUUID,
+              to: isoListenerIncomer.providedUUID
             }
           }, backupIncomerTransaction.redisMetadata.transactionId),
+          this.dispatcherTransactionStore.updateTransaction(relatedDispatcherTransactionId, {
+            ...relatedDispatcherTransaction,
+            redisMetadata: {
+              ...relatedDispatcherTransaction.redisMetadata,
+              to: isoListenerIncomer.providedUUID
+            }
+          } as Transaction<"dispatcher">),
           this.backupIncomerTransactionStore.deleteTransaction(backupTransactionId)
         );
       }
