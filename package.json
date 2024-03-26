@@ -34,8 +34,8 @@
   "dependencies": {
     "@myunisoft/redis": "github:MyUnisoft/redis#v3.4.2",
     "ajv": "^8.12.0",
-    "pino-pretty": "^10.3.1",
-    "ts-pattern": "^4.3.0"
+    "pino-pretty": "^11.0.0",
+    "ts-pattern": "^5.0.8"
   },
   "devDependencies": {
     "@nodesecure/eslint-config": "^1.9.0",
