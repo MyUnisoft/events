@@ -10,7 +10,7 @@
     "operation": {
       "type": "string",
       "description": "Operation operated next to the event",
-      "enum": ["CREATE", "UPDATE"]
+      "enum": ["CREATE", "UPDATE", "DELETE"]
     },
     "scope": {
       "type": "object",
