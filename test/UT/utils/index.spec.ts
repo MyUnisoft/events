@@ -57,13 +57,13 @@ describe("eventsValidationFn", () => {
       document = eventsValidationFn.get("document");
     });
 
-    test("document should have a validation function for \"create\"", () => {
+    test("document should have a validation function for \"create\", \"delete\"", () => {
       expect(document.has("create")).toBe(true);
+      expect(document.has("delete")).toBe(true);
     });
 
-    test("document should not have a validation function for \"update\", \"delete\", \"void\"", () => {
+    test("document should not have a validation function for \"update\", \"void\"", () => {
       expect(document.has("update")).toBe(false);
-      expect(document.has("delete")).toBe(false);
       expect(document.has("void")).toBe(false);
     });
   });

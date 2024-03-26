@@ -48,7 +48,7 @@ export interface AccountingFolder {
 }
 
 export type DocumentOperation = Operation[
-  keyof Pick<Operation, "create">
+  keyof Pick<Operation, "create" | "delete">
 ];
 
 export type DocumentScope = Scope;

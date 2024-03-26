@@ -10,7 +10,7 @@
     "operation": {
       "type": "string",
       "description": "Operation operated next to the event",
-      "enum": ["CREATE"]
+      "enum": ["CREATE", "DELETE"]
     },
     "scope": {
       "$ref": "Scope"

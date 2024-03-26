@@ -13,6 +13,20 @@
       },
       "required": ["id", "kind"],
       "additionalProperties": false
+    },
+    "delete": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "kind": {
+          "enum": ["AF", "PF", "DB", "ED"]
+        }
+      },
+      "required": ["id", "kind"],
+      "additionalProperties": false
     }
   }
 }

@@ -76,7 +76,7 @@ Event notifying the creation/addition of a document.
 
 ```ts
 export type DocumentOperation = Operation[
-  keyof Pick<Operation, "create">
+  keyof Pick<Operation, "create" | "delete">
 ];
 
 export type DocumentScope = Scope;
