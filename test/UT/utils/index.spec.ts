@@ -36,14 +36,14 @@ describe("eventsValidationFn", () => {
       accountingFolder = eventsValidationFn.get("accountingFolder");
     });
 
-    test("accountingFolder should have a validation function for \"create\" & \"update\" & \"scope\"", () => {
+    test("accountingFolder should have a validation function for \"create\", \"update\", \"delete\", \"scope\"", () => {
       expect(accountingFolder.has("create")).toBe(true);
       expect(accountingFolder.has("update")).toBe(true);
+      expect(accountingFolder.has("delete")).toBe(true);
       expect(accountingFolder.has("scope")).toBe(true);
     });
 
-    test("accountingFolder should not have a validation function for \"delete\", \"void\"", () => {
-      expect(accountingFolder.has("delete")).toBe(false);
+    test("accountingFolder should not have a validation function for \"void\"", () => {
       expect(accountingFolder.has("void")).toBe(false);
     });
   });
