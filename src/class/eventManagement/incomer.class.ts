@@ -1,7 +1,6 @@
 // Import Node.js Dependencies
 import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -42,6 +41,7 @@ import {
 import { Externals } from "./externals.class";
 import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents } from "./dispatcher.class";
 import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
+import { LazyIntervals } from "../utils/lazy-intervals.class";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -124,6 +124,7 @@ export class Incomer <
   private standardLogFn: StandardLog<T>;
   private checkRegistrationInterval: NodeJS.Timer;
   private checkTransactionsStateInterval: NodeJS.Timer;
+  private lazyPublishIntervals: LazyIntervals;
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
@@ -174,44 +175,67 @@ export class Incomer <
     ) {
       this.externals = new Externals(options);
     }
+
+    this.checkTransactionsStateInterval = setInterval(async() => {
+      if (!this.lastPingDate || this.isDispatcherInstance) {
+        return;
+      }
+
+      const date = Date.now();
+
+      if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date && !this.isDispatcherInstance) {
+        this.dispatcherConnectionState = false;
+        this.lazyPublishIntervals.emit("state", false);
+
+        return;
+      }
+
+      if (this.dispatcherConnectionState) {
+        return;
+      }
+
+      this.dispatcherConnectionState = true;
+      this.lazyPublishIntervals.emit("state", true);
+    }, 10).unref();
+
+    this.lazyPublishIntervals = new LazyIntervals({
+      callback: this.publishUnpublishedEvents,
+      timers: this.maxPingInterval,
+      state: false
+    });
   }
 
-  private async checkDispatcherState() {
-    const date = Date.now();
-
-    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date && !this.isDispatcherInstance) {
-      this.dispatcherConnectionState = false;
-
+  private async publishUnpublishedEvents(signal: AbortSignal) {
+    if (!this.lastPingDate || this.isDispatcherInstance) {
       return;
     }
-
-    this.dispatcherConnectionState = true;
 
     try {
       const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
 
       for await (const transactionKeys of store.transactionLazyFetch()) {
-        const transactions = await Promise.all(transactionKeys.map(
-          (transactionKey) => store.getValue(transactionKey)
-        ));
+        if (signal.aborted) {
+          throw new Error(`Aborted: ${signal.reason}`);
+        }
 
-        await Promise.race([
-          Promise.all(transactions.map((transaction) => {
-            if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
-              return this.incomerChannel.publish({
-                ...transaction,
-                redisMetadata: {
-                  transactionId: transaction.redisMetadata.transactionId,
-                  origin: transaction.redisMetadata.origin,
-                  prefix: transaction.redisMetadata.prefix
-                }
-              } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
-            }
+        for (const transactionKey of transactionKeys) {
+          if (signal.aborted) {
+            throw new Error(`Aborted: ${signal.reason}`);
+          }
 
-            return void 0;
-          })),
-          new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
-        ]);
+          const transaction = await store.getValue(transactionKey);
+
+          if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
+            await this.incomerChannel.publish({
+              ...transaction,
+              redisMetadata: {
+                transactionId: transaction.redisMetadata.transactionId,
+                origin: transaction.redisMetadata.origin,
+                prefix: transaction.redisMetadata.prefix
+              }
+            } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
+          }
+        }
       }
     }
     catch {
@@ -270,15 +294,8 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.checkTransactionsStateInterval = setInterval(async() => {
-        if (!this.lastPingDate || this.isDispatcherInstance) {
-          return;
-        }
-
-        await this.checkDispatcherState();
-      }, this.maxPingInterval).unref();
-
       this.dispatcherConnectionState = true;
+      this.lazyPublishIntervals.emit("state", true);
       this.checkRegistrationInterval = setInterval(
         async() => this.registrationIntervalCb(),
         this.publishInterval * 2
@@ -348,15 +365,8 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.checkTransactionsStateInterval = setInterval(async() => {
-        if (!this.lastPingDate || this.isDispatcherInstance) {
-          return;
-        }
-
-        await this.checkDispatcherState();
-      }, this.maxPingInterval).unref();
-
       this.dispatcherConnectionState = true;
+      this.lazyPublishIntervals.emit("state", true);
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch {
@@ -385,8 +395,15 @@ export class Incomer <
   public async close() {
     await this.externals?.close();
 
-    clearInterval(this.checkTransactionsStateInterval);
-    this.checkTransactionsStateInterval = undefined;
+    if (this.lazyPublishIntervals) {
+      this.lazyPublishIntervals.close();
+      this.lazyPublishIntervals = undefined;
+    }
+
+    if (this.checkTransactionsStateInterval) {
+      clearInterval(this.checkTransactionsStateInterval);
+      this.checkTransactionsStateInterval = undefined;
+    }
 
     if (this.checkRegistrationInterval) {
       clearInterval(this.checkRegistrationInterval);
