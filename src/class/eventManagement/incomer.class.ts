@@ -197,7 +197,11 @@ export class Incomer <
 
         await Promise.race([
           Promise.all(transactions.map((transaction) => {
-            if (transaction.redisMetadata.mainTransaction && !transaction.redisMetadata.published) {
+            if (
+              transaction.redisMetadata.mainTransaction &&
+              !transaction.redisMetadata.published &&
+              transaction.aliveSince + this.maxPingInterval < Date.now()
+            ) {
               return this.incomerChannel.publish({
                 ...transaction,
                 redisMetadata: {
