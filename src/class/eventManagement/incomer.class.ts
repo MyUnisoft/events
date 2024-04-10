@@ -665,9 +665,12 @@ export class Incomer <
     const { data } = message;
 
     this.incomerChannelName = this.prefixedName + data.uuid;
-    this.providedUUID = data.uuid;
 
-    await this.subscriber.subscribe(this.incomerChannelName);
+    if (!this.providedUUID) {
+      await this.subscriber.subscribe(this.incomerChannelName);
+    }
+
+    this.providedUUID = data.uuid;
 
     this.incomerChannel = new Channel({
       name: this.providedUUID,
