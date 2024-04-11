@@ -21,6 +21,7 @@ import {
 import { InitHandler } from "./init.class";
 import { DispatcherStore } from "../store/dispatcher.class";
 import { PubSubHandler } from "./pubsub.class";
+import { StateManager } from "./state-manager.class";
 
 // CONSTANTS
 const kLoggerLevel = process.env.MYUNISOFT_EVENTS_SILENT_LOGGER;
@@ -176,12 +177,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> {
         JSON.stringify(parsedMessage[key]) : parsedMessage[key];
     }
 
-    await eventStream.instance.push(parsedMessage, {});
+    await eventStream.instance.push(parsedMessage, { metadata: randomUUID() });
   }
 }
 
 import timers from "node:timers/promises";
-import { StateManager } from "./state-manager.class";
 
 async function main() {
   await initRedis();
@@ -196,7 +196,7 @@ async function main() {
       eventsSubscribe: [
         {
           name: "accountingFolder",
-          horizontalScale: false,
+          horizontalScale: true,
           eventCallback: (message) => {
             console.log("Received event with custom callback: ", message);
           }

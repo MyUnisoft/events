@@ -33,7 +33,6 @@ export class IncomerStream {
       }
     }
 
-
     Object.assign(this, options);
   }
 

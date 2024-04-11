@@ -1,5 +1,6 @@
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
 
 // Import Third-party Dependencies
 import {
@@ -12,10 +13,11 @@ import { Logger } from "pino";
 
 // Import Internal Dependencies
 import { TransactionStore } from "../store/transaction.class";
-import { EventCast, EventSubscribe, Prefix } from "../../../../types";
+import { CallBackEventMessage, EventCast, EventSubscribe, Prefix } from "../../../../types";
 import { SharedConf } from "./dispatcher.class";
 import { DispatcherStore } from "../store/dispatcher.class";
 import { StateManager } from "./state-manager.class";
+import { RedisResponse } from "./init.class";
 
 // CONSTANTS
 const kDispatcherChannel = "dispatcher";
@@ -211,6 +213,8 @@ export class PubSubHandler {
 
     const streamsData: { streamKey: string; groupKey: string; consumerUUID: string; }[] = [];
     for (const unknownEvent of unknownEvents) {
+      const { horizontalScale } = unknownEvent;
+
       const streamKey = `${formattedPrefix}${unknownEvent.name}`;
 
       const stream = new Stream({
@@ -220,7 +224,7 @@ export class PubSubHandler {
 
       await stream.init();
 
-      const groupKey = `${formattedPrefix}${instanceName}-${consumerUUID}`;
+      const groupKey = `${formattedPrefix}${instanceName}${horizontalScale ? `-${consumerUUID}` : ""}`;
 
       await stream.createGroup(groupKey);
       // NOT HERE, THE GIVEN INSTANCE MUST BE THE ONE CREATING THE CONSUMER THROUGH INIT OF INTRAPERSONAL CLASS
@@ -239,10 +243,13 @@ export class PubSubHandler {
         frequency: 500
       });
 
-      if (eventsSubscribe.find((event) => streamKey.split("-").includes(event.name))) {
+      const relatedEvent = eventsSubscribe.find((event) => streamKey.split("-").includes(event.name));
+      if (relatedEvent) {
+        const { horizontalScale } = relatedEvent;
+
         await stream.init();
 
-        const groupKey = `${instanceName}-${consumerUUID}`;
+        const groupKey = `${instanceName}${horizontalScale ? `-${consumerUUID}` : ""}`;
 
         await stream.createGroup(groupKey);
         await stream.createConsumer(groupKey, consumerUUID);
@@ -361,6 +368,59 @@ export class PubSubHandler {
         (new Stream({ streamName: this.dispatcherInitStream.streamName, frequency: 0 }))
           .createConsumer(this.dispatcherInitStream.groupName, this.consumerUUID)
       ]);
+
+      for (const streamData of data.streamsData) {
+        const eventStream = new Interpersonal({
+          count: 100,
+          lastId: ">",
+          frequency: 0,
+          claimOptions: {
+            idleTime: 5_000
+          },
+          streamName: streamData.streamKey,
+          groupName: streamData.groupKey,
+          consumerName: streamData.consumerUUID
+        });
+
+        await eventStream.init();
+
+        const eventReadable = Readable.from(eventStream[Symbol.asyncIterator]());
+
+        eventReadable.on("readable", async() => {
+          const redisEvents = eventReadable.read() as RedisResponse<any>;
+
+          for (const redisEvent of redisEvents) {
+            const { id, data: eventData } = redisEvent;
+
+            const parsedEventData = JSON.parse(eventData.data);
+            const fullyParsedData = Object.assign({}, parsedEventData);
+
+            for (const key of Object.keys(parsedEventData)) {
+              try {
+                fullyParsedData[key] = JSON.parse(parsedEventData[key]);
+              }
+              catch {
+                continue;
+              }
+            }
+
+            const event = {
+              ...eventData,
+              data: fullyParsedData
+            };
+
+            console.log(`EventId: ${id}`);
+
+            try {
+              console.log("HEHEHEHER", event);
+              eventStream.claimEntry(id);
+            }
+            catch (error) {
+              this.logger.error({ error }, "Unable to handle the Event with id... (Inject custom ID on publish)");
+            }
+          }
+        });
+      }
 
       this.logger.info(`Dispatcher Approved width uuid: ${this.consumerUUID}`);
     }

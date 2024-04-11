@@ -140,7 +140,6 @@ export class InitHandler<
       return;
     });
 
-
     await this.pubsubHandler.init();
 
     await this.pushInitStreamEntry();
@@ -187,16 +186,15 @@ export class InitHandler<
           .some((group) => group.name === name);
 
         if (!subscriberGroupExist) {
-          await eventStream.createGroup(name);
+          await eventStream.createGroup(`${name}${horizontalScale ? `-${randomUUID()}` : ""}`);
         }
 
         if (horizontalScale) {
           const existingGroups = (await eventStream.getGroupsData())
             .filter((group) => group.name.startsWith(`${name}-`));
 
-          for (let index = existingGroups.length; index < replicas - 1; index++) {
-            const groupName = `${name}-${randomUUID()}`;
-            await eventStream.createGroup(groupName);
+          for (let index = existingGroups.length; index < replicas; index++) {
+            await eventStream.createGroup(`${name}-${randomUUID()}`);
           }
         }
       }
@@ -205,7 +203,7 @@ export class InitHandler<
 
   private async initDispatcherGroup() {
     for (const subEvent of this.eventsSubscribe) {
-      const { name, eventCallback } = subEvent;
+      const { name, horizontalScale, eventCallback } = subEvent;
 
       const streamName = this.formattedPrefix + name;
 
@@ -217,7 +215,7 @@ export class InitHandler<
           idleTime: 5_000
         },
         streamName,
-        groupName: this.instanceName,
+        groupName: `${this.instanceName}${horizontalScale ? `-${this.consumerUUID}` : ""}`,
         consumerName: this.consumerUUID
       });
 
