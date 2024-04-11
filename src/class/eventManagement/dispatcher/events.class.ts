@@ -4,8 +4,6 @@ import { EventEmitter } from "node:events";
 // Import Third-party Dependencies
 import { Channel } from "@myunisoft/redis";
 import Ajv, { ValidateFunction } from "ajv";
-import { Logger } from "pino";
-import { match } from "ts-pattern";
 
 // Import Internal Dependencies
 import { TransactionStore } from "../../store/transaction.class";
@@ -26,6 +24,7 @@ import {
   concatErrors,
   defaultStandardLog
 } from "../../../utils";
+import { PartialLogger } from "../dispatcher.class";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -100,7 +99,7 @@ export interface EventsHandlerOptions<T extends GenericEvent> {
     customValidationCbFn?: customValidationCbFn<T>;
   };
   standardLog?: StandardLog<T>;
-  parentLogger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
+  parentLogger: PartialLogger;
 }
 
 export class EventsHandler<T extends GenericEvent> extends EventEmitter {
@@ -110,7 +109,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   #eventsValidationFn: eventsValidationFn<T>;
   #customValidationCbFn: customValidationCbFn<T>;
 
-  #logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
+  #logger: PartialLogger;
   #standardLogFn: StandardLog<T>;
 
   constructor(options: EventsHandlerOptions<T>) {
@@ -118,7 +117,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     Object.assign(this, { ...options });
 
-    this.#logger = options.parentLogger.child({ module: "events-handler" });
+    this.#logger = options.parentLogger.child({ module: "events-handler" }) || options.parentLogger;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
 
     this.#eventsValidationFn = options.eventsValidation?.eventsValidationFn ?? new Map();

@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 // Import Third-party Dependencies
-import { Logger } from "pino";
 import { Channel } from "@myunisoft/redis";
 
 // Import Internal Dependencies
@@ -17,7 +16,7 @@ import {
   IncomerChannelMessages
 } from "../../../types";
 import { IncomerChannelHandler } from "./incomer-channel.class";
-import { DefaultOptions, SharedOptions } from "../dispatcher.class";
+import { DefaultOptions, PartialLogger, SharedOptions } from "../dispatcher.class";
 import { StandardLog, StandardLogOpts, defaultStandardLog } from "../../../utils";
 import { EventsHandler } from "./events.class";
 
@@ -86,13 +85,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
   private incomerChannelHandler: IncomerChannelHandler<T>;
   private eventsHandler: EventsHandler<T>;
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
+  private logger: PartialLogger;
   private standardLogFn: StandardLog<T>;
 
   constructor(opts: TransactionHandlerOptions<T>) {
     Object.assign(this, opts);
 
-    this.logger = opts.parentLogger.child({ module: "transaction-handler" });
+    this.logger = opts.parentLogger.child({ module: "transaction-handler" }) || opts.parentLogger;
     this.standardLogFn = opts.standardLog ?? defaultStandardLog;
   }
 

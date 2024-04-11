@@ -9,7 +9,7 @@ import {
   Channel,
   getRedis
 } from "@myunisoft/redis";
-import { Logger, pino } from "pino";
+import { pino } from "pino";
 
 // Import Internal Dependencies
 import {
@@ -53,7 +53,7 @@ export const PING_INTERVAL = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHE
   Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL);
 
 export type DefaultOptions<T extends GenericEvent> = {
-  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
+  logger?: PartialLogger;
   standardLog?: StandardLog<T>;
   pingInterval?: number;
   idleTime?: number;
@@ -67,7 +67,7 @@ export type SharedOptions<T extends GenericEvent> = {
   incomerStore: IncomerStore;
   privateUUID: string;
   formattedPrefix: string;
-  parentLogger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
+  parentLogger: PartialLogger;
 }
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOptions<T> & {
@@ -86,6 +86,15 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
 };
 
 export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" | "ABORT_TAKING_LEAD" | "ABORT_TAKING_LEAD_BACK" };
+
+type anyFn = (...args: any[]) => any;
+
+export type PartialLogger = Record<string, any> & {
+  info: anyFn;
+  warn: anyFn;
+  debug: anyFn;
+  error: anyFn;
+}
 
 export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
   readonly type = "dispatcher";
@@ -110,7 +119,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private transactionHandler: TransactionHandler;
 
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
+  private logger: PartialLogger;
   private incomerChannelHandler: IncomerChannelHandler<T>;
   private channelsToUnsubscribe = new Set<string>();
 

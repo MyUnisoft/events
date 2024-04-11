@@ -1,12 +1,12 @@
 // Import Third-party Dependencies
 import { Channel, getRedis } from "@myunisoft/redis";
-import { Logger } from "pino";
 
 // Import Internal Dependencies
 import { DistributedEventMessage, GenericEvent, IncomerChannelMessages } from "../../../types";
+import { PartialLogger } from "../dispatcher.class";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
-  logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "error">;
+  logger: PartialLogger;
   channels?: Map<string, Channel<DistributedEventMessage<T>>>;
 }
 

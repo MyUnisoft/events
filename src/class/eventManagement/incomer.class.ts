@@ -40,7 +40,7 @@ import {
   handleLoggerMode
 } from "../../utils/index";
 import { Externals } from "./externals.class";
-import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents } from "./dispatcher.class";
+import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents, PartialLogger } from "./dispatcher.class";
 import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
 
 // CONSTANTS
@@ -78,7 +78,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
   prefix?: Prefix;
-  logger?: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
+  logger?: PartialLogger;
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
@@ -114,7 +114,7 @@ export class Incomer <
   private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
   private dispatcherChannelName: string;
   private providedUUID: string;
-  private logger: Partial<Logger> & Pick<Logger, "info" | "warn" | "debug" | "error">;
+  private logger: PartialLogger;
   private incomerChannelName: string;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
