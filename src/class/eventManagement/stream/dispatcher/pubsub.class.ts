@@ -67,18 +67,7 @@ export class PubSubHandler {
       name: "dispatcher",
       prefix: this.prefix
     });
-  }
 
-  get redis() {
-    return getRedis();
-  }
-
-  get subscriber() {
-    return getRedis("subscriber");
-  }
-
-  public async init() {
-    await this.subscriber.subscribe(this.formattedPrefix + kDispatcherChannel);
     this.subscriber.on("message", async(channel, message) => {
       if (!message) {
         return;
@@ -119,6 +108,18 @@ export class PubSubHandler {
         this.logger.error(error);
       }
     });
+  }
+
+  get redis() {
+    return getRedis();
+  }
+
+  get subscriber() {
+    return getRedis("subscriber");
+  }
+
+  public async init() {
+    await this.subscriber.subscribe(this.formattedPrefix + kDispatcherChannel);
   }
 
   public async dispatcherRegistration() {
@@ -226,7 +227,6 @@ export class PubSubHandler {
 
       const groupKey = `${formattedPrefix}${instanceName}${horizontalScale ? `-${consumerUUID}` : ""}`;
 
-      await stream.createGroup(groupKey);
       // NOT HERE, THE GIVEN INSTANCE MUST BE THE ONE CREATING THE CONSUMER THROUGH INIT OF INTRAPERSONAL CLASS
       // await this.redis.xgroup("CREATECONSUMER", streamKey, groupKey, consumerUUID);
 
@@ -250,9 +250,6 @@ export class PubSubHandler {
         await stream.init();
 
         const groupKey = `${instanceName}${horizontalScale ? `-${consumerUUID}` : ""}`;
-
-        await stream.createGroup(groupKey);
-        await stream.createConsumer(groupKey, consumerUUID);
 
         streamsData.push({
           streamKey,
@@ -364,16 +361,14 @@ export class PubSubHandler {
             resolved: true
           }
         }),
-        this.dispatcherInitStream.deleteConsumer(),
-        (new Stream({ streamName: this.dispatcherInitStream.streamName, frequency: 0 }))
-          .createConsumer(this.dispatcherInitStream.groupName, this.consumerUUID)
+        this.dispatcherInitStream.deleteConsumer()
       ]);
 
       for (const streamData of data.streamsData) {
         const eventStream = new Interpersonal({
           count: 100,
           lastId: ">",
-          frequency: 0,
+          frequency: 1_000,
           claimOptions: {
             idleTime: 5_000
           },
@@ -381,8 +376,6 @@ export class PubSubHandler {
           groupName: streamData.groupKey,
           consumerName: streamData.consumerUUID
         });
-
-        await eventStream.init();
 
         const eventReadable = Readable.from(eventStream[Symbol.asyncIterator]());
 
@@ -409,23 +402,23 @@ export class PubSubHandler {
               data: fullyParsedData
             };
 
-            console.log(`EventId: ${id}`);
-
             try {
               console.log("HEHEHEHER", event);
               eventStream.claimEntry(id);
             }
             catch (error) {
-              this.logger.error({ error }, "Unable to handle the Event with id... (Inject custom ID on publish)");
+              this.logger.error({ error: error.stack }, "Unable to handle the Event with id... (Inject custom ID on publish)");
             }
           }
         });
+
+        await eventStream.init();
       }
 
       this.logger.info(`Dispatcher Approved width uuid: ${this.consumerUUID}`);
     }
     catch (error) {
-      this.logger.error({ error }, `Unable to handle approvement next to the transaction: ${transactionId}`);
+      this.logger.error({ error: error.stack }, `Unable to handle approvement next to the transaction: ${transactionId}`);
     }
   }
 }
