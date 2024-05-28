@@ -184,7 +184,7 @@ export interface PushNotification {
   scope: PushNotificationScope;
   operation: PushNotificationOperation;
   data: {
-    type: "room_deleted" | "message_created" | "message_updated" | "unread_message_created";
+    type: PushNotificationType;
     data: Record<string, any>;
   }
 }
