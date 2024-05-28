@@ -7,3 +7,4 @@ export { adminMessage } from "./adminMessage.json";
 export { thirdParty } from "./thirdParty.json";
 export { accountingEntryLettering } from "./accountingEntryLettering.json";
 export { cloudDocument } from "./cloudDocument.json";
+export { pushNotification } from "./pushNotification.json";

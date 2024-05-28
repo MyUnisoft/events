@@ -1,0 +1,22 @@
+{
+  "pushNotification": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "room_deleted",
+            "message_created",
+            "message_updated",
+            "unread_message_created"
+          ]
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "required": ["type", "data"],
+      "additionalProperties": false
+    }
+  }
+}

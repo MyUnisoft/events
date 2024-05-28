@@ -171,6 +171,24 @@ export interface CloudDocument {
   }
 }
 
+export type PushNotificationOperation = Operation[
+  keyof Pick<Operation, "create">
+];
+
+export type PushNotificationScope = Scope;
+
+export type PushNotificationType = "room_deleted" | "message_created" | "message_updated" | "unread_message_created";
+
+export interface PushNotification {
+  name: "pushNotification";
+  scope: PushNotificationScope;
+  operation: PushNotificationOperation;
+  data: {
+    type: "room_deleted" | "message_created" | "message_updated" | "unread_message_created";
+    data: Record<string, any>;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -181,4 +199,5 @@ export interface Events {
   thirdParty: ThirdParty;
   accountingEntryLettering: AccountingEntryLettering;
   cloudDocument: CloudDocument;
+  pushNotification: PushNotification;
 }
