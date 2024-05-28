@@ -187,6 +187,26 @@ describe("eventsValidationFn", () => {
       expect(cloudDocument.has("void")).toBe(false);
     });
   });
+
+  describe("PushNotification", () => {
+    let pushNotification;
+
+    beforeAll(() => {
+      expect(eventsValidationFn.has("pushNotification")).toBe(true);
+
+      pushNotification = eventsValidationFn.get("pushNotification");
+    });
+
+    test("pushNotification should have a validation function for \"create\"", () => {
+      expect(pushNotification.has("create")).toBe(true);
+    });
+
+    test("pushNotification should not have a validation function for \"delete\", \"void\", \"update\"", () => {
+      expect(pushNotification.has("delete")).toBe(false);
+      expect(pushNotification.has("void")).toBe(false);
+      expect(pushNotification.has("update")).toBe(false);
+    });
+  });
 });
 
 describe("defaultStandardLog", () => {
