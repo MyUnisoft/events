@@ -8,7 +8,7 @@ import {
   getRedis,
   Channel
 } from "@myunisoft/redis";
-import { Logger, pino } from "pino";
+import { pino } from "pino";
 import { P, match } from "ts-pattern";
 import { ValidateFunction } from "ajv";
 
