@@ -643,7 +643,6 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       this.backupIncomerTransactionStore.getTransactions()
     ]);
 
-
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();
     for (const incomer of incomers) {

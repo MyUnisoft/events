@@ -263,30 +263,26 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
       });
 
-    this.resolveTransactionsInterval = setInterval(async() => {
+    this.resolveTransactionsInterval = setInterval(() => {
       if (!this.isWorking) {
         return;
       }
 
-      try {
-        await this.transactionHandler.resolveTransactions();
-      }
-      catch (error) {
-        this.logger.error({ error: error.stack }, "Failed at resolving transactions");
-      }
+      new Promise(() => {
+        this.transactionHandler.resolveTransactions()
+          .catch((error) => this.logger.error({ error: error.stack }, "Failed at resolving transactions"));
+      });
     }, options.checkTransactionInterval ?? RESOLVE_TRANSACTION_INTERVAL).unref();
 
-    this.pingIntervalTimer = setInterval(async() => {
-      try {
-        if (!this.isWorking) {
-          return;
-        }
+    this.pingIntervalTimer = setInterval(() => {
+      if (!this.isWorking) {
+        return;
+      }
 
-        await this.ping();
-      }
-      catch (error) {
-        this.logger.error({ error: error.stack }, "Failed sending pings");
-      }
+      new Promise(() => {
+        this.ping()
+          .catch((error) => this.logger.error({ error: error.stack }, "Failed sending pings"));
+      });
     }, this.pingInterval).unref();
 
     this.checkLastActivityIntervalTimer = setInterval(async() => {
