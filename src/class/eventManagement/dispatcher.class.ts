@@ -121,7 +121,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private logger: PartialLogger;
   private incomerChannelHandler: IncomerChannelHandler<T>;
-  private channelsToUnsubscribe = new Set<string>();
+  private activeChannels = new Set<string>();
 
   private pingInterval: number;
   private pingIntervalTimer: NodeJS.Timer;
@@ -347,7 +347,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await this.subscriber.unsubscribe(
       this.dispatcherChannelName,
       ...this.incomerChannelHandler.channels.keys(),
-      ...this.channelsToUnsubscribe.values()
+      ...this.activeChannels.values()
     );
 
     this.updateState(false);
@@ -649,7 +649,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       toHandle.push(Promise.all([
         this.incomerStore.deleteIncomer(inactive.providedUUID),
         this.transactionHandler.resolveInactiveIncomerTransactions(inactive),
-        this.channelsToUnsubscribe.add(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
+        this.activeChannels.add(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
       ]));
     }
 
@@ -853,36 +853,53 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       throw new Error("No related transaction found next to register event");
     }
 
-    // Get Incomers Tree
     const incomers = await this.incomerStore.getIncomers();
-
-    // Avoid multiple init from a same instance of a incomer
-    for (const incomer of incomers) {
-      if (incomer.baseUUID === origin) {
-        await this.dispatcherTransactionStore.deleteTransaction(transactionId);
-
-        throw new Error("Forbidden multiple registration for a same instance");
-      }
-    }
-
-    // Update the tree
     const now = Date.now();
 
-    const incomer = Object.assign({}, {
-      ...data,
-      isDispatcherActiveInstance: origin === this.selfProvidedUUID,
-      baseUUID: origin,
-      lastActivity: now,
-      aliveSince: now,
-      prefix
-    });
+    let providedUUID;
+    if (data.providedUUID) {
+      providedUUID = data.providedUUID;
 
-    const providedUUID = await this.incomerStore.setIncomer(incomer, data.providedUUID);
+      const relatedIncomer = [...incomers.values()]
+        .find((incomer) => incomer.baseUUID === origin && incomer.providedUUID === providedUUID);
 
-    // Subscribe to the exclusive service channel
+      if (!relatedIncomer) {
+        const incomer = Object.assign({}, {
+          ...data,
+          isDispatcherActiveInstance: origin === this.selfProvidedUUID,
+          baseUUID: origin,
+          lastActivity: now,
+          aliveSince: now,
+          prefix
+        });
+
+        await this.incomerStore.setIncomer(incomer, data.providedUUID);
+      }
+    }
+    else {
+      for (const incomer of incomers) {
+        if (incomer.baseUUID === origin) {
+          await this.dispatcherTransactionStore.deleteTransaction(transactionId);
+
+          throw new Error("Forbidden multiple registration for a same instance");
+        }
+      }
+
+      const incomer = Object.assign({}, {
+        ...data,
+        isDispatcherActiveInstance: origin === this.selfProvidedUUID,
+        baseUUID: origin,
+        lastActivity: now,
+        aliveSince: now,
+        prefix
+      });
+
+      providedUUID = await this.incomerStore.setIncomer(incomer);
+    }
+
     this.incomerChannelHandler.set({ uuid: providedUUID, prefix });
 
-    if (!this.channelsToUnsubscribe.has(`${prefix ? `${prefix}-` : ""}${providedUUID}`)) {
+    if (!this.activeChannels.has(`${prefix ? `${prefix}-` : ""}${providedUUID}`)) {
       await this.subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
     }
 
@@ -900,7 +917,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
     };
 
-    // Approve the service & send him info so he can use the dedicated channel
     await this.eventsHandler.dispatch({
       channel: this.dispatcherChannel as Channel<DispatcherChannelMessages["DispatcherMessages"]>,
       store: this.dispatcherTransactionStore,
