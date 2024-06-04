@@ -268,10 +268,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         return;
       }
 
-      new Promise(() => {
-        this.transactionHandler.resolveTransactions()
-          .catch((error) => this.logger.error({ error: error.stack }, "Failed at resolving transactions"));
-      });
+      this.transactionHandler.resolveTransactions()
+        .catch((error) => this.logger.error({ error: error.stack }, "failed at resolving transactions"));
     }, options.checkTransactionInterval ?? RESOLVE_TRANSACTION_INTERVAL).unref();
 
     this.pingIntervalTimer = setInterval(() => {
@@ -279,15 +277,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         return;
       }
 
-      new Promise(() => {
-        this.ping()
-          .catch((error) => this.logger.error({ error: error.stack }, "Failed sending pings"));
-      });
+      this.ping()
+        .catch((error) => this.logger.error({ error: error.stack }, "failed sending pings"));
     }, this.pingInterval).unref();
 
-    this.checkLastActivityIntervalTimer = setInterval(async() => {
-      await this.checkLastActivityIntervalFn();
-    }, this.checkLastActivityInterval).unref();
+    this.checkLastActivityIntervalTimer = setInterval(() => this.checkLastActivity()
+      .catch((error) => this.logger.error({ error: error.stack }, "failed to check activity")),
+    this.checkLastActivityInterval).unref();
   }
 
   get redis() {
@@ -311,9 +307,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         incomer.isDispatcherActiveInstance));
 
     if (activeDispatcher && this.incomerStore.isActive(activeDispatcher)) {
-      this.checkDispatcherStateInterval = setInterval(
-        async() => await this.takeLeadBack(), this.pingInterval
-      ).unref();
+      this.checkDispatcherStateInterval = setInterval(() => this.takeLeadBack()
+        .catch((error) => this.logger.error({ error: error.stack }, "failed while taking lead back")),
+      this.pingInterval).unref();
 
       return;
     }
@@ -419,7 +415,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       this.logger.warn("Dispatcher Timed out on taking lead");
 
-      this.checkDispatcherStateInterval = setInterval(async() => await this.takeLeadBack(), this.pingInterval).unref();
+      this.checkDispatcherStateInterval = setInterval(() => this.takeLeadBack()
+        .catch((error) => this.logger.error({ error: error.stack }, "Fail while taking lead back")),
+      this.pingInterval).unref();
     }
     catch {
       await this.dispatcherChannel.publish({
@@ -501,19 +499,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         return;
       }
 
-      this.resetCheckLastActivityTimeout = setTimeout(async() => {
-        try {
-          await this.transactionHandler.resolveTransactions();
-
+      this.resetCheckLastActivityTimeout = setTimeout(() => this.transactionHandler.resolveTransactions()
+        .then(() => {
           clearInterval(this.checkLastActivityIntervalTimer);
-          this.checkLastActivityIntervalTimer = setInterval(async() => {
-            await this.checkLastActivityIntervalFn();
-          }, this.checkLastActivityInterval).unref();
-        }
-        catch (error) {
-          this.logger.error({ error: error.stack }, "failed at resolving transaction while taking back the lead");
-        }
-      }, this.resolveTransactionInterval).unref();
+          this.checkLastActivityIntervalTimer = setInterval(() => this.checkLastActivity()
+            .catch((error) => this.logger.error({ error: error.stack }, "failed while checking activity")),
+          this.checkLastActivityInterval).unref();
+        })
+        .catch(
+          (error) => this.logger.error({ error: error.stack }, "failed at resolving transaction while taking back the lead")
+        ), this.resolveTransactionInterval).unref();
 
       if (this.checkDispatcherStateInterval) {
         clearInterval(this.checkDispatcherStateInterval);
@@ -534,59 +529,43 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     return Math.floor((Math.random() * (this.maxTimeout - this.minTimeout)) + this.minTimeout);
   }
 
-  private async checkLastActivityIntervalFn() {
+  private async checkLastActivity() {
     if (!this.isWorking) {
       return;
     }
 
-    let inactiveIncomers;
+    const inactiveIncomers = await this.incomerStore.getNonActives();
 
-    try {
-      inactiveIncomers = await this.incomerStore.getNonActives();
-    }
-    catch (error) {
-      this.logger.error({ error: error.stack }, "Failed while checking last activity");
+    const toResolve = [];
 
-      return;
-    }
+    let index = 0;
+    for (const inactive of inactiveIncomers) {
+      const transactionStore = new TransactionStore({
+        prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
+        instance: "incomer"
+      });
 
-    try {
-      const toResolve = [];
+      const transactions = await transactionStore.getTransactions();
+      const recentPingTransactionKeys = [...(Object.entries(transactions) as [string, Transaction<"incomer">][])
+        .filter(([, transaction]) => transaction.name === "PING" &&
+          Date.now() < (Number(transaction.aliveSince) + Number(this.idleTime)))]
+        .map(([transactionId]) => transactionId);
 
-      let index = 0;
-      for (const inactive of inactiveIncomers) {
-        const transactionStore = new TransactionStore({
-          prefix: `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`,
-          instance: "incomer"
-        });
+      if (recentPingTransactionKeys.length > 0) {
+        toResolve.push(Promise.all([
+          this.updateIncomerState(inactive.providedUUID),
+          transactionStore.deleteTransactions(recentPingTransactionKeys)
+        ]));
 
-        const transactions = await transactionStore.getTransactions();
-        const recentPingTransactionKeys = [...(Object.entries(transactions) as [string, Transaction<"incomer">][])
-          .filter(([, transaction]) => transaction.name === "PING" &&
-            Date.now() < (Number(transaction.aliveSince) + Number(this.idleTime)))]
-          .map(([transactionId]) => transactionId);
-
-        if (recentPingTransactionKeys.length > 0) {
-          toResolve.push(Promise.all([
-            this.updateIncomerState(inactive.providedUUID),
-            transactionStore.deleteTransactions(recentPingTransactionKeys)
-          ]));
-
-          inactiveIncomers.splice(index, 1);
-        }
-
-        index++;
+        inactiveIncomers.splice(index, 1);
       }
 
-      await Promise.all(toResolve);
-
-      await this.removeNonActives(inactiveIncomers);
+      index++;
     }
-    catch (error) {
-      const uuids = [...inactiveIncomers.map((incomer) => incomer?.providedUUID ?? incomer?.baseUUID)].join(",");
 
-      this.logger.error({ error: error.stack }, `[${uuids}], Failed to remove nonactives incomers`);
-    }
+    await Promise.all(toResolve);
+
+    await this.removeNonActives(inactiveIncomers);
   }
 
   private async ping() {
