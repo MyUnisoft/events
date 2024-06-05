@@ -187,39 +187,34 @@ export class Incomer <
 
     this.dispatcherConnectionState = true;
 
-    try {
-      const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
+    const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
 
-      for await (const transactionKeys of store.transactionLazyFetch()) {
-        const transactions = await Promise.all(transactionKeys.map(
-          (transactionKey) => store.getValue(transactionKey)
-        ));
+    for await (const transactionKeys of store.transactionLazyFetch()) {
+      const transactions = await Promise.all(transactionKeys.map(
+        (transactionKey) => store.getValue(transactionKey)
+      ));
 
-        await Promise.race([
-          Promise.all(transactions.map((transaction) => {
-            if (
-              transaction.redisMetadata.mainTransaction &&
-              !transaction.redisMetadata.published &&
-              transaction.aliveSince + this.maxPingInterval < Date.now()
-            ) {
-              return this.incomerChannel.publish({
-                ...transaction,
-                redisMetadata: {
-                  transactionId: transaction.redisMetadata.transactionId,
-                  origin: transaction.redisMetadata.origin,
-                  prefix: transaction.redisMetadata.prefix
-                }
-              } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
-            }
+      await Promise.race([
+        Promise.all(transactions.map((transaction) => {
+          if (
+            transaction.redisMetadata.mainTransaction &&
+            !transaction.redisMetadata.published &&
+            transaction.aliveSince + this.maxPingInterval < Date.now()
+          ) {
+            return this.incomerChannel.publish({
+              ...transaction,
+              redisMetadata: {
+                transactionId: transaction.redisMetadata.transactionId,
+                origin: transaction.redisMetadata.origin,
+                prefix: transaction.redisMetadata.prefix
+              }
+            } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
+          }
 
-            return void 0;
-          })),
-          new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
-        ]);
-      }
-    }
-    catch {
-      this.logger.warn("Failed while trying to publish events a new time");
+          return void 0;
+        })),
+        new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
+      ]);
     }
   }
 
@@ -274,29 +269,28 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.checkTransactionsStateInterval = setInterval(async() => {
+      this.checkTransactionsStateInterval = setInterval(() => {
         if (!this.lastPingDate || this.isDispatcherInstance) {
           return;
         }
 
-        await this.checkDispatcherState();
+        this.checkDispatcherState()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking dispatcher state"));
       }, this.maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
-      this.checkRegistrationInterval = setInterval(
-        async() => this.registrationIntervalCb(),
-        this.publishInterval * 2
-      ).unref();
+      this.checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
+        .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
+      this.publishInterval * 2).unref();
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch {
       this.logger.error("Failed to register in time.");
       this.dispatcherConnectionState = false;
 
-      this.checkRegistrationInterval = setInterval(
-        async() => this.registrationIntervalCb(),
-        this.publishInterval * 2
-      ).unref();
+      this.checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
+        .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
+      this.publishInterval * 2).unref();
 
       return;
     }
@@ -352,12 +346,13 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.checkTransactionsStateInterval = setInterval(async() => {
+      this.checkTransactionsStateInterval = setInterval(() => {
         if (!this.lastPingDate || this.isDispatcherInstance) {
           return;
         }
 
-        await this.checkDispatcherState();
+        this.checkDispatcherState()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking dispatcher state"));
       }, this.maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
