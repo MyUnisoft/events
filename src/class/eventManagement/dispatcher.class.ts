@@ -520,7 +520,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       this.logger.info(
-        `Dispatcher ${this.selfProvidedUUID} took lead back on ${dispatcherToRemove.baseUUID ?? dispatcherToRemove.providedUUID}`
+        // eslint-disable-next-line max-len
+        `Dispatcher ${this.selfProvidedUUID} took lead back on ${dispatcherToRemove ? dispatcherToRemove.baseUUID ?? dispatcherToRemove.providedUUID : ""}`
       );
     }
   }
