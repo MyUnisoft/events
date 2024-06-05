@@ -184,7 +184,7 @@ export class TransactionStore<
       aliveSince: Date.now()
     } as unknown as Transaction<T>;
 
-    this.setValue({ key: transactionKey, value: formattedTransaction });
+    await this.setValue({ key: transactionKey, value: formattedTransaction });
 
     return formattedTransaction;
   }
