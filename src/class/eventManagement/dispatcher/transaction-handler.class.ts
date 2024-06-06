@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 // Import Third-party Dependencies
 import { Channel } from "@myunisoft/redis";
+import { Mutex } from "@openally/mutex";
 
 // Import Internal Dependencies
 import {
@@ -88,6 +89,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   private logger: PartialLogger;
   private standardLogFn: StandardLog<T>;
 
+  private resolveTransactionsLock = new Mutex({ concurrency: 1 });
+
   constructor(opts: TransactionHandlerOptions<T>) {
     Object.assign(this, opts);
 
@@ -96,10 +99,17 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   }
 
   public async resolveTransactions() {
-    await this.handleBackupIncomerTransactions();
+    const free = await this.resolveTransactionsLock.acquire();
 
-    await this.resolveSpreadTransactions();
-    await this.resolveMainTransactions();
+    try {
+      await this.handleBackupIncomerTransactions();
+
+      await this.resolveSpreadTransactions();
+      await this.resolveMainTransactions();
+    }
+    finally {
+      free();
+    }
   }
 
   public async resolveInactiveIncomerTransactions(
@@ -420,6 +430,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       this.backupIncomerTransactionStore.getTransactions(),
       this.dispatcherTransactionStore.getTransactions()
     ]);
+
     const toResolve = [];
 
     for (const [backupTransactionId, backupIncomerTransaction] of backupIncomerTransactions.entries()) {
@@ -537,14 +548,15 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   }
 
   private async resolveSpreadTransactions() {
-    const [incomers, dispatcherTransactions, backupIncomerTransactions] = await Promise.all([
+    const [incomers, backupIncomerTransactions, dispatcherTransactions] = await Promise.all([
       this.incomerStore.getIncomers(),
-      this.dispatcherTransactionStore.getTransactions(),
-      this.backupIncomerTransactionStore.getTransactions()
+      this.backupIncomerTransactionStore.getTransactions(),
+      this.dispatcherTransactionStore.getTransactions()
     ]);
 
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();
+
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
       const transactionRecipient = dispatcherTransaction.redisMetadata.to;
 
@@ -637,14 +649,15 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   }
 
   private async resolveMainTransactions() {
-    const [incomers, dispatcherTransactions, backupIncomerTransactions] = await Promise.all([
+    const [incomers, backupIncomerTransactions, dispatcherTransactions] = await Promise.all([
       this.incomerStore.getIncomers(),
-      this.dispatcherTransactionStore.getTransactions(),
-      this.backupIncomerTransactionStore.getTransactions()
+      this.backupIncomerTransactionStore.getTransactions(),
+      this.dispatcherTransactionStore.getTransactions()
     ]);
 
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();
+
     for (const incomer of incomers) {
       const incomerStore = new TransactionStore({
         prefix: `${incomer.prefix ? `${incomer.prefix}-` : ""}${incomer.providedUUID}`,
