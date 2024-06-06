@@ -556,10 +556,10 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     const incomerStateToUpdate = new Set<string>();
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
-      const transactionRecipient = dispatcherTransaction.redisMetadata.to;
+      const relatedIncomer = [...incomers].find((incomer) => incomer.providedUUID === dispatcherTransaction.redisMetadata.to ||
+        incomer.baseUUID === dispatcherTransaction.redisMetadata.to);
 
-      const relatedIncomer = [...incomers].find((incomer) => incomer.providedUUID === transactionRecipient ||
-        incomer.baseUUID === transactionRecipient);
+      const transactionRecipient = relatedIncomer ? relatedIncomer.providedUUID : dispatcherTransaction.redisMetadata.to;
 
       const [relatedBackupIncomerTransactionId, relatedBackupIncomerTransaction] = [...backupIncomerTransactions.entries()]
         .find(([__, incomerTransaction]) => incomerTransaction.redisMetadata.relatedTransaction === dispatcherTransactionId) ||
@@ -594,49 +594,53 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
       const relatedIncomerTransactions = await relatedIncomerTransactionStore.getTransactions();
 
-      const [relatedIncomerTransactionId, relatedIncomerTransaction] = [...relatedIncomerTransactions.entries()]
-        .find(([__, incomerTransaction]) => incomerTransaction.redisMetadata.relatedTransaction === dispatcherTransactionId &&
+      const filteredIncomerTransactions = [...relatedIncomerTransactions.values()]
+        .filter((incomerTransaction) => incomerTransaction.redisMetadata.relatedTransaction === dispatcherTransactionId &&
           incomerTransaction.redisMetadata.resolved) ||
           [];
 
       // Event not resolved yet
-      if (!relatedIncomerTransactionId) {
+      if (filteredIncomerTransactions.length === 0) {
         continue;
       }
 
-      if (dispatcherTransaction.redisMetadata.mainTransaction) {
-        // Only in case of ping event
-        incomerStateToUpdate.add(relatedIncomerTransaction.redisMetadata.origin);
-        toResolve.push(Promise.all([
-          relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
-          this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
-        ]));
+      for (const filteredIncomerTransaction of filteredIncomerTransactions) {
+        const filteredIncomerTransactionId = filteredIncomerTransaction.redisMetadata.transactionId;
 
-        continue;
-      }
+        if (dispatcherTransaction.redisMetadata.mainTransaction) {
+          // Only in case of ping event
+          incomerStateToUpdate.add(filteredIncomerTransaction.redisMetadata.origin);
+          toResolve.push(Promise.all([
+            relatedIncomerTransactionStore.deleteTransaction(filteredIncomerTransactionId),
+            this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+          ]));
 
-      if (dispatcherTransaction.name === "APPROVEMENT") {
-        if (!relatedIncomerTransaction || !relatedIncomerTransaction.redisMetadata.resolved) {
           continue;
         }
 
+        if (dispatcherTransaction.name === "APPROVEMENT") {
+          if (!filteredIncomerTransaction || !filteredIncomerTransaction.redisMetadata.resolved) {
+            continue;
+          }
+
+          toResolve.push(Promise.all([
+            relatedIncomerTransactionStore.deleteTransaction(filteredIncomerTransactionId),
+            this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+          ]));
+
+          continue;
+        }
+
+        dispatcherTransaction.redisMetadata.resolved = true;
+        incomerStateToUpdate.add((filteredIncomerTransaction.redisMetadata as any).to);
         toResolve.push(Promise.all([
-          relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
-          this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+          relatedIncomerTransactionStore.deleteTransaction(filteredIncomerTransactionId),
+          this.dispatcherTransactionStore.updateTransaction(
+            dispatcherTransactionId,
+            dispatcherTransaction
+          )
         ]));
-
-        continue;
       }
-
-      dispatcherTransaction.redisMetadata.resolved = true;
-      incomerStateToUpdate.add((relatedIncomerTransaction.redisMetadata as any).to);
-      toResolve.push(Promise.all([
-        relatedIncomerTransactionStore.deleteTransaction(relatedIncomerTransactionId),
-        this.dispatcherTransactionStore.updateTransaction(
-          dispatcherTransactionId,
-          dispatcherTransaction
-        )
-      ]));
     }
 
     toResolve.push([...incomerStateToUpdate.values()].map(

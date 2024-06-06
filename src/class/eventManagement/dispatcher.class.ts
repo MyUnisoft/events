@@ -938,7 +938,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     else {
       for (const incomer of incomers) {
         if (incomer.baseUUID === origin) {
-          await this.dispatcherTransactionStore.deleteTransaction(transactionId);
+          await relatedTransactionStore.deleteTransaction(transactionId);
 
           throw new Error("Forbidden multiple registration for a same instance");
         }
@@ -982,7 +982,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       redisMetadata: {
         mainTransaction: false,
         relatedTransaction: transactionId,
-        eventTransactionId: null,
+        eventTransactionId: transactionId,
         resolved: false
       },
       event: event as any
