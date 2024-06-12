@@ -182,24 +182,25 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       });
 
       await concernedIncomer.initialize();
+    });
 
+    test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
       await concernedIncomer.publish(event);
 
       await timers.setTimeout(1_000);
 
       expect(handlerTransaction).toBeDefined();
 
+      await secondConcernedIncomer.initialize();
       await concernedIncomer.close();
 
+      jest.spyOn(dispatcher as any, "checkLastActivity").mockImplementation(async(opts: any) => {
+        // do nothing
+      });
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
+      secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
 
-      await secondConcernedIncomer.initialize();
-
-      await timers.setTimeout(10_000);
-    });
-
-    test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      await timers.setTimeout(18_000);
+      await timers.setTimeout(5_000);
 
       const mockCalls = mockedSetTransaction.mock.calls.flat();
 
