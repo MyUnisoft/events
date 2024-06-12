@@ -11,6 +11,7 @@ import {
 import { pino } from "pino";
 import { P, match } from "ts-pattern";
 import { ValidateFunction } from "ajv";
+import { Result } from "@openally/result";
 
 // Import Internal Dependencies
 import {
@@ -74,6 +75,8 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "APPROVEMENT";
 }
 
+type EventCallbackResponse = Result<"Resolved" | "NotResolved", string>;
+
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
@@ -86,7 +89,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
     eventsValidationFn?: eventsValidationFn<T>;
     customValidationCbFn?: customValidationCbFn<T>;
   };
-  eventCallback: (message: CallBackEventMessage<T>) => void;
+  eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
   dispatcherInactivityOptions?: {
     /* max interval between received ping before considering dispatcher off */
     maxPingInterval?: number;
@@ -102,7 +105,7 @@ export class Incomer <
 > extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
-  readonly eventCallback: (message: CallBackEventMessage<T>) => void;
+  readonly eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
 
   public dispatcherConnectionState = false;
   public baseUUID = randomUUID();
@@ -642,18 +645,23 @@ export class Incomer <
 
     const formattedTransaction = await store.setTransaction(transaction);
 
-    await Promise.all([
-      this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
-      store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-        ...formattedTransaction,
-        redisMetadata: {
-          ...formattedTransaction.redisMetadata,
-          resolved: true
-        }
-      } as Transaction<"incomer">)
-    ]);
+    const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
-    this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
+    await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+      ...formattedTransaction,
+      redisMetadata: {
+        ...formattedTransaction.redisMetadata,
+        resolved: true
+      }
+    } as Transaction<"incomer">);
+
+    if (callbackResult.ok) {
+      this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
+
+      return;
+    }
+
+    this.logger.info(this.standardLogFn(logData)(callbackResult.val));
   }
 
   private async handleApprovement(message: DispatcherApprovementMessage) {
