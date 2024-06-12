@@ -34,6 +34,7 @@
   "dependencies": {
     "@myunisoft/redis": "github:MyUnisoft/redis#v3.4.2",
     "@openally/mutex": "^1.0.0",
+    "@openally/result": "^1.2.1",
     "ajv": "^8.12.0",
     "pino-pretty": "^10.3.1",
     "ts-pattern": "^4.3.0"
