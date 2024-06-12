@@ -75,7 +75,7 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "APPROVEMENT";
 }
 
-type EventCallbackResponse = Result<"Resolved" | "NotResolved", string>;
+export type EventCallbackResponse = Result<"Resolved" | "NotResolved", string>;
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
@@ -647,21 +647,21 @@ export class Incomer <
 
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
-    await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-      ...formattedTransaction,
-      redisMetadata: {
-        ...formattedTransaction.redisMetadata,
-        resolved: true
-      }
-    } as Transaction<"incomer">);
-
     if (callbackResult.ok) {
+      await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+        ...formattedTransaction,
+        redisMetadata: {
+          ...formattedTransaction.redisMetadata,
+          resolved: true
+        }
+      } as Transaction<"incomer">);
+
       this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
 
       return;
     }
 
-    this.logger.info(this.standardLogFn(logData)(callbackResult.val));
+    this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${callbackResult.val}`));
   }
 
   private async handleApprovement(message: DispatcherApprovementMessage) {
