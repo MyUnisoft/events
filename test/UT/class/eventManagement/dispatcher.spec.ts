@@ -30,7 +30,7 @@ const mockedLoggerInfo = jest.spyOn(logger, "info");
 const mockedHandleDispatcherMessages = jest.spyOn(Dispatcher.prototype as any, "approveIncomer");
 const mockedHandleIncomerMessages = jest.spyOn(Dispatcher.prototype as any, "handleCustomEvents");
 const mockedPing = jest.spyOn(Dispatcher.prototype as any, "ping");
-const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivityIntervalFn");
+const mockedCheckLastActivity = jest.spyOn(Dispatcher.prototype as any, "checkLastActivity");
 const mockedHandleInactiveIncomer =  jest.spyOn(TransactionHandler.prototype, "resolveInactiveIncomerTransactions");
 
 const mockedSetTransaction = jest.spyOn(TransactionStore.prototype, "setTransaction");
