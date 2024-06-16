@@ -57,6 +57,9 @@ const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLI
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
 const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
+export const RESOLVED = Symbol("Resolved");
+export const UNRESOLVED = Symbol("Unresolved");
+
 type IncomerChannelEvents<
   T extends GenericEvent = GenericEvent
 > = { name: "PING"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
@@ -75,7 +78,7 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "APPROVEMENT";
 }
 
-export type EventCallbackResponse = Result<"Resolved" | "NotResolved", string>;
+export type EventCallbackResponse = Result<symbol, string>;
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
@@ -648,20 +651,22 @@ export class Incomer <
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
     if (callbackResult.ok) {
-      await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-        ...formattedTransaction,
-        redisMetadata: {
-          ...formattedTransaction.redisMetadata,
-          resolved: true
-        }
-      } as Transaction<"incomer">);
+      if (callbackResult.val === RESOLVED) {
+        await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+          ...formattedTransaction,
+          redisMetadata: {
+            ...formattedTransaction.redisMetadata,
+            resolved: true
+          }
+        } as Transaction<"incomer">);
 
-      this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
+        this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
 
-      return;
+        return;
+      }
     }
 
-    this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${callbackResult.val}`));
+    this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${String(callbackResult.val)}`));
   }
 
   private async handleApprovement(message: DispatcherApprovementMessage) {
