@@ -1,4 +1,7 @@
 /* eslint-disable max-lines */
+// Import Node.js Dependencies
+import { randomUUID } from "node:crypto";
+
 // Import Third-party Dependencies
 import { Channel } from "@myunisoft/redis";
 import { Mutex } from "@openally/mutex";
@@ -33,6 +36,12 @@ interface BackupSpreadTransactionsOptions {
   handlerIncomerTransactions: Transactions<"incomer">;
   inactiveIncomerTransactionStore: TransactionStore<"incomer">;
   incomers: Set<RegisteredIncomer>;
+}
+
+interface ResolveTransactions {
+  incomers: Set<RegisteredIncomer>;
+  backupIncomerTransactions: Transactions<"incomer">;
+  dispatcherTransactions: Transactions<"dispatcher">;
 }
 
 interface FindISOIncomerOptions {
@@ -102,10 +111,22 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     const free = await this.resolveTransactionsLock.acquire();
 
     try {
-      await this.handleBackupIncomerTransactions();
+      const [incomers, backupIncomerTransactions, dispatcherTransactions] = await Promise.all([
+        this.incomerStore.getIncomers(),
+        this.backupIncomerTransactionStore.getTransactions(),
+        this.dispatcherTransactionStore.getTransactions()
+      ]);
 
-      await this.resolveSpreadTransactions();
-      await this.resolveMainTransactions();
+      let options = {
+        incomers,
+        backupIncomerTransactions,
+        dispatcherTransactions
+      };
+
+      options = await this.handleBackupIncomerTransactions(options);
+
+      options = await this.resolveSpreadTransactions(options);
+      await this.resolveMainTransactions(options);
     }
     finally {
       free();
@@ -422,12 +443,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     )("Main transaction redistributed to an Incomer"));
   }
 
-  private async handleBackupIncomerTransactions() {
-    const [incomers, backupIncomerTransactions, dispatcherTransactions] = await Promise.all([
-      this.incomerStore.getIncomers(),
-      this.backupIncomerTransactionStore.getTransactions(),
-      this.dispatcherTransactionStore.getTransactions()
-    ]);
+  private async handleBackupIncomerTransactions(options: ResolveTransactions) {
+    const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
 
     const toResolve = [];
 
@@ -460,6 +477,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
           this.backupIncomerTransactionStore.deleteTransaction(backupTransactionId)
         );
 
+        backupIncomerTransactions.delete(backupTransactionId);
+
         continue;
       }
 
@@ -490,28 +509,44 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
           const concernedIncomerChannel = this.incomerChannelHandler.get(providedUUID) ??
             this.incomerChannelHandler.set({ uuid: providedUUID, prefix });
 
+          const dispatcherTransactionUUID = randomUUID();
+          const event = {
+            ...backupIncomerTransaction as IncomerHandlerTransaction["incomerDistributedEventTransaction"],
+            redisMetadata: {
+              ...backupIncomerTransaction.redisMetadata,
+              origin: this.privateUUID,
+              to: isoListenerIncomer.providedUUID
+            }
+          } as any;
+
+          const redisMetadata = {
+            mainTransaction: backupIncomerTransaction.redisMetadata.mainTransaction,
+            relatedTransaction: backupIncomerTransaction.redisMetadata.relatedTransaction,
+            eventTransactionId: null,
+            resolved: backupIncomerTransaction.redisMetadata.resolved
+          };
+
           toResolve.push([
             this.eventsHandler.dispatch({
               channel: concernedIncomerChannel,
               store: this.dispatcherTransactionStore,
-              redisMetadata: {
-                mainTransaction: backupIncomerTransaction.redisMetadata.mainTransaction,
-                relatedTransaction: backupIncomerTransaction.redisMetadata.relatedTransaction,
-                eventTransactionId: null,
-                resolved: backupIncomerTransaction.redisMetadata.resolved
-              },
-              event: {
-                ...backupIncomerTransaction as IncomerHandlerTransaction["incomerDistributedEventTransaction"],
-                redisMetadata: {
-                  ...backupIncomerTransaction.redisMetadata,
-                  origin: this.privateUUID,
-                  to: isoListenerIncomer.providedUUID
-                }
-              } as any
+              redisMetadata,
+              event,
+              dispatcherTransactionUUID
             }),
             this.backupIncomerTransactionStore.deleteTransaction(backupTransactionId),
             this.dispatcherTransactionStore.deleteTransaction(relatedDispatcherTransactionId)
           ]);
+
+          dispatcherTransactions.set(dispatcherTransactionUUID, {
+            ...event,
+            redisMetadata: {
+              ...event.redisMetadata,
+              ...redisMetadata
+            }
+          });
+          backupIncomerTransactions.delete(backupTransactionId);
+          dispatcherTransactions.delete(relatedDispatcherTransactionId);
 
           continue;
         }
@@ -539,18 +574,24 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
           } as Transaction<"dispatcher">),
           this.backupIncomerTransactionStore.deleteTransaction(backupTransactionId)
         );
+
+        dispatcherTransactions.set(relatedDispatcherTransactionId, {
+          ...relatedDispatcherTransaction,
+          redisMetadata: {
+            ...relatedDispatcherTransaction.redisMetadata,
+            to: isoListenerIncomer.providedUUID
+          }
+        } as Transaction<"dispatcher">);
       }
     }
 
     await Promise.all(toResolve);
+
+    return { incomers, backupIncomerTransactions, dispatcherTransactions };
   }
 
-  private async resolveSpreadTransactions() {
-    const [incomers, backupIncomerTransactions, dispatcherTransactions] = await Promise.all([
-      this.incomerStore.getIncomers(),
-      this.backupIncomerTransactionStore.getTransactions(),
-      this.dispatcherTransactionStore.getTransactions()
-    ]);
+  private async resolveSpreadTransactions(options: ResolveTransactions) {
+    const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
 
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();
@@ -576,10 +617,12 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             )
           ]));
 
+          backupIncomerTransactions.delete(relatedBackupIncomerTransactionId);
+          backupIncomerTransactions.set(dispatcherTransactionId, dispatcherTransaction);
+
           continue;
         }
 
-        // Event not resolved yet
         continue;
       }
 
@@ -615,6 +658,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
           ]));
 
+          dispatcherTransactions.delete(dispatcherTransactionId);
+
           continue;
         }
 
@@ -628,6 +673,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
           ]));
 
+          dispatcherTransactions.delete(dispatcherTransactionId);
+
           continue;
         }
 
@@ -640,6 +687,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             dispatcherTransaction
           )
         ]));
+
+        dispatcherTransactions.set(dispatcherTransactionId, dispatcherTransaction);
       }
     }
 
@@ -648,14 +697,12 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     );
 
     await Promise.all(toResolve);
+
+    return { incomers, backupIncomerTransactions, dispatcherTransactions };
   }
 
-  private async resolveMainTransactions() {
-    const [incomers, backupIncomerTransactions, dispatcherTransactions] = await Promise.all([
-      this.incomerStore.getIncomers(),
-      this.backupIncomerTransactionStore.getTransactions(),
-      this.dispatcherTransactionStore.getTransactions()
-    ]);
+  private async resolveMainTransactions(options: ResolveTransactions) {
+    const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
 
     const toResolve = [];
     const incomerStateToUpdate = new Set<string>();

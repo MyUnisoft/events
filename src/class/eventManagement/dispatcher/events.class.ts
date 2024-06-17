@@ -94,6 +94,7 @@ export interface DispatchEventOptions<T extends GenericEvent> {
     resolved: boolean;
   };
   store: TransactionStore<"incomer"> | TransactionStore<"dispatcher">;
+  dispatcherTransactionUUID?: string;
 }
 
 export type customValidationCbFn<T extends GenericEvent> = (event: T) => void;
@@ -137,7 +138,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   }
 
   public async dispatch(options: DispatchEventOptions<T>): Promise<void> {
-    const { channel, store, redisMetadata, event } = options;
+    const { channel, store, redisMetadata, event, dispatcherTransactionUUID } = options;
 
     const transaction = await store.setTransaction({
       ...event,
@@ -145,7 +146,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
         ...event.redisMetadata,
         ...redisMetadata
       } as any
-    });
+    }, dispatcherTransactionUUID);
 
     await channel.publish({
       ...event,
