@@ -57,8 +57,8 @@ const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLI
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
 const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
-export const RESOLVED = Symbol("Resolved");
-export const UNRESOLVED = Symbol("Unresolved");
+export const RESOLVED: unique symbol = Symbol.for("RESOLVED");
+export const UNRESOLVED: unique symbol = Symbol.for("UNRESOLVED");
 
 type IncomerChannelEvents<
   T extends GenericEvent = GenericEvent
@@ -78,7 +78,24 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "APPROVEMENT";
 }
 
-export type EventCallbackResponse = Result<symbol, string>;
+type Resolved = "RESOLVED";
+type Unresolved = "UNRESOLVED";
+
+export type EventCallbackResponse<T extends Resolved | Unresolved = Resolved | Unresolved> = Result<
+  T extends Resolved ? {
+    status: T;
+  } : {
+  status: T;
+  retryStrategy?: {
+    iteration: number;
+    maxIteration: number;
+  };
+  reason: string;
+}, string>;
+
+function isUnresolvedEvent(value: EventCallbackResponse): value is EventCallbackResponse<"UNRESOLVED"> {
+  return value.ok && Symbol.for(value.val.status) === UNRESOLVED;
+}
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
@@ -651,7 +668,7 @@ export class Incomer <
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
     if (callbackResult.ok) {
-      if (callbackResult.val === RESOLVED) {
+      if (Symbol.for(callbackResult.val.status) === RESOLVED) {
         await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
           ...formattedTransaction,
           redisMetadata: {
@@ -663,6 +680,32 @@ export class Incomer <
         this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
 
         return;
+      }
+
+      if (isUnresolvedEvent(callbackResult)) {
+        if (callbackResult.val.retryStrategy) {
+          const { iteration, maxIteration } = callbackResult.val.retryStrategy;
+
+          if (iteration < maxIteration) {
+            // Pubsub to send information to Dispatcher so he can delete artifacts of the old transaction
+            // and send back the given event to a different instance of the incomer (if possible)
+            // while keeping track on iteration on the event
+          }
+
+          await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+            ...formattedTransaction,
+            redisMetadata: {
+              ...formattedTransaction.redisMetadata,
+              resolved: true
+            }
+          } as Transaction<"incomer">);
+
+          this.logger.info(
+            this.standardLogFn(logData)(`Callback Resolved but failed for the given reason: ${callbackResult.val.reason}`)
+          );
+
+          return;
+        }
       }
     }
 
