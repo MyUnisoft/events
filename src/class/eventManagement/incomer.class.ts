@@ -32,7 +32,8 @@ import {
   DistributedEventMessage,
   EventMessage,
   GenericEvent,
-  IncomerRegistrationMessage
+  IncomerRegistrationMessage,
+  RetryMessage
 } from "../../types/eventManagement/index";
 import {
   NestedValidationFunctions,
@@ -87,7 +88,6 @@ export type EventCallbackResponse<T extends Resolved | Unresolved = Resolved | U
   } : {
   status: T;
   retryStrategy?: {
-    iteration: number;
     maxIteration: number;
   };
   reason: string;
@@ -141,7 +141,7 @@ export class Incomer <
   private incomerChannelName: string;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
-  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
+  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
   private publishInterval: number;
   private maxPingInterval: number;
   private standardLogFn: StandardLog<T>;
@@ -490,7 +490,7 @@ export class Incomer <
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        transactionId: (transaction.redisMetadata as any).transactionId
       }
     } as unknown as EventMessage<T>;
 
@@ -633,7 +633,7 @@ export class Incomer <
   private async customEvent(opts: { name: string, channel: string, message: DistributedEventMessage<T> }) {
     const { message, channel } = opts;
     const { redisMetadata, ...event } = message;
-    const { eventTransactionId } = redisMetadata;
+    const { eventTransactionId, iteration } = redisMetadata;
 
     const logData = {
       channel,
@@ -684,9 +684,20 @@ export class Incomer <
 
       if (isUnresolvedEvent(callbackResult)) {
         if (callbackResult.val.retryStrategy) {
-          const { iteration, maxIteration } = callbackResult.val.retryStrategy;
+          const { maxIteration } = callbackResult.val.retryStrategy;
 
           if (iteration < maxIteration) {
+            await this.incomerChannel.publish({
+              name: "RETRY",
+              data: {
+                dispatcherTransactionId: redisMetadata.transactionId
+              },
+              redisMetadata: {
+                origin: this.providedUUID,
+                incomerName: this.name,
+                prefix: this.prefix
+              }
+            });
             // Pubsub to send information to Dispatcher so he can delete artifacts of the old transaction
             // and send back the given event to a different instance of the incomer (if possible)
             // while keeping track on iteration on the event

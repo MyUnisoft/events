@@ -26,7 +26,8 @@ import {
   DispatcherPingMessage,
   EventMessage,
   GenericEvent,
-  CloseMessage
+  CloseMessage,
+  RetryMessage
 } from "../../types/eventManagement/index";
 import { defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
 import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
@@ -244,8 +245,20 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
         catch (error) {
           this.logger.error({
-            channel: "dispatcher",
+            channel,
             message: closeEvent,
+            error: error.stack
+          });
+        }
+      })
+      .on("RETRY", async(channel: string, retryEvent: RetryMessage) => {
+        try {
+          await this.handleRetryEvent(retryEvent);
+        }
+        catch (error) {
+          this.logger.error({
+            channel,
+            message: retryEvent,
             error: error.stack
           });
         }
@@ -256,7 +269,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
         catch (error) {
           this.logger.error({
-            channel: "dispatcher",
+            channel,
             message: customEvent,
             error: error.stack
           });
@@ -686,6 +699,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
   }
 
+  private async handleRetryEvent(retryEvent: RetryMessage) {
+    //
+    console.log("RETRY", retryEvent);
+  }
+
   private async handleCustomEvents(channel: string, customEvent: EventMessage<T>) {
     const { redisMetadata, ...event } = customEvent;
     const { name } = event;
@@ -788,6 +806,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           mainTransaction: false,
           relatedTransaction: transactionId,
           eventTransactionId: transactionId,
+          iteration: 0,
           resolved: false
         },
         event: formattedEvent as any

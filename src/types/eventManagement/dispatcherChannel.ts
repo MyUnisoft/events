@@ -16,12 +16,11 @@ interface DispatcherApprovementData {
 export type DispatcherApprovementMessage = {
   name: "APPROVEMENT";
   data: DispatcherApprovementData;
-  redisMetadata: DispatcherTransactionMetadata;
+  redisMetadata: Omit<DispatcherTransactionMetadata, "iteration">;
 }
 
 // Send by an Incomer
 type IncomerMessages = IncomerRegistrationMessage;
-
 
 interface IncomerRegistrationData {
   /* Service name */
