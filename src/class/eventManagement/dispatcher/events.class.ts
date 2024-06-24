@@ -151,9 +151,10 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
+        iteration: redisMetadata.iteration,
         eventTransactionId: redisMetadata.eventTransactionId,
         transactionId: transaction.redisMetadata.transactionId
-      }
+      } as any
     });
   }
 
@@ -162,14 +163,6 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     event: AnyDispatcherChannelMessage |
     AnyIncomerChannelMessage<T>
   ) {
-    if (!event.name || !event.redisMetadata) {
-      throw new Error("Malformed message");
-    }
-
-    if (event.redisMetadata.origin === this.privateUUID) {
-      return;
-    }
-
     if (channel === this.dispatcherChannelName) {
       if (!isDispatcherChannelMessage(event)) {
         throw new Error("Unknown event on Dispatcher Channel");
@@ -255,6 +248,10 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     this.redisMetadataValidation(event);
 
     if (event.name === "CLOSE") {
+      return;
+    }
+
+    if (event.name === "RETRY") {
       return;
     }
 

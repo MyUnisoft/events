@@ -13,6 +13,7 @@ import { pino } from "pino";
 
 // Import Internal Dependencies
 import {
+  DispatcherSpreadTransaction,
   PartialTransaction,
   Transaction,
   TransactionStore
@@ -309,8 +310,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   public async initialize() {
     await this.subscriber.subscribe(this.dispatcherChannelName);
-    this.subscriber.on("message", async(channel, message) => {
-      await this.handleMessages(channel, message);
+    this.subscriber.on("message", (channel, message) => {
+      this.handleMessages(channel, message).catch((error) => this.logger.error({ error: error.stack }));
     });
 
     const incomers = await this.incomerStore.getIncomers();
@@ -700,8 +701,67 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async handleRetryEvent(retryEvent: RetryMessage) {
-    //
-    console.log("RETRY", retryEvent);
+    const { data, redisMetadata } = retryEvent;
+    const { dispatcherTransactionId, incomerTransactionId } = data;
+    const { origin, prefix } = redisMetadata;
+
+    const concernedIncomerStore = new TransactionStore({
+      prefix: `${prefix ? `${prefix}-` : ""}${origin}`,
+      instance: "incomer"
+    });
+
+    const relatedDispatcherTransaction = await this.dispatcherTransactionStore
+      .getTransactionById(dispatcherTransactionId) as unknown as
+        DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"];
+    const { redisMetadata: dispatcherTransactionMetadata, ...event } = relatedDispatcherTransaction;
+
+    const incomers = await this.incomerStore.getIncomers();
+
+    const concernedIncomer = [...incomers]
+      .find(
+        (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === event.name) &&
+          incomer.name === dispatcherTransactionMetadata.incomerName
+      );
+
+    const concernedIncomerChannel = this.incomerChannelHandler.get(concernedIncomer.providedUUID) ??
+      this.incomerChannelHandler.set({ uuid: concernedIncomer.providedUUID, prefix: concernedIncomer.prefix });
+
+    const formattedEvent = {
+      ...event,
+      redisMetadata: {
+        origin: this.privateUUID,
+        to: concernedIncomer.providedUUID,
+        incomerName: concernedIncomer.name
+      }
+    };
+
+    this.eventsHandler.dispatch({
+      channel: concernedIncomerChannel,
+      store: this.dispatcherTransactionStore,
+      redisMetadata: {
+        mainTransaction: false,
+        relatedTransaction: dispatcherTransactionMetadata.relatedTransaction,
+        eventTransactionId: dispatcherTransactionMetadata.eventTransactionId,
+        iteration: ++dispatcherTransactionMetadata.iteration,
+        resolved: false
+      },
+      event: formattedEvent as any
+    });
+
+    await Promise.all([
+      concernedIncomerStore.deleteTransaction(incomerTransactionId),
+      this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
+    ]);
+
+    this.logger.info(this.standardLogFn(
+      Object.assign({}, { channel: concernedIncomerChannel.name, ...event }, {
+        redisMetadata: {
+          ...redisMetadata,
+          eventTransactionId: dispatcherTransactionMetadata.eventTransactionId,
+          to: `${concernedIncomer.providedUUID}`
+        }
+      }) as any
+    )("Custom event distributed according to retry strategy"));
   }
 
   private async handleCustomEvents(channel: string, customEvent: EventMessage<T>) {

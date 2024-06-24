@@ -690,7 +690,8 @@ export class Incomer <
             await this.incomerChannel.publish({
               name: "RETRY",
               data: {
-                dispatcherTransactionId: redisMetadata.transactionId
+                dispatcherTransactionId: redisMetadata.transactionId,
+                incomerTransactionId: formattedTransaction.redisMetadata.transactionId
               },
               redisMetadata: {
                 origin: this.providedUUID,
@@ -698,9 +699,12 @@ export class Incomer <
                 prefix: this.prefix
               }
             });
-            // Pubsub to send information to Dispatcher so he can delete artifacts of the old transaction
-            // and send back the given event to a different instance of the incomer (if possible)
-            // while keeping track on iteration on the event
+
+            this.logger.info(
+              this.standardLogFn(logData)(`Callback Resolved but retry for the given reason: ${callbackResult.val.reason}`)
+            );
+
+            return;
           }
 
           await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
