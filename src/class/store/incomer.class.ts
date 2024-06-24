@@ -103,7 +103,7 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
     const incomer = await this.getValue(incomerKey);
 
     if (!incomer) {
-      throw new Error("Cannot find the Incomer");
+      throw new Error(`Cannot find the Incomer ${incomerKey}`);
     }
 
     this.setValue({ key: incomerKey, value: { ...incomer, lastActivity: Date.now() } });

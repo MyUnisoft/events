@@ -14,7 +14,8 @@ import {
   GenericEvent,
   IncomerChannelMessages,
   IncomerRegistrationMessage,
-  CloseMessage
+  CloseMessage,
+  RetryMessage
 } from "../../../types";
 import * as eventsSchema from "../../../schema/eventManagement/index";
 import {
@@ -37,7 +38,7 @@ type AnyDispatcherChannelMessage = (
 );
 
 type AnyIncomerChannelMessage<T extends GenericEvent> = (
-  IncomerChannelMessages<T>["DispatcherMessages"] | IncomerChannelMessages<T>["IncomerMessages"]
+  IncomerChannelMessages<T>["DispatcherMessages"] | (IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage)
 );
 
 function isIncomerChannelMessage<
@@ -45,7 +46,7 @@ function isIncomerChannelMessage<
 >(
   event: AnyDispatcherChannelMessage |
     AnyIncomerChannelMessage<T>
-): event is IncomerChannelMessages<T>["IncomerMessages"] {
+): event is IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage {
   return kDispatcherChannelEvents.find((message) => message === event.name) === undefined;
 }
 
@@ -59,15 +60,21 @@ function isDispatcherChannelMessage<
 }
 
 function isCustomEventMessage<T extends GenericEvent>(
-  event: IncomerChannelMessages<T>["IncomerMessages"]
+  event: IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage
 ): event is EventMessage<T> {
-  return event.name !== "CLOSE";
+  return event.name !== "CLOSE" && event.name !== "RETRY";
 }
 
 function isCloseMessage<T extends GenericEvent>(
-  event: IncomerChannelMessages<T>["IncomerMessages"]
+  event: IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage
 ): event is CloseMessage {
   return event.name === "CLOSE";
+}
+
+function isRetryMessage<T extends GenericEvent>(
+  event: IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage
+): event is RetryMessage {
+  return event.name === "RETRY";
 }
 
 type DispatchedEvent<T extends GenericEvent> = (
@@ -83,6 +90,7 @@ export interface DispatchEventOptions<T extends GenericEvent> {
     mainTransaction: boolean;
     relatedTransaction?: null | string;
     eventTransactionId?: null | string;
+    iteration?: number;
     resolved: boolean;
   };
   store: TransactionStore<"incomer"> | TransactionStore<"dispatcher">;
@@ -143,25 +151,18 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
       ...event,
       redisMetadata: {
         ...event.redisMetadata,
+        iteration: redisMetadata.iteration,
         eventTransactionId: redisMetadata.eventTransactionId,
         transactionId: transaction.redisMetadata.transactionId
-      }
+      } as any
     });
   }
 
   public async handleEvents(
     channel: string,
     event: AnyDispatcherChannelMessage |
-    AnyIncomerChannelMessage<T> | DispatcherChannelMessages["DispatcherMessages"]
+    AnyIncomerChannelMessage<T>
   ) {
-    if (!event.name || !event.redisMetadata) {
-      throw new Error("Malformed message");
-    }
-
-    if (event.redisMetadata.origin === this.privateUUID) {
-      return;
-    }
-
     if (channel === this.dispatcherChannelName) {
       if (!isDispatcherChannelMessage(event)) {
         throw new Error("Unknown event on Dispatcher Channel");
@@ -187,14 +188,26 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     else if (isIncomerChannelMessage(event)) {
       this.incomerChannelMessagesSchemaValidation(event);
 
-      this.emit(isCloseMessage(event) ? "CLOSE" : "CUSTOM_EVENT", channel, event);
+      if (isCloseMessage(event)) {
+        this.emit("CLOSE", channel, event);
+      }
+      else if (isRetryMessage(event)) {
+        this.emit("RETRY", channel, event);
+      }
+      else {
+        this.emit("CUSTOM_EVENT", channel, event);
+      }
     }
     else {
       throw new Error("Unknown event for the given Channel");
     }
   }
 
-  private redisMetadataValidation(event: AnyDispatcherChannelMessage | AnyIncomerChannelMessage<T>) {
+  private redisMetadataValidation(
+    event: AnyDispatcherChannelMessage |
+      AnyIncomerChannelMessage<T> |
+      DispatcherApprovementMessage
+  ) {
     const { redisMetadata } = event;
 
     const redisMetadataValidationFn = this.#eventsValidationFn.get("redisMetadata") as ValidateFunction<T>;
@@ -228,13 +241,17 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   }
 
   private incomerChannelMessagesSchemaValidation(
-    event: IncomerChannelMessages<T>["IncomerMessages"]
+    event: IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage
   ): void {
     const { redisMetadata, ...eventRest } = event;
 
     this.redisMetadataValidation(event);
 
     if (event.name === "CLOSE") {
+      return;
+    }
+
+    if (event.name === "RETRY") {
       return;
     }
 

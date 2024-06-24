@@ -404,11 +404,12 @@ describe("Event that doesn't scale", () => {
         origin: expect.any(String),
         prefix: publisher.prefix,
         mainTransaction: false,
+        iteration: expect.any(Number),
         resolved: false,
         to: expect.any(String),
         relatedTransaction: expect.any(String),
         transactionId: expect.any(String)
-      },
+      }
     };
 
     const mockIncomerSetTransactionCalls = mockedIncomerSetTransaction.mock.calls.flat() as Array<any>;
@@ -601,6 +602,7 @@ describe("Event that scale", () => {
         incomerName: expect.any(String),
         to: expect.any(String),
         transactionId: expect.any(String),
+        iteration: expect.any(Number),
         mainTransaction: false,
         resolved: false,
         relatedTransaction: expect.any(String)

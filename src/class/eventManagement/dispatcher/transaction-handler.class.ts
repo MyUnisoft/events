@@ -361,8 +361,6 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
           inactiveIncomerTransactionStore.deleteTransaction(relatedHandlerTransaction.redisMetadata.transactionId)
       ]));
 
-      // To publish later when concerned Incomer
-
       this.logger.debug(this.standardLogFn(
         dispatcherTransaction as unknown as StandardLogOpts<T>
       )("Spread transaction has been backup"));

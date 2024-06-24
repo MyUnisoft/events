@@ -45,6 +45,7 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
+          iteration: 0,
           resolved: false,
           incomerName: "foo"
         }
@@ -73,6 +74,7 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
+          iteration: 0,
           resolved: false,
           incomerName: "foo"
         },
@@ -97,6 +99,7 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
+          iteration: 0,
           resolved: false,
           incomerName: "foo"
         },
@@ -126,6 +129,7 @@ describe("Transaction options", () => {
           to: "foo",
           mainTransaction: true,
           relatedTransaction: null,
+          iteration: 0,
           resolved: false,
           incomerName: "foo"
         },

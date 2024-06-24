@@ -214,7 +214,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
             incomerName: concernedIncomer.name,
             mainTransaction: false,
             relatedTransaction: expect.anything(),
-            resolved: expect.anything()
+            resolved: expect.anything(),
+            iteration: expect.any(Number)
           },
           aliveSince: expect.anything()
         })

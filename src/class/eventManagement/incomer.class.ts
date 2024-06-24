@@ -11,6 +11,7 @@ import {
 import { pino } from "pino";
 import { P, match } from "ts-pattern";
 import { ValidateFunction } from "ajv";
+import { Result } from "@openally/result";
 
 // Import Internal Dependencies
 import {
@@ -31,7 +32,8 @@ import {
   DistributedEventMessage,
   EventMessage,
   GenericEvent,
-  IncomerRegistrationMessage
+  IncomerRegistrationMessage,
+  RetryMessage
 } from "../../types/eventManagement/index";
 import {
   NestedValidationFunctions,
@@ -56,6 +58,9 @@ const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLI
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
 const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
 
+export const RESOLVED: unique symbol = Symbol.for("RESOLVED");
+export const UNRESOLVED: unique symbol = Symbol.for("UNRESOLVED");
+
 type IncomerChannelEvents<
   T extends GenericEvent = GenericEvent
 > = { name: "PING"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
@@ -74,6 +79,24 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "APPROVEMENT";
 }
 
+type Resolved = "RESOLVED";
+type Unresolved = "UNRESOLVED";
+
+export type EventCallbackResponse<T extends Resolved | Unresolved = Resolved | Unresolved> = Result<
+  T extends Resolved ? {
+    status: T;
+  } : {
+  status: T;
+  retryStrategy?: {
+    maxIteration: number;
+  };
+  reason: string;
+}, string>;
+
+function isUnresolvedEvent(value: EventCallbackResponse): value is EventCallbackResponse<"UNRESOLVED"> {
+  return value.ok && Symbol.for(value.val.status) === UNRESOLVED;
+}
+
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
@@ -86,7 +109,7 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
     eventsValidationFn?: eventsValidationFn<T>;
     customValidationCbFn?: customValidationCbFn<T>;
   };
-  eventCallback: (message: CallBackEventMessage<T>) => void;
+  eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
   dispatcherInactivityOptions?: {
     /* max interval between received ping before considering dispatcher off */
     maxPingInterval?: number;
@@ -102,7 +125,7 @@ export class Incomer <
 > extends EventEmitter {
   readonly name: string;
   readonly prefix: Prefix | undefined;
-  readonly eventCallback: (message: CallBackEventMessage<T>) => void;
+  readonly eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
 
   public dispatcherConnectionState = false;
   public baseUUID = randomUUID();
@@ -118,7 +141,7 @@ export class Incomer <
   private incomerChannelName: string;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
-  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"]>;
+  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
   private publishInterval: number;
   private maxPingInterval: number;
   private standardLogFn: StandardLog<T>;
@@ -467,7 +490,7 @@ export class Incomer <
       ...formattedEvent,
       redisMetadata: {
         ...formattedEvent.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId
+        transactionId: (transaction.redisMetadata as any).transactionId
       }
     } as unknown as EventMessage<T>;
 
@@ -610,7 +633,7 @@ export class Incomer <
   private async customEvent(opts: { name: string, channel: string, message: DistributedEventMessage<T> }) {
     const { message, channel } = opts;
     const { redisMetadata, ...event } = message;
-    const { eventTransactionId } = redisMetadata;
+    const { eventTransactionId, iteration } = redisMetadata;
 
     const logData = {
       channel,
@@ -642,18 +665,66 @@ export class Incomer <
 
     const formattedTransaction = await store.setTransaction(transaction);
 
-    await Promise.all([
-      this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>),
-      store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-        ...formattedTransaction,
-        redisMetadata: {
-          ...formattedTransaction.redisMetadata,
-          resolved: true
-        }
-      } as Transaction<"incomer">)
-    ]);
+    const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
-    this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
+    if (callbackResult.ok) {
+      if (Symbol.for(callbackResult.val.status) === RESOLVED) {
+        await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+          ...formattedTransaction,
+          redisMetadata: {
+            ...formattedTransaction.redisMetadata,
+            resolved: true
+          }
+        } as Transaction<"incomer">);
+
+        this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
+
+        return;
+      }
+
+      if (isUnresolvedEvent(callbackResult)) {
+        if (callbackResult.val.retryStrategy) {
+          const { maxIteration } = callbackResult.val.retryStrategy;
+
+          if (iteration < maxIteration) {
+            await this.incomerChannel.publish({
+              name: "RETRY",
+              data: {
+                dispatcherTransactionId: redisMetadata.transactionId,
+                incomerTransactionId: formattedTransaction.redisMetadata.transactionId
+              },
+              redisMetadata: {
+                origin: this.providedUUID,
+                incomerName: this.name,
+                prefix: this.prefix
+              }
+            });
+
+            this.logger.info(
+              this.standardLogFn(logData)(`Callback Resolved but retry for the given reason: ${callbackResult.val.reason}`)
+            );
+
+            return;
+          }
+
+          await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+            ...formattedTransaction,
+            redisMetadata: {
+              ...formattedTransaction.redisMetadata,
+              resolved: true
+            }
+          } as Transaction<"incomer">);
+
+          this.logger.info(
+            this.standardLogFn(logData)(`Callback Resolved but failed for the given reason: ${callbackResult.val.reason}`)
+          );
+
+          return;
+        }
+      }
+    }
+
+    this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${String(callbackResult.val)}`));
   }
 
   private async handleApprovement(message: DispatcherApprovementMessage) {

@@ -6,7 +6,11 @@ import {
   Prefix
 } from "./index";
 
-export type DispatcherPingMessage = { name: "PING", data: null, redisMetadata: DispatcherTransactionMetadata };
+export type DispatcherPingMessage = {
+  name: "PING",
+  data: null,
+  redisMetadata: Omit<DispatcherTransactionMetadata, "iteration">
+};
 export type DistributedEventMessage<
   T extends GenericEvent = GenericEvent
 > = T & {
@@ -32,6 +36,19 @@ export type CloseMessage = {
     incomerName: string;
     prefix?: Prefix;
     transactionId?: null;
+  }
+}
+
+export type RetryMessage = {
+  name: "RETRY";
+  data: {
+    dispatcherTransactionId: string;
+    incomerTransactionId: string;
+  }
+  redisMetadata: {
+    origin: string;
+    incomerName: string;
+    prefix?: Prefix;
   }
 }
 
