@@ -1,6 +1,6 @@
 {
   "name": "@myunisoft/events",
-  "version": "4.3.6",
+  "version": "5.0.0",
   "description": "MyUnisoft Events validation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
