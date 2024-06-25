@@ -35,17 +35,17 @@
     "@myunisoft/redis": "github:MyUnisoft/redis#v3.4.2",
     "@openally/mutex": "^1.0.0",
     "@openally/result": "^1.2.1",
-    "ajv": "^8.12.0",
-    "pino-pretty": "^10.3.1",
+    "ajv": "^8.16.0",
+    "pino-pretty": "^11.2.1",
     "ts-pattern": "^4.3.0"
   },
   "devDependencies": {
     "@nodesecure/eslint-config": "^1.9.0",
     "@types/jest": "^27.4.1",
-    "dotenv": "^16.3.1",
+    "dotenv": "^16.4.5",
     "fastify": "^4.3.0",
     "jest": "^27.5.1",
-    "testcontainers": "^10.6.0",
+    "testcontainers": "^10.10.0",
     "ts-jest": "^27.1.4",
     "typescript": "^4.9.5"
   }
