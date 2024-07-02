@@ -399,13 +399,20 @@ export class Incomer <
 
     await this.subscriber.subscribe(this.dispatcherChannelName);
 
-    this.subscriber.on("message", (channel: string, message: string) => this.handleMessages(channel, message));
+    this.subscriber.on(
+      "message",
+      (channel: string, message: string) => this.handleMessages(channel, message)
+        .catch((error) => this.logger.error({ error: error.stack }, "Failed at resolving message"))
+    );
 
     await this.registrationAttempt();
   }
 
   public async close() {
     await this.externals?.close();
+
+    await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
+    this.subscriber.removeAllListeners("message");
 
     clearInterval(this.checkTransactionsStateInterval);
     this.checkTransactionsStateInterval = undefined;
@@ -444,9 +451,6 @@ export class Incomer <
           })
       );
     }
-
-    await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
-    this.subscriber.removeAllListeners("message");
   }
 
   public async publish(
