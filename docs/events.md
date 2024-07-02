@@ -95,6 +95,7 @@ export interface Document {
   data: {
     id: string;
     kind: DocumentKind;
+    name: string;
   };
 }
 ```
