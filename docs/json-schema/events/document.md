@@ -23,9 +23,12 @@
         },
         "kind": {
           "enum": ["AF", "PF", "DB", "ED"]
+        },
+        "name": {
+          "type": "string"
         }
       },
-      "required": ["id", "kind"]
+      "required": ["id", "kind", "name"]
     }
   },
   "required": ["name", "operation", "scope", "data"]
