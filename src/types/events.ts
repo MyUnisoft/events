@@ -123,6 +123,25 @@ export interface CloudDocument {
   }
 }
 
+export type PushNotificationScope = Scope & {
+  persPhysiqueId: number;
+};
+
+export type DiscussionRoomOperation = Operation[
+  keyof Pick<Operation, "create" | "update" | "delete">
+];
+
+export type DiscussionRoomScope = PushNotificationScope;
+
+export interface discussionRoom {
+  name: "room";
+  scope: DiscussionRoomScope;
+  operation: DiscussionRoomOperation;
+  data: {
+    id: number;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
