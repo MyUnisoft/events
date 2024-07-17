@@ -218,63 +218,53 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.eventsHandler
-      .on("APPROVEMENT", async(registrationEvent: IncomerRegistrationMessage) => {
-        try {
-          await this.approveIncomer(registrationEvent);
-        }
-        catch (error) {
-          this.logger.error({
+      .on("APPROVEMENT", (registrationEvent: IncomerRegistrationMessage) => {
+        this.approveIncomer(registrationEvent)
+          .catch((error) => {
+            this.logger.error({
+              channel: "dispatcher",
+              message: registrationEvent,
+              error: error.stack
+            });
+          });
+      })
+      .on("CLOSE", (channel: string, closeEvent: CloseMessage) => {
+        const { redisMetadata } = closeEvent;
+
+        this.incomerStore.getIncomer(redisMetadata.origin)
+          .then((relatedIncomer) => {
+            if (!relatedIncomer) {
+              this.logger.warn({ channel }, "Unable to find the Incomer closing the connection");
+
+              return;
+            }
+
+            this.removeNonActives([relatedIncomer]);
+          }).catch((error) => {
+            this.logger.error({
+              channel: "dispatcher",
+              message: closeEvent,
+              error: error.stack
+            });
+          });
+      })
+      .on("RETRY", (channel: string, retryEvent: RetryMessage) => {
+        this.handleRetryEvent(retryEvent)
+          .catch((error) => {
+            this.logger.error({
+              channel,
+              message: retryEvent,
+              error: error.stack
+            });
+          });
+      })
+      .on("CUSTOM_EVENT", (channel: string, customEvent: EventMessage<T>) => {
+        this.handleCustomEvents(channel, customEvent)
+          .catch((error) => this.logger.error({
             channel: "dispatcher",
-            message: registrationEvent,
-            error: error.stack
-          });
-        }
-      })
-      .on("CLOSE", async(channel: string, closeEvent: CloseMessage) => {
-        try {
-          const { redisMetadata } = closeEvent;
-
-          const relatedIncomer = await this.incomerStore.getIncomer(redisMetadata.origin);
-
-          if (!relatedIncomer) {
-            this.logger.warn({ channel }, "Unable to find the Incomer closing the connection");
-
-            return;
-          }
-
-          await this.removeNonActives([relatedIncomer]);
-        }
-        catch (error) {
-          this.logger.error({
-            channel,
-            message: closeEvent,
-            error: error.stack
-          });
-        }
-      })
-      .on("RETRY", async(channel: string, retryEvent: RetryMessage) => {
-        try {
-          await this.handleRetryEvent(retryEvent);
-        }
-        catch (error) {
-          this.logger.error({
-            channel,
-            message: retryEvent,
-            error: error.stack
-          });
-        }
-      })
-      .on("CUSTOM_EVENT", async(channel: string, customEvent: EventMessage<T>) => {
-        try {
-          await this.handleCustomEvents(channel, customEvent);
-        }
-        catch (error) {
-          this.logger.error({
-            channel,
             message: customEvent,
             error: error.stack
-          });
-        }
+          }));
       });
 
     this.resolveTransactionsInterval = setInterval(() => {
@@ -568,7 +558,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       if (recentPingTransactionKeys.length > 0) {
         toResolve.push(Promise.all([
-          this.updateIncomerState(inactive.providedUUID),
+          this.incomerStore.updateIncomerState(inactive.providedUUID),
           transactionStore.deleteTransactions(recentPingTransactionKeys)
         ]));
 
@@ -595,7 +585,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const { providedUUID: uuid } = incomer;
 
       if (incomer.baseUUID === this.selfProvidedUUID) {
-        await this.updateIncomerState(uuid);
+        await this.incomerStore.updateIncomerState(uuid);
 
         continue;
       }
@@ -656,14 +646,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
   }
 
-  private async updateIncomerState(origin: string) {
-    try {
-      await this.incomerStore.updateIncomerState(origin);
-    }
-    catch (error) {
-      this.logger.error({ uuid: origin, error: error.stack }, "Failed to update incomer state");
-    }
-  }
 
   private async setAsActiveDispatcher() {
     const incomers = await this.incomerStore.getIncomers();
@@ -873,7 +855,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }));
     }
 
-    await this.updateIncomerState(redisMetadata.origin);
+    await this.incomerStore.updateIncomerState(redisMetadata.origin);
     await Promise.all([
       ...toResolve,
       senderTransactionStore.updateTransaction(transactionId, {
