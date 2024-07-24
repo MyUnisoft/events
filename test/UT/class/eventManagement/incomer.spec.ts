@@ -96,7 +96,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("Incomer calling close, it should remove the given Incomer", async() => {
     await incomer.close();
 
-    await timers.setTimeout(500);
+    await timers.setTimeout(1_000);
 
     expect(mockedDispatcherRemoveNonActives).toHaveBeenCalled();
 

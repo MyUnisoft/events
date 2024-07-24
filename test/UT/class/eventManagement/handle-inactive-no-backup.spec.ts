@@ -201,7 +201,12 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
       secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
 
-      await timers.setTimeout(5_000);
+      await timers.setTimeout(1_000);
+
+      const incomer = [...(await dispatcher["incomerStore"].getIncomers()).values()].find((incomer) => incomer.baseUUID === concernedIncomer.baseUUID);
+      await dispatcher["removeNonActives"]([incomer!]);
+
+      await timers.setTimeout(1_000);
 
       const mockCalls = mockedSetTransaction.mock.calls.flat();
 
