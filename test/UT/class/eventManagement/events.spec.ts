@@ -10,6 +10,7 @@ import {
   getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import {
@@ -26,7 +27,7 @@ import { validate } from "../../../../src/index";
 const incomerLogger = Logger.pino({
   level: "debug"
 });
-const mockedEventComeBackHandler = jest.fn();
+const mockedEventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
 
 async function updateRegisterTransactionState(
   publisherOldTransacStore: TransactionStore<"incomer">,

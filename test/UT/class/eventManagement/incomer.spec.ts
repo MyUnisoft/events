@@ -7,6 +7,7 @@ import {
   closeAllRedis,
   getRedis
 } from "@myunisoft/redis";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import { Dispatcher, Incomer } from "../../../../src/index";
@@ -18,7 +19,7 @@ const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any,
 const kIdleTime = 4_000;
 
 describe("Init Incomer without Dispatcher alive", () => {
-  const eventComeBackHandler = () => void 0;
+  const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
 
   const pingInterval = 2_000;
 

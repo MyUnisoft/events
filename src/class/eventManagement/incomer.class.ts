@@ -79,8 +79,8 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
   return value.name !== "APPROVEMENT";
 }
 
-type Resolved = "RESOLVED";
-type Unresolved = "UNRESOLVED";
+export type Resolved = "RESOLVED";
+export type Unresolved = "UNRESOLVED";
 
 export type EventCallbackResponse<T extends Resolved | Unresolved = Resolved | Unresolved> = Result<
   T extends Resolved ? {
@@ -222,7 +222,7 @@ export class Incomer <
           if (
             transaction.redisMetadata.mainTransaction &&
             !transaction.redisMetadata.published &&
-            transaction.aliveSince + this.maxPingInterval < Date.now()
+            Number(transaction.aliveSince) + Number(this.maxPingInterval) < Date.now()
           ) {
             return this.incomerChannel.publish({
               ...transaction,
@@ -322,10 +322,6 @@ export class Incomer <
   private async registrationIntervalCb() {
     if (this.dispatcherConnectionState) {
       return;
-    }
-
-    if (this.providedUUID) {
-      this.subscriber.unsubscribe(`${this.prefix ? `${this.prefix}-` : ""}${this.providedUUID}`);
     }
 
     const event = {
@@ -588,24 +584,13 @@ export class Incomer <
   ): Promise<void> {
     const { name } = message;
 
-    match<IncomerChannelEvents<T>>({ name, message } as IncomerChannelEvents<T>)
-      .with({
-        name: "PING"
-      },
-      async(res: { name: "PING", message: DispatcherPingMessage }) => this.handlePing(channel, res.message))
-      .with(P._,
-        async(res: { name: string, message: DistributedEventMessage<T> }) => this.customEvent({
-          ...res, channel
-        })
-      )
-      .exhaustive()
-      .catch((error) => {
-        this.logger.error({
-          channel: "incomer",
-          error: error.stack,
-          message
-        });
-      });
+    if (name === "PING") {
+      await this.handlePing(channel, message as DispatcherPingMessage);
+
+      return;
+    }
+
+    await this.customEvent({ name, channel, message: message as DistributedEventMessage<T> });
   }
 
   private async handlePing(channel: string, message: DispatcherPingMessage) {
@@ -671,7 +656,7 @@ export class Incomer <
 
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
-    if (callbackResult.ok) {
+    if (callbackResult && callbackResult.ok) {
       if (Symbol.for(callbackResult.val.status) === RESOLVED) {
         await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
           ...formattedTransaction,

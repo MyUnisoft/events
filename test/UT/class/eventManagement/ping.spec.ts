@@ -10,6 +10,7 @@ import {
   getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import { Dispatcher, Incomer } from "../../../../src/index";
@@ -23,7 +24,7 @@ const incomerLogger = Logger.pino({
 const mockedIncomerLoggerDebug = jest.spyOn(incomerLogger, "debug");
 
 describe("Ping", () => {
-  const eventComeBackHandler = () => void 0;
+  const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
 
   let dispatcher: Dispatcher;
   let incomer: Incomer;

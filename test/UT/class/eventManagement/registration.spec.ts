@@ -10,6 +10,7 @@ import {
   getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import { Dispatcher, EventOptions, Incomer } from "../../../../src/index";
@@ -92,7 +93,7 @@ describe("Registration", () => {
     let handlePingFn: (...any) => any;
     let incomerProvidedUUID: string;
 
-    const eventComeBackHandler = () => void 0;
+    const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
 
     afterAll(async() => {
       await incomer.close();
