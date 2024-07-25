@@ -5,6 +5,7 @@ import {
   getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import { Incomer } from "../../../../src/index";
@@ -32,7 +33,7 @@ afterAll(async() => {
 });
 
 describe("Init Incomer without Dispatcher alive & prefix as \"test\"", () => {
-  const eventComeBackHandler = () => void 0;
+  const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
 
   describe("With externalsInitialized at true", () => {
     const incomer: Incomer = new Incomer({

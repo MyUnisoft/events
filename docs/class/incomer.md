@@ -30,6 +30,8 @@ const incomer = new Incomer({
   eventsSubscribe: [...Object.values(AVAILABLE_EVENTS)],
   eventCallback: (event) => {
     console.log(event);
+
+    return OK({ status: "RESOLVED" });
   }
 });
 
@@ -73,7 +75,7 @@ type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
-  eventCallback: (message: CallBackEventMessage<T>) => void;
+  eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
   prefix?: Prefix;
   abortPublishTime?: number;
   externalsInitialized?: boolean;

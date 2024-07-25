@@ -10,6 +10,7 @@ import {
   getRedis
 } from "@myunisoft/redis";
 import * as Logger from "pino";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import {
@@ -26,7 +27,7 @@ import { TransactionStore } from "../../../../src/class/store/transaction.class"
 const dispatcherLogger = Logger.pino({
   level: "debug"
 });
-const mockedEventComeBackHandler = jest.fn();
+const mockedEventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
 
 describe("Publishing/exploiting a custom event & inactive incomer", () => {
   let dispatcher: Dispatcher<EventOptions<keyof Events>>;
@@ -200,7 +201,12 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
       secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
 
-      await timers.setTimeout(5_000);
+      await timers.setTimeout(1_000);
+
+      const incomer = [...(await dispatcher["incomerStore"].getIncomers()).values()].find((incomer) => incomer.baseUUID === concernedIncomer.baseUUID);
+      await dispatcher["removeNonActives"]([incomer!]);
+
+      await timers.setTimeout(1_000);
 
       const mockCalls = mockedSetTransaction.mock.calls.flat();
 

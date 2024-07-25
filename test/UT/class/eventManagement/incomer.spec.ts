@@ -7,6 +7,7 @@ import {
   closeAllRedis,
   getRedis
 } from "@myunisoft/redis";
+import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import { Dispatcher, Incomer } from "../../../../src/index";
@@ -18,7 +19,7 @@ const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any,
 const kIdleTime = 4_000;
 
 describe("Init Incomer without Dispatcher alive", () => {
-  const eventComeBackHandler = () => void 0;
+  const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
 
   const pingInterval = 2_000;
 
@@ -93,9 +94,16 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   test("Incomer calling close, it should remove the given Incomer", async() => {
-    await incomer.close();
+    await incomer["incomerChannel"].publish({
+      name: "CLOSE",
+      redisMetadata: {
+        origin: incomer["providedUUID"],
+        incomerName: incomer["name"],
+        prefix: incomer["prefix"]
+      }
+    });
 
-    await timers.setTimeout(500);
+    await timers.setTimeout(1_000);
 
     expect(mockedDispatcherRemoveNonActives).toHaveBeenCalled();
 
@@ -106,7 +114,6 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   afterAll(async() => {
     await dispatcherIncomer.close();
-    await incomer.close();;
     await closeAllRedis();
   });
 });
