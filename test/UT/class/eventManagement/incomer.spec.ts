@@ -94,7 +94,14 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   test("Incomer calling close, it should remove the given Incomer", async() => {
-    await incomer.close();
+    await incomer["incomerChannel"].publish({
+      name: "CLOSE",
+      redisMetadata: {
+        origin: incomer["providedUUID"],
+        incomerName: incomer["name"],
+        prefix: incomer["prefix"]
+      }
+    });
 
     await timers.setTimeout(1_000);
 
@@ -107,7 +114,6 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   afterAll(async() => {
     await dispatcherIncomer.close();
-    await incomer.close();;
     await closeAllRedis();
   });
 });
