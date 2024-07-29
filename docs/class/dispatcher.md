@@ -51,7 +51,7 @@ type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
 <br/>
 
 > Default logger is a pino logger. <br/>
-> ⚠️ You can inject your own but you must ensure that the provided logger has those methods `info` | `error` | `warn`.
+> ⚠️ You can inject your own but you must ensure that the provided logger has those methods `info` | `error` | `warn` | `debug`.
 
 </details>
 
@@ -64,12 +64,32 @@ type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
 > Callback function use to formate logs related to custom events casting.
 
 ```ts
+type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
+  redisMetadata: {
+    transactionId: string;
+    origin?: string;
+    to?: string;
+    eventTransactionId?: string;
+  }
+};
+```
+
+> Default Callback function used.
+
+```ts
+function logValueFallback(value: string): string {
+  return value ?? "none";
+}
+
 function standardLog<T extends GenericEvent = EventOptions<keyof Events>>
-(event: T & { redisMetadata: { transactionId: string } }) {
-  const logs = `foo: ${event.foo}`;
+(data: StandardLogOpts<T>) {
+  const logs = Array.from(mapped<T>(event)).join("|");
+
+  // eslint-disable-next-line max-len
+  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}`;
 
   function log(message: string) {
-    return `(${logs}) ${message}`;
+    return `(${logs})(${eventMeta}) ${message}`;
   }
 
   return log;
@@ -88,10 +108,14 @@ function standardLog<T extends GenericEvent = EventOptions<keyof Events>>
 > Map of Ajv validation functions related to events.
 
 ```ts
-const eventsValidationFn: MappedEventsValidationFn = new Map<string, CustomEventsValidationFunctions>();
+type NestedValidationFunctions = Map<string, ValidateFunction<Record<string, any>>>;
+
+type eventsValidationFn<T extends GenericEvent> = Map<string, ValidateFunction<T> | NestedValidationFunctions>;
+
+export const eventsValidationFn: MappedEventsValidationFn = new Map<string, NestedValidationFunctions>();
 
 for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas)) {
-  const operationsValidationFunctions: Map<string, ValidateFunction<OperationFunctions>> = new Map();
+  const operationsValidationFunctions: Map<string, ValidateFunction<Record<string, any>>> = new Map();
 
   for (const [operation, validationSchema] of Object.entries(validationSchemas)) {
     operationsValidationFunctions.set(operation, ajv.compile(validationSchema));
@@ -106,6 +130,8 @@ for (const [name, validationSchemas] of Object.entries(eventsValidationSchemas))
 > Callback validation function used to validate events according to the given eventsValidationFn.
 
 ```ts
+type customValidationCbFn<T extends GenericEvent> = (event: T) => void;
+
 function validate<T extends keyof Events = keyof Events>(options: EventOptions<T>) {
   const { name, operation, data, scope, metadata } = options;
 
