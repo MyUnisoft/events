@@ -9,7 +9,7 @@ import {
   Channel
 } from "@myunisoft/redis";
 import { pino } from "pino";
-import { P, match } from "ts-pattern";
+import { match } from "ts-pattern";
 import { ValidateFunction } from "ajv";
 import { Result } from "@openally/result";
 
@@ -60,10 +60,6 @@ const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "f
 
 export const RESOLVED: unique symbol = Symbol.for("RESOLVED");
 export const UNRESOLVED: unique symbol = Symbol.for("UNRESOLVED");
-
-type IncomerChannelEvents<
-  T extends GenericEvent = GenericEvent
-> = { name: "PING"; message: DispatcherPingMessage } | { name: string; message: DistributedEventMessage<T> };
 
 function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(value:
   DispatcherChannelMessages["DispatcherMessages"] |
@@ -712,6 +708,14 @@ export class Incomer <
         }
       }
     }
+
+    await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
+      ...formattedTransaction,
+      redisMetadata: {
+        ...formattedTransaction.redisMetadata,
+        resolved: true
+      }
+    } as Transaction<"incomer">);
 
     this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${String(callbackResult.val)}`));
   }
