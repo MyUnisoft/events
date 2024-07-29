@@ -28,10 +28,27 @@ const incomer = new Incomer({
   name: "foo",
   eventsCast: [...Object.keys(AVAILABLE_EVENTS)],
   eventsSubscribe: [...Object.values(AVAILABLE_EVENTS)],
-  eventCallback: (event) => {
-    console.log(event);
+  eventCallback: async(event) => {
+    try {
+      // Do some async work
+    }
+    catch (error) {
+      if (error.reason === "ANY_RETRY_ERROR") {
+        return OK({
+          status: "UNRESOLVED",
+          reason: error.stack,
+          retryStrategy: {
+            maxIteration: 1
+          }
+        });
+      }
 
-    return OK({ status: "RESOLVED" });
+      return Err(error.stack);
+    }
+
+    return OK({
+      status: "RESOLVED"
+    });
   }
 });
 
@@ -50,7 +67,6 @@ type GenericEvent = {
   data: Record<string, any>;
   [key: string]: any;
 };
-
 
 type EventCast<T extends string | keyof Events = string> = T;
 
