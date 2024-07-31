@@ -1,0 +1,34 @@
+{
+  "discussion_room": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "delete": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  }
+}

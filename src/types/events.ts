@@ -133,10 +133,40 @@ export type DiscussionRoomOperation = Operation[
 
 export type DiscussionRoomScope = PushNotificationScope;
 
-export interface discussionRoom {
-  name: "room";
+export interface DiscussionRoom {
+  name: "discussion_room";
   scope: DiscussionRoomScope;
   operation: DiscussionRoomOperation;
+  data: {
+    id: number;
+  }
+}
+
+export type DiscussionMessageOperation = Operation[
+  keyof Pick<Operation, "create" | "update">
+];
+
+export type DiscussionMessageScope = PushNotificationScope;
+
+export interface DiscussionMessage {
+  name: "discussion_message";
+  scope: DiscussionMessageScope;
+  operation: DiscussionMessageOperation;
+  data: {
+    id: number;
+  }
+}
+
+export type DiscussionUnreadMessageOperation = Operation[
+  keyof Pick<Operation, "create" | "update">
+];
+
+export type DiscussionUnreadMessageScope = PushNotificationScope;
+
+export interface DiscussionUnreadMessage {
+  name: "discussion_unread_message";
+  scope: DiscussionUnreadMessageScope;
+  operation: DiscussionUnreadMessageOperation;
   data: {
     id: number;
   }
@@ -152,4 +182,7 @@ export interface Events {
   thirdParty: ThirdParty;
   accountingEntryLettering: AccountingEntryLettering;
   cloudDocument: CloudDocument;
+  discussionRoom: DiscussionRoom;
+  discussionMessage: DiscussionMessage;
+  discussionUnreadMessage: DiscussionUnreadMessage;
 }
