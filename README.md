@@ -139,17 +139,19 @@ if (isDeleteOperation(event.operation)) {
 
 | variable | description | default |
 | --- | --- | --- |
-| `MYUNISOFT_INCOMER_INIT_TIMEOUT` | Incomer initialisation timeout | `3_500` |
-| `MYUNISOFT_EVENTS_INIT_EXTERNAL` | Weither Incomer should initialise an external Dispatcher | `false` |
 | `MYUNISOFT_EVENTS_LOGGER_MODE` | Set log level for the default logger | `info` |
-| `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` | Maximum ping interval | `60_000` |
-| `MYUNISOFT_INCOMER_PUBLISH_INTERVAL` | Publish interval | `60_000` |
-| `MYUNISOFT_INCOMER_IS_DISPATCHER` | Weither Incomer is a Dispatcher | `false` |
+| <b>Dispatcher</b> |
 | `MYUNISOFT_DISPATCHER_IDLE_TIME` | Interval threshold when Dispatcher become idle | `600_000` |
 | `MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL` | Dispatcher checking last activity interval | `120_000` |
 | `MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME` | Default name for backup transaction store | `backup` |
 | `MYUNISOFT_DISPATCHER_INIT_TIMEOUT` | Dispatcher initialisation timeout | `3_500` |
 | `MYUNISOFT_DISPATCHER_PING_INTERVAL` | Dispatcher ping interval | `3_500` |
+| <b>Incomer</b> |
+| `MYUNISOFT_INCOMER_INIT_TIMEOUT` | Incomer initialisation timeout | `3_500` |
+| `MYUNISOFT_EVENTS_INIT_EXTERNAL` | Whenever Incomer should initialize an external Dispatcher | `false` |
+| `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` | Maximum ping interval | `60_000` |
+| `MYUNISOFT_INCOMER_PUBLISH_INTERVAL` | Publish interval | `60_000` |
+| `MYUNISOFT_INCOMER_IS_DISPATCHER` | Weither Incomer is a Dispatcher | `false` |
 
 ### API
 
@@ -161,7 +163,7 @@ if (isDeleteOperation(event.operation)) {
 
 #### validate< T extends keyof Events >(options: EventOptions<T>): void
 
-> Throw an error if a given event is not internaly known.
+> Throw an error if a given event is not internally known.
 
 ---
 

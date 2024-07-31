@@ -28,10 +28,27 @@ const incomer = new Incomer({
   name: "foo",
   eventsCast: [...Object.keys(AVAILABLE_EVENTS)],
   eventsSubscribe: [...Object.values(AVAILABLE_EVENTS)],
-  eventCallback: (event) => {
-    console.log(event);
+  eventCallback: async(event) => {
+    try {
+      // Do some async work
+    }
+    catch (error) {
+      if (error.reason === "ANY_RETRY_ERROR") {
+        return OK({
+          status: "UNRESOLVED",
+          reason: error.stack,
+          retryStrategy: {
+            maxIteration: 1
+          }
+        });
+      }
 
-    return OK({ status: "RESOLVED" });
+      return Err(error.stack);
+    }
+
+    return OK({
+      status: "RESOLVED"
+    });
   }
 });
 
@@ -45,7 +62,11 @@ await incomer.close();
 ```ts
 type Prefix = "test" | "development" | "staging" | "production";
 
-type GenericEvent = Record<string, any> & { data: Record<string, any> };
+type GenericEvent = {
+  name: string;
+  data: Record<string, any>;
+  [key: string]: any;
+};
 
 type EventCast<T extends string | keyof Events = string> = T;
 
@@ -58,26 +79,48 @@ type EventSubscribe<T extends string | keyof Events = string> = {
 type CallBackEventMessage<
   T extends GenericEvent = GenericEvent
 > = T & {
-  name: string;
+  eventTransactionId: string;
 };
 
-type EventMessage<
-  T extends GenericEvent = GenericEvent
-> = T & {
-  name: string;
-  redisMetadata: IncomerTransactionMetadata;
-};
+export type Resolved = "RESOLVED";
+export type Unresolved = "UNRESOLVED";
+
+type EventCallbackResponse<T extends Resolved | Unresolved = Resolved | Unresolved> = Result<
+  T extends Resolved ? {
+    status: T;
+  } : {
+  status: T;
+  retryStrategy?: {
+    maxIteration: number;
+  };
+  reason: string;
+}, string>;
+
+type NestedValidationFunctions = Map<string, ValidateFunction<Record<string, any>>>;
+
+type customValidationCbFn<T extends GenericEvent> = (event: T) => void;
+type eventsValidationFn<T extends GenericEvent> = Map<string, ValidateFunction<T> | NestedValidationFunctions>;
 
 type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
+  prefix?: Prefix;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
   standardLog?: StandardLog<T>;
   eventsCast: EventCast[];
   eventsSubscribe: EventSubscribe[];
+  eventsValidation?: {
+    eventsValidationFn?: eventsValidationFn<T>;
+    customValidationCbFn?: customValidationCbFn<T>;
+  };
   eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
-  prefix?: Prefix;
-  abortPublishTime?: number;
+  dispatcherInactivityOptions?: {
+    /* max interval between received ping before considering dispatcher off */
+    maxPingInterval?: number;
+    /* max interval between a new event (based on ping interval) */
+    publishInterval?: number;
+  };
+  isDispatcherInstance?: boolean;
   externalsInitialized?: boolean;
 };
 ```
@@ -90,7 +133,7 @@ type IncomerOptions<T extends GenericEvent = GenericEvent> = {
 <br/>
 
 > Default logger is a pino logger. <br/>
-> ⚠️ You can inject your own but you must ensure that the provided logger has those methods `info` | `error` | `warn`.
+> ⚠️ You can inject your own but you must ensure that the provided logger has those methods `info` | `error` | `warn` | `debug`.
 
 </details>
 
@@ -103,28 +146,37 @@ type IncomerOptions<T extends GenericEvent = GenericEvent> = {
 > Callback function use to formate logs related to custom events casting.
 
 ```ts
+type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
+  redisMetadata: {
+    transactionId: string;
+    origin?: string;
+    to?: string;
+    eventTransactionId?: string;
+  }
+};
+```
+
+> Default Callback function used.
+
+```ts
+function logValueFallback(value: string): string {
+  return value ?? "none";
+}
+
 function standardLog<T extends GenericEvent = EventOptions<keyof Events>>
-(event: T & { redisMetadata: { transactionId: string } }) {
-  const logs = `foo: ${event.foo}`;
+(data: StandardLogOpts<T>) {
+  const logs = Array.from(mapped<T>(event)).join("|");
+
+  // eslint-disable-next-line max-len
+  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}`;
 
   function log(message: string) {
-    return `(${logs}) ${message}`;
+    return `(${logs})(${eventMeta}) ${message}`;
   }
 
   return log;
 }
 ```
-
-</details>
-
----
-
-<details> 
-<summary><b>abortPublishTime</b></summary>
-<br/>
-
-> Interval of time during which the `incomer` instance is going to wait to for a response from the `dispatcher` next to the registration demand or any event publishing. <br/>
-> If there is no recent activity from the `dispatcher`, those events are not publish and saved in Redis awaiting for the next iteration.
 
 </details>
 
@@ -140,7 +192,7 @@ function standardLog<T extends GenericEvent = EventOptions<keyof Events>>
 
 ## API
 
-### publish< K extends GenericEvent | null = null >(event: K extends null ? Omit< EventMessage< T >, "redisMetadata" >): Promise<void>
+### publish(event: T): Promise<void>
 
 > Publish the given event on Redis pubsub. <br/>
 > If there is no dispatcher alive, the event isn't publish but saved in Redis awaiting for an incoming publish.
