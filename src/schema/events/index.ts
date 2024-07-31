@@ -7,3 +7,7 @@ export { adminMessage } from "./adminMessage.json";
 export { thirdParty } from "./thirdParty.json";
 export { accountingEntryLettering } from "./accountingEntryLettering.json";
 export { cloudDocument } from "./cloudDocument.json";
+
+export { discussion_room } from "./discussion/room.json";
+export { discussion_message } from "./discussion/message.json";
+export { discussion_unread_message } from "./discussion/unreadMessage.json";
