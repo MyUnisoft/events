@@ -5,9 +5,21 @@
       "properties": {
         "id": {
           "type": "number"
+        },
+        "folderId": {
+          "type": "number"
+        },
+        "roomTypeId": {
+          "type": "number"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
         }
       },
-      "required": ["id"],
+      "required": ["id", "folderId", "roomTypeId"],
       "additionalProperties": false
     },
     "update": {
@@ -15,9 +27,21 @@
       "properties": {
         "id": {
           "type": "number"
+        },
+        "folderId": {
+          "type": "number"
+        },
+        "roomTypeId": {
+          "type": "number"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
         }
       },
-      "required": ["id"],
+      "required": ["id", "folderId", "roomTypeId", "memberIds"],
       "additionalProperties": false
     },
     "delete": {
@@ -25,9 +49,15 @@
       "properties": {
         "id": {
           "type": "number"
+        },
+        "folderId": {
+          "type": "number"
+        },
+        "roomTypeId": {
+          "type": "number"
         }
       },
-      "required": ["id"],
+      "required": ["id", "folderId", "roomTypeId"],
       "additionalProperties": false
     }
   }

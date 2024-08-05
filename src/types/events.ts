@@ -125,48 +125,35 @@ export interface CloudDocument {
 
 export type PushNotificationScope = Scope & {
   persPhysiqueId: number;
+  accountingFolderId: number;
 };
 
 export type DiscussionRoomOperation = Operation[
   keyof Pick<Operation, "create" | "update" | "delete">
 ];
 
+
 export type DiscussionRoomScope = PushNotificationScope;
 
-export interface DiscussionRoom {
+export interface DiscussionRoom<T extends DiscussionRoomOperation = DiscussionRoomOperation> {
   name: "discussion_room";
   scope: DiscussionRoomScope;
-  operation: DiscussionRoomOperation;
-  data: {
+  operation: T;
+  data: (T extends Operation[keyof Pick<Operation, "create" | "update">] ? {
+    memberIds: number[];
+  } : unknown) & {
     id: number;
-  }
+    folderId: number;
+    roomTypeId: number;
+  };
 }
-
-export type DiscussionMessageOperation = Operation[
-  keyof Pick<Operation, "create" | "update">
-];
 
 export type DiscussionMessageScope = PushNotificationScope;
 
 export interface DiscussionMessage {
   name: "discussion_message";
   scope: DiscussionMessageScope;
-  operation: DiscussionMessageOperation;
-  data: {
-    id: number;
-  }
-}
-
-export type DiscussionUnreadMessageOperation = Operation[
-  keyof Pick<Operation, "create" | "update">
-];
-
-export type DiscussionUnreadMessageScope = PushNotificationScope;
-
-export interface DiscussionUnreadMessage {
-  name: "discussion_unread_message";
-  scope: DiscussionUnreadMessageScope;
-  operation: DiscussionUnreadMessageOperation;
+  operation: "CREATE" | "UPDATE";
   data: {
     id: number;
   }
@@ -184,5 +171,4 @@ export interface Events {
   cloudDocument: CloudDocument;
   discussionRoom: DiscussionRoom;
   discussionMessage: DiscussionMessage;
-  discussionUnreadMessage: DiscussionUnreadMessage;
 }
