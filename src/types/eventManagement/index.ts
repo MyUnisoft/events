@@ -1,3 +1,4 @@
+// Import Internal Dependencies
 import { Events } from "../index";
 
 export type Prefix = "test" | "development" | "staging" | "production";
@@ -10,23 +11,21 @@ export type EventSubscribe<T extends string | keyof Events = string> = {
   horizontalScale?: boolean;
 };
 
-export interface DispatcherTransactionMetadata {
+export interface SharedTransactionMetadata {
   origin: string;
-  to: string;
   incomerName: string;
   transactionId: string;
-  iteration: number;
   prefix?: Prefix;
   eventTransactionId?: string;
 }
 
-export interface IncomerTransactionMetadata {
-  origin: string;
-  incomerName: string;
+export interface DispatcherTransactionMetadata extends SharedTransactionMetadata {
+  to: string;
+  iteration: number;
+}
+
+export interface IncomerTransactionMetadata extends SharedTransactionMetadata {
   to?: string;
-  prefix?: Prefix;
-  transactionId: string;
-  eventTransactionId?: string;
 }
 
 export type GenericEvent = {
