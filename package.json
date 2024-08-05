@@ -32,12 +32,12 @@
     "validation"
   ],
   "dependencies": {
-    "@myunisoft/redis": "github:MyUnisoft/redis#v3.4.2",
+    "@myunisoft/redis": "github:MyUnisoft/redis#v3.4.3",
     "@openally/mutex": "^1.0.0",
     "@openally/result": "^1.2.1",
     "ajv": "^8.16.0",
     "pino-pretty": "^11.2.1",
-    "ts-pattern": "^4.3.0"
+    "ts-pattern": "^5.2.0"
   },
   "devDependencies": {
     "@nodesecure/eslint-config": "^1.9.0",
