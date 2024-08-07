@@ -7,14 +7,20 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/package-json/v/MyUnisoft/events?style=flat-square" alt="npm version"></a>
-    <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/license/MyUnisoft/events?style=flat-square" alt="license"></a>
-    <a href="https://github.com/MyUnisoft/events"><img src="https://img.shields.io/github/languages/code-size/MyUnisoft/events?style=flat-square" alt="size"></a>
+  <a href="https://github.com/MyUnisoft/events">
+    <img src="https://img.shields.io/github/package-json/v/MyUnisoft/events?style=flat-square" alt="npm version">
+  </a>
+  <a href="https://github.com/MyUnisoft/events">
+    <img src="https://img.shields.io/github/license/MyUnisoft/events?style=flat-square" alt="license">
+  </a>
+  <a href="https://github.com/MyUnisoft/events">
+    <img src="https://img.shields.io/github/languages/code-size/MyUnisoft/events?style=flat-square" alt="size">
+  </a>
 </p>
 
 ## 🚧 Requirements
 
-- [Node.js](https://nodejs.org/en/) version 16 or higher
+- [Node.js](https://nodejs.org/en/) version 18 or higher
 - Docker (for running tests).
 
 ## 🚀 Getting Started
