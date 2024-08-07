@@ -36,6 +36,7 @@
     "@openally/mutex": "^1.0.0",
     "@openally/result": "^1.2.1",
     "ajv": "^8.16.0",
+    "pino": "^9.3.2",
     "pino-pretty": "^11.2.1",
     "ts-pattern": "^4.3.0"
   },
