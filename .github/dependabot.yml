@@ -19,3 +19,10 @@ updates:
         dependency-type: "production"
       development-dependencies:
         dependency-type: "development"
+
+  - package-ecosystem: npm
+    directory: /example/fastify
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"

@@ -1,12 +1,12 @@
-// Import Internal Dependencies
-import * as MyEvents from "../../../src/index";
-
-// Import types
-import {
+// Import Third-party Dependencies
+import type {
   FastifyRequest,
   FastifyReply,
   FastifyInstance
 } from "fastify";
+
+// Import Internal Dependencies
+import * as MyEvents from "../../../src/index.js";
 
 export async function webhooksAPI(server: FastifyInstance) {
   server.post("/anyEvents", getAnyWebhooks);
@@ -21,7 +21,10 @@ type GetAnyWebhooksRequest = FastifyRequest<{
   Body: MyEvents.WebhooksResponse;
 }>;
 
-async function getAnyWebhooks(req: GetAnyWebhooksRequest, reply: FastifyReply) {
+async function getAnyWebhooks(
+  request: GetAnyWebhooksRequest,
+  reply: FastifyReply
+) {
   // Do some code
 }
 
@@ -33,6 +36,9 @@ type GetConnectorWebhooksRequest = FastifyRequest<{
   Body: MyEvents.WebhooksResponse<["connector"]>;
 }>;
 
-async function getConnectorWebhooks(req: GetConnectorWebhooksRequest, reply: FastifyReply) {
+async function getConnectorWebhooks(
+  request: GetConnectorWebhooksRequest,
+  reply: FastifyReply
+) {
   // Do some code
 }

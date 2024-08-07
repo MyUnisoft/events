@@ -43,7 +43,6 @@
     "@nodesecure/eslint-config": "^1.9.0",
     "@types/jest": "^27.4.1",
     "dotenv": "^16.4.5",
-    "fastify": "^4.3.0",
     "jest": "^27.5.1",
     "testcontainers": "^10.10.0",
     "ts-jest": "^27.1.4",
