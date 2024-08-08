@@ -412,11 +412,6 @@ export class Incomer <
 
   public async close() {
     try {
-      await this.externals?.close();
-
-      await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
-      this.subscriber.removeAllListeners("message");
-
       clearInterval(this.checkTransactionsStateInterval);
       this.checkTransactionsStateInterval = undefined;
 
@@ -430,7 +425,12 @@ export class Incomer <
         this.checkDispatcherStateTimeout = undefined;
       }
 
-      await this.cleaupTransactions();
+      await this.externals?.close();
+
+      await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
+      this.subscriber.removeAllListeners("message");
+
+      await this.cleanupTransactions();
 
       this.logger.info("Incomer closed successfully");
     }
@@ -441,7 +441,7 @@ export class Incomer <
     }
   }
 
-  private async cleaupTransactions() {
+  private async cleanupTransactions() {
     if (this.incomerChannel) {
       await this.incomerChannel.publish({
         name: "CLOSE",
