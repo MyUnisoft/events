@@ -141,8 +141,8 @@ export class Incomer <
   private publishInterval: number;
   private maxPingInterval: number;
   private standardLogFn: StandardLog<T>;
-  private checkRegistrationInterval: NodeJS.Timer;
-  private checkTransactionsStateInterval: NodeJS.Timer;
+  private checkRegistrationInterval: NodeJS.Timeout;
+  private checkTransactionsStateInterval: NodeJS.Timeout;
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
   private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
