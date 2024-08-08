@@ -13,12 +13,12 @@ import { pino } from "pino";
 
 // Import Internal Dependencies
 import {
-  DispatcherSpreadTransaction,
-  PartialTransaction,
-  Transaction,
+  type DispatcherSpreadTransaction,
+  type PartialTransaction,
+  type Transaction,
   TransactionStore
 } from "../store/transaction.class.js";
-import {
+import type {
   Prefix,
   DispatcherChannelMessages,
   IncomerChannelMessages,
@@ -30,16 +30,21 @@ import {
   CloseMessage,
   RetryMessage,
   DistributedEventMessage,
-  DispatcherTransactionMetadata
-} from "../../types/eventManagement/index.js";
-import { defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index.js";
-import { IncomerStore, RegisteredIncomer } from "../store/incomer.class.js";
+  DispatcherTransactionMetadata,
+  PartialLogger,
+  RegisteredIncomer
+} from "../../types/index.js";
+import {
+  defaultStandardLog,
+  handleLoggerMode, type StandardLog
+} from "../../utils/index.js";
+import { IncomerStore } from "../store/incomer.class.js";
 import { TransactionHandler } from "./dispatcher/transaction-handler.class.js";
 import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class.js";
 import {
   EventsHandler,
-  customValidationCbFn,
-  eventsValidationFn
+  type customValidationCbFn,
+  type eventsValidationFn
 } from "./dispatcher/events.class.js";
 
 // CONSTANTS
@@ -60,25 +65,7 @@ export const RESOLVE_TRANSACTION_INTERVAL = Number.isNaN(
 export const PING_INTERVAL = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL)) ? 60_000 * 5 :
   Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL);
 
-export type DefaultOptions<T extends GenericEvent> = {
-  logger?: PartialLogger;
-  standardLog?: StandardLog<T>;
-  pingInterval?: number;
-  idleTime?: number;
-}
-
-export type SharedOptions<T extends GenericEvent> = {
-  dispatcherTransactionStore: TransactionStore<"dispatcher">;
-  backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
-  backupIncomerTransactionStore: TransactionStore<"incomer">;
-  incomerChannelHandler: IncomerChannelHandler<T>;
-  incomerStore: IncomerStore;
-  privateUUID: string;
-  formattedPrefix: string;
-  parentLogger: PartialLogger;
-}
-
-export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOptions<T> & {
+export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   prefix?: Prefix;
   eventsValidation?: {
     eventsValidationFn?: eventsValidationFn<T>;
@@ -88,18 +75,10 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
   instanceName?: string;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
-};
-
-export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" | "ABORT_TAKING_LEAD" | "ABORT_TAKING_LEAD_BACK" };
-
-type anyFn = (...args: any[]) => void;
-
-export type PartialLogger = {
-  info: anyFn;
-  warn: anyFn;
-  debug: anyFn;
-  error: anyFn;
-  [key: string]: any;
+  logger?: PartialLogger;
+  standardLog?: StandardLog<T>;
+  pingInterval?: number;
+  idleTime?: number;
 };
 
 interface DispatchEventToIncomer<T extends GenericEvent = GenericEvent> {
@@ -212,7 +191,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       instance: "incomer"
     });
 
-    const sharedOptions: SharedOptions<T> = {
+    const sharedOptions = {
       privateUUID: this.privateUUID,
       formattedPrefix: this.formattedPrefix,
       parentLogger: this.logger,

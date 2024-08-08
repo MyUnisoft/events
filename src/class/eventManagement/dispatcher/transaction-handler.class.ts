@@ -14,7 +14,7 @@ import {
   type Transaction,
   type Transactions
 } from "../../store/transaction.class.js";
-import { IncomerStore, RegisteredIncomer } from "../../store/incomer.class.js";
+import { IncomerStore } from "../../store/incomer.class.js";
 import { IncomerChannelHandler } from "./incomer-channel.class.js";
 import {
   type StandardLog,
@@ -25,13 +25,10 @@ import { EventsHandler } from "./events.class.js";
 import type {
   DispatcherChannelMessages,
   GenericEvent,
-  IncomerChannelMessages
-} from "../../../types/index.js";
-import type {
-  DefaultOptions,
+  IncomerChannelMessages,
   PartialLogger,
-  SharedOptions
-} from "../dispatcher.class.js";
+  RegisteredIncomer
+} from "../../../types/index.js";
 
 
 interface DistributeMainTransactionOptions {
@@ -90,8 +87,20 @@ export interface DispatchEventOptions<T extends GenericEvent> {
   event: DispatchedEvent<T>;
 }
 
-export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = DefaultOptions<T> & SharedOptions<T> & {
+export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = {
   eventsHandler: EventsHandler<T>;
+  dispatcherTransactionStore: TransactionStore<"dispatcher">;
+  backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
+  backupIncomerTransactionStore: TransactionStore<"incomer">;
+  incomerChannelHandler: IncomerChannelHandler<T>;
+  incomerStore: IncomerStore;
+  privateUUID: string;
+  formattedPrefix: string;
+  parentLogger: PartialLogger;
+  logger?: PartialLogger;
+  standardLog?: StandardLog<T>;
+  pingInterval?: number;
+  idleTime?: number;
 };
 
 export class TransactionHandler<T extends GenericEvent = GenericEvent> {
