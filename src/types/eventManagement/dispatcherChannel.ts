@@ -1,5 +1,5 @@
 // Import Internal Dependencies
-import {
+import type {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   EventSubscribe,

@@ -1,12 +1,12 @@
 // Import Internal Dependencies
-import { Incomer, IncomerOptions } from "./incomer.class";
-import { Dispatcher } from "./dispatcher.class";
-import {
+import { Incomer, type IncomerOptions } from "./incomer.class.js";
+import { Dispatcher } from "./dispatcher.class.js";
+import type {
   GenericEvent
-} from "../../types";
+} from "../../types/index.js";
 import {
   AVAILABLE_EVENTS
-} from "../../index";
+} from "../../index.js";
 
 export class Externals<T extends GenericEvent = GenericEvent> {
   public incomer: Incomer<T>;

@@ -1,5 +1,5 @@
 // Import Node.js Dependencies
-import timers from "timers/promises";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -17,11 +17,11 @@ import {
   Dispatcher,
   Incomer,
   eventsValidationFn,
-  EventOptions,
-  Events,
+  type EventOptions,
+  type Events,
   validate
-} from "../../../../src/index";
-import { TransactionStore } from "../../../../src/class/store/transaction.class";
+} from "../../../../src/index.js";
+import { TransactionStore } from "../../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
 const dispatcherLogger = Logger.pino({

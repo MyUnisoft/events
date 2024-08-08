@@ -1,6 +1,6 @@
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
-import timers from "timers/promises";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -15,10 +15,18 @@ import * as Logger from "pino";
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { Dispatcher, EventOptions, Events } from "../../../../src/index";
-import * as EventsSchemas from "../../schema/index";
-import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
-import { TransactionHandler } from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class";
+import {
+  Dispatcher,
+  type EventOptions,
+  type Events
+} from "../../../../src/index.js";
+import * as EventsSchemas from "../../../fixtures/foo.js";
+import {
+  Transaction, TransactionStore
+} from "../../../../src/class/store/transaction.class.js";
+import {
+  TransactionHandler
+} from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class.js";
 
 // Internal Dependencies Mocks
 const logger = Logger.pino({

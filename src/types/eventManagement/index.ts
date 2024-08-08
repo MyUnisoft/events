@@ -1,4 +1,4 @@
-import { Events } from "../index";
+import { Events } from "../index.js";
 
 export type Prefix = "test" | "development" | "staging" | "production";
 
@@ -33,5 +33,5 @@ export type GenericEvent = {
   [key: string]: any;
 };
 
-export * from "./dispatcherChannel";
-export * from "./incomerChannel";
+export * from "./dispatcherChannel.js";
+export * from "./incomerChannel.js";

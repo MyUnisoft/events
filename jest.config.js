@@ -16,5 +16,12 @@ module.exports = {
     "**/test/**/*.spec.ts"
   ],
   maxWorkers: 1,
-  globalSetup: "./start-container.js"
+  globalSetup: "./start-container.js",
+  transform: {
+    "\\.[jt]sx?$": "ts-jest"
+  },
+  moduleNameMapper: {
+    "(.+)\\.js": "$1"
+  },
+  extensionsToTreatAsEsm: [".ts"]
 };

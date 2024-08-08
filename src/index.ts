@@ -2,11 +2,12 @@
 import Ajv from "ajv";
 
 // Import Internal Dependencies
-import { concatErrors, eventsValidationFn } from "./utils/index";
-import { metadata as metadataSchema, scope as scopeSchema } from "./schema";
-
-// Import Types
+import { concatErrors, eventsValidationFn } from "./utils/index.js";
 import {
+  metadata as metadataSchema,
+  scope as scopeSchema
+} from "./schema/index.js";
+import type {
   EventOptions,
   EventSubscribe,
   Events,
@@ -80,8 +81,8 @@ export const AVAILABLE_EVENTS = Object.freeze<Record<keyof Events, EventSubscrib
   })).reduce((prev, curr) => Object.assign(prev, { [curr.name]: curr }), {}) as Record<keyof Events, EventSubscribe>
 );
 
+export { eventsValidationFn } from "./utils/index";
 export * as EventSchemas from "./schema/events/index";
 export * from "./types/index";
-export { eventsValidationFn } from "./utils/index";
 export * from "./class/eventManagement/dispatcher.class";
 export * from "./class/eventManagement/incomer.class";

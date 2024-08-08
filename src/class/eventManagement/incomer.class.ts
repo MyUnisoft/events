@@ -10,16 +10,16 @@ import {
 } from "@myunisoft/redis";
 import { pino } from "pino";
 import { match } from "ts-pattern";
-import { ValidateFunction } from "ajv";
-import { Result } from "@openally/result";
+import type { ValidateFunction } from "ajv";
+import type { Result } from "@openally/result";
 
 // Import Internal Dependencies
 import {
-  IncomerMainTransaction,
-  PartialTransaction,
-  Transaction,
+  type IncomerMainTransaction,
+  type PartialTransaction,
+  type Transaction,
   TransactionStore
-} from "../store/transaction.class";
+} from "../store/transaction.class.js";
 import {
   Prefix,
   EventCast,
@@ -34,16 +34,16 @@ import {
   GenericEvent,
   IncomerRegistrationMessage,
   RetryMessage
-} from "../../types/eventManagement/index";
+} from "../../types/eventManagement/index.js";
 import {
-  NestedValidationFunctions,
-  StandardLog,
+  type NestedValidationFunctions,
+  type StandardLog,
   defaultStandardLog,
   handleLoggerMode
-} from "../../utils/index";
-import { Externals } from "./externals.class";
-import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents, PartialLogger } from "./dispatcher.class";
-import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
+} from "../../utils/index.js";
+import { Externals } from "./externals.class.js";
+import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents, PartialLogger } from "./dispatcher.class.js";
+import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class.js";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout

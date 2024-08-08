@@ -1,5 +1,5 @@
 // Import Internal Dependencies
-import * as MyEvents from "../../src/index";
+import * as MyEvents from "../../src/index.js";
 
 describe("validate", () => {
   test("Casting no events name, it should take any events", () => {

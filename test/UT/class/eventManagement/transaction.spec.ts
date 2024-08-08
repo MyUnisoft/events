@@ -5,7 +5,11 @@ import {
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import { PartialTransaction, Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
+import {
+  type PartialTransaction,
+  type Transaction,
+  TransactionStore
+} from "../../../../src/class/store/transaction.class.js";
 
 let transactionStore: TransactionStore<"dispatcher">;
 

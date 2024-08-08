@@ -1,5 +1,5 @@
 // Import Node.js Dependencies
-import timers from "timers/promises";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -14,14 +14,14 @@ import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import {
+  validate,
   Dispatcher,
   Incomer,
   eventsValidationFn,
-  EventOptions,
-  Events
-} from "../../../../src/index";
-import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class";
-import { validate } from "../../../../src/index";
+  type EventOptions,
+  type Events
+} from "../../../../src/index.js";
+import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
 const incomerLogger = Logger.pino({

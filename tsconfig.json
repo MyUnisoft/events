@@ -1,19 +1,33 @@
 {
     "compilerOptions": {
+      /* Base Options: */
       "target": "ES2022",
       "module": "commonjs",
-      "strict": false,
-      "outDir": "./dist",
+      "allowJs": true,
       "moduleResolution": "node",
       "resolveJsonModule": true,
-      "baseUrl": "./src",
+      "esModuleInterop": true,
+      "moduleDetection": "force",
+      "isolatedModules": true,
+      "verbatimModuleSyntax": false,
+
+      /* Strictness */
+      "strict": false,
+      "noUncheckedIndexedAccess": false,
+      "noImplicitOverride": true,
+
+      /* Others */
+      "sourceMap": true,
       "declaration": true,
+      "declarationMap": true,
+      "lib": ["es2022"],
+      "baseUrl": "./src",
+      "outDir": "./dist",
+      "types": ["jest", "node"],
       "paths": {
         "#src/*": ["./src/*"]
       },
-      "typeRoots": ["node_modules/@types", "./types"],
-      "types": ["jest", "node"],
-      "esModuleInterop": true
+      "typeRoots": ["node_modules/@types", "./types"]
     },
     "include": [
       "src/**/**/*.ts",

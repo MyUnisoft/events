@@ -1,6 +1,5 @@
 // Import Node.js Dependencies
-import { randomUUID } from "node:crypto";
-import timers from "timers/promises";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -13,7 +12,11 @@ import * as Logger from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
-import { Dispatcher, EventOptions, Incomer } from "../../../../src/index";
+import {
+  Dispatcher,
+  Incomer,
+  type EventOptions
+} from "../../../../src/index.js";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");

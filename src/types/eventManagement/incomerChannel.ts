@@ -1,10 +1,10 @@
 // Import Internal Dependencies
-import {
+import type {
   DispatcherTransactionMetadata,
   GenericEvent,
   IncomerTransactionMetadata,
   Prefix
-} from "./index";
+} from "./index.js";
 
 export type DispatcherPingMessage = {
   name: "PING";
