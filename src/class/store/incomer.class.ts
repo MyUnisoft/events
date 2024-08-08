@@ -8,19 +8,7 @@ import {
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import { EventCast, EventSubscribe } from "../../types";
-
-export interface RegisteredIncomer {
-  providedUUID: string;
-  baseUUID: string;
-  name: string;
-  isDispatcherActiveInstance: boolean;
-  lastActivity: number;
-  aliveSince: number;
-  eventsCast: EventCast[];
-  eventsSubscribe: EventSubscribe[];
-  prefix?: string;
-}
+import type { RegisteredIncomer } from "../../types/index.js";
 
 export class IncomerStore extends KVPeer<RegisteredIncomer> {
   #key: string;

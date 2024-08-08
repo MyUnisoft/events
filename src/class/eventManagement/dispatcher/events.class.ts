@@ -16,7 +16,8 @@ import type {
   IncomerRegistrationMessage,
   CloseMessage,
   RetryMessage,
-  DispatcherTransactionMetadata
+  DispatcherTransactionMetadata,
+  PartialLogger
 } from "../../../types/index.js";
 import * as eventsSchema from "../../../schema/eventManagement/index.js";
 import {
@@ -26,13 +27,10 @@ import {
   concatErrors,
   defaultStandardLog
 } from "../../../utils/index.js";
-import { PartialLogger } from "../dispatcher.class.js";
 
 // CONSTANTS
 const ajv = new Ajv();
 const kDispatcherChannelEvents = ["REGISTER"];
-
-export type DispatcherChannelEvents = { name: "REGISTER"};
 
 type AnyDispatcherChannelMessage = (
   DispatcherChannelMessages["IncomerMessages"]

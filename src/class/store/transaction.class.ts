@@ -8,16 +8,15 @@ import {
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import {
+import type {
   DispatcherTransactionMetadata,
   IncomerTransactionMetadata,
   DispatcherChannelMessages,
   IncomerChannelMessages,
   DispatcherPingMessage,
-  DistributedEventMessage
-} from "../../types/eventManagement/index";
-
-export type Instance = "dispatcher" | "incomer";
+  DistributedEventMessage,
+  Instance
+} from "../../types/eventManagement/index.js";
 
 type MainTransaction = {
   published?: boolean;

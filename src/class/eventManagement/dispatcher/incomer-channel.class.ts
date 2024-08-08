@@ -5,9 +5,9 @@ import { Channel, getRedis } from "@myunisoft/redis";
 import type {
   DistributedEventMessage,
   GenericEvent,
-  IncomerChannelMessages
+  IncomerChannelMessages,
+  PartialLogger
 } from "../../../types/index.js";
-import { PartialLogger } from "../dispatcher.class.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
   logger: PartialLogger;

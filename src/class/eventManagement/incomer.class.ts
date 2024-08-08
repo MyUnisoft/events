@@ -20,7 +20,7 @@ import {
   type Transaction,
   TransactionStore
 } from "../store/transaction.class.js";
-import {
+import type {
   Prefix,
   EventCast,
   EventSubscribe,
@@ -33,7 +33,8 @@ import {
   EventMessage,
   GenericEvent,
   IncomerRegistrationMessage,
-  RetryMessage
+  RetryMessage,
+  PartialLogger
 } from "../../types/eventManagement/index.js";
 import {
   type NestedValidationFunctions,
@@ -42,7 +43,7 @@ import {
   handleLoggerMode
 } from "../../utils/index.js";
 import { Externals } from "./externals.class.js";
-import { DISPATCHER_CHANNEL_NAME, DispatcherChannelEvents, PartialLogger } from "./dispatcher.class.js";
+import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class.js";
 import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class.js";
 
 // CONSTANTS
@@ -77,6 +78,8 @@ function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
 
 export type Resolved = "RESOLVED";
 export type Unresolved = "UNRESOLVED";
+
+type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" | "ABORT_TAKING_LEAD" | "ABORT_TAKING_LEAD_BACK" };
 
 export type EventCallbackResponse<T extends Resolved | Unresolved = Resolved | Unresolved> = Result<
   T extends Resolved ? {
