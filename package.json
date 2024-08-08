@@ -36,6 +36,7 @@
     "@openally/mutex": "^1.0.0",
     "@openally/result": "^1.2.1",
     "ajv": "^8.16.0",
+    "pino": "^9.3.2",
     "pino-pretty": "^11.2.1",
     "ts-pattern": "^4.3.0"
   },
@@ -43,7 +44,6 @@
     "@nodesecure/eslint-config": "^1.9.0",
     "@types/jest": "^27.4.1",
     "dotenv": "^16.4.5",
-    "fastify": "^4.3.0",
     "jest": "^27.5.1",
     "testcontainers": "^10.10.0",
     "ts-jest": "^27.1.4",

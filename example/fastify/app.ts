@@ -1,14 +1,11 @@
 // Import Node.js Dependencies
-import { createHmac } from "crypto";
+import { createHmac } from "node:crypto";
 
 // Import Third-party Dependencies
-import fastify, { FastifyRequest } from "fastify";
-
-// Import Types
-import { FastifyInstance } from "fastify/types/instance";
+import fastify, { type FastifyRequest, type FastifyInstance } from "fastify";
 
 // Import Internal Dependencies
-import { webhooksAPI } from "./feature/webhook";
+import { webhooksAPI } from "./feature/webhook.js";
 
 // CONSTANTS
 const kSecret = "foo";
@@ -16,10 +13,7 @@ const kSecret = "foo";
 export function buildServer(): FastifyInstance {
   const app = fastify({
     logger: {
-      level: "info",
-      transport: {
-        target: "pino-pretty"
-      }
+      level: "info"
     }
   });
 

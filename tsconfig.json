@@ -19,5 +19,5 @@
       "src/**/**/*.ts",
       "./types"
     ],
-    "exclude": ["node_modules"]
+    "exclude": ["node_modules", "example"]
 }

@@ -1,0 +1,6 @@
+{
+  "name": "webhook-api-example",
+  "dependencies": {
+    "fastify": "^4.3.0"
+  }
+}
