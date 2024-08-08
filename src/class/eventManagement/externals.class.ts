@@ -4,9 +4,6 @@ import { Dispatcher } from "./dispatcher.class.js";
 import type {
   GenericEvent
 } from "../../types/index.js";
-import {
-  AVAILABLE_EVENTS
-} from "../../index.js";
 
 export class Externals<T extends GenericEvent = GenericEvent> {
   public incomer: Incomer<T>;
@@ -16,7 +13,11 @@ export class Externals<T extends GenericEvent = GenericEvent> {
     this.incomer = new Incomer({
       ...options,
       eventsCast: options.eventsSubscribe.map((val) => val.name),
-      eventsSubscribe: Object.values(AVAILABLE_EVENTS),
+      eventsSubscribe: options.eventsCast.map((eventCast) => {
+        return {
+          name: eventCast
+        };
+      }),
       externalsInitialized: true
     });
 
