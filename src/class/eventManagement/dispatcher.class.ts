@@ -126,13 +126,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private activeChannels = new Set<string>();
 
   private pingInterval: number;
-  private pingIntervalTimer: NodeJS.Timer;
+  private pingIntervalTimer: NodeJS.Timeout;
   private checkLastActivityInterval: number;
-  private checkLastActivityIntervalTimer: NodeJS.Timer;
+  private checkLastActivityIntervalTimer: NodeJS.Timeout;
   private resolveTransactionInterval: number;
-  private checkDispatcherStateInterval: NodeJS.Timer;
-  private resetCheckLastActivityTimeout: NodeJS.Timer;
-  private resolveTransactionsInterval: NodeJS.Timer;
+  private checkDispatcherStateInterval: NodeJS.Timeout;
+  private resetCheckLastActivityTimeout: NodeJS.Timeout;
+  private resolveTransactionsInterval: NodeJS.Timeout;
   private idleTime: number;
   private minTimeout = 0;
   // Arbitrary value according to fastify default pluginTimeout
