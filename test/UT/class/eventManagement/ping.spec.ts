@@ -9,7 +9,7 @@ import {
   closeAllRedis,
   getRedis
 } from "@myunisoft/redis";
-import * as Logger from "pino";
+import { pino } from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
@@ -18,10 +18,10 @@ import {
   Incomer
 } from "../../../../src/index.js";
 
-const dispatcherLogger = Logger.pino({
+const dispatcherLogger = pino({
   level: "debug"
 });
-const incomerLogger = Logger.pino({
+const incomerLogger = pino({
   level: "debug"
 });
 const mockedIncomerLoggerDebug = jest.spyOn(incomerLogger, "debug");

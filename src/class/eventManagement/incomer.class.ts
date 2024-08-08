@@ -8,7 +8,7 @@ import {
   getRedis,
   Channel
 } from "@myunisoft/redis";
-import { pino } from "pino";
+import { pino, type Logger } from "pino";
 import { match } from "ts-pattern";
 import type { ValidateFunction } from "ajv";
 import type { Result } from "@openally/result";
@@ -22,9 +22,7 @@ import {
 } from "../store/transaction.class.js";
 import type {
   Prefix,
-  EventCast,
   EventSubscribe,
-  DispatcherChannelMessages,
   IncomerChannelMessages,
   DispatcherApprovementMessage,
   CallBackEventMessage,
@@ -33,8 +31,7 @@ import type {
   EventMessage,
   GenericEvent,
   IncomerRegistrationMessage,
-  RetryMessage,
-  PartialLogger
+  RetryMessage
 } from "../../types/index.js";
 import {
   type NestedValidationFunctions,
@@ -63,14 +60,14 @@ export const RESOLVED: unique symbol = Symbol.for("RESOLVED");
 export const UNRESOLVED: unique symbol = Symbol.for("UNRESOLVED");
 
 function isDispatcherChannelMessage<T extends GenericEvent = GenericEvent>(value:
-  DispatcherChannelMessages["DispatcherMessages"] |
+  DispatcherApprovementMessage |
   IncomerChannelMessages<T>["DispatcherMessages"]
-): value is DispatcherChannelMessages["DispatcherMessages"] {
+): value is DispatcherApprovementMessage {
   return value.name === "APPROVEMENT";
 }
 
 function isIncomerChannelMessage<T extends GenericEvent = GenericEvent>(value:
-  DispatcherChannelMessages["DispatcherMessages"] |
+  DispatcherApprovementMessage |
   IncomerChannelMessages<T>["DispatcherMessages"]
 ): value is IncomerChannelMessages<T>["DispatcherMessages"] {
   return value.name !== "APPROVEMENT";
@@ -100,9 +97,9 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
   prefix?: Prefix;
-  logger?: PartialLogger;
+  logger?: Logger;
   standardLog?: StandardLog<T>;
-  eventsCast: EventCast[];
+  eventsCast: string[];
   eventsSubscribe: EventSubscribe[];
   eventsValidation?: {
     eventsValidationFn?: eventsValidationFn<T>;
@@ -131,12 +128,12 @@ export class Incomer <
 
   private prefixedName: string;
   private isDispatcherInstance: boolean;
-  private eventsCast: EventCast[];
+  private eventsCast: string[];
   private eventsSubscribe: EventSubscribe[];
-  private dispatcherChannel: Channel<DispatcherChannelMessages["IncomerMessages"]>;
+  private dispatcherChannel: Channel<IncomerRegistrationMessage>;
   private dispatcherChannelName: string;
   private providedUUID: string;
-  private logger: PartialLogger;
+  private logger: Logger;
   private incomerChannelName: string;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
@@ -542,7 +539,7 @@ export class Incomer <
       return;
     }
 
-    const formattedMessage: DispatcherChannelMessages["DispatcherMessages"] |
+    const formattedMessage: DispatcherApprovementMessage |
       IncomerChannelMessages<T>["DispatcherMessages"] = JSON.parse(message);
 
     if (
@@ -567,7 +564,7 @@ export class Incomer <
 
   private async handleDispatcherMessages(
     channel: string,
-    message: DispatcherChannelMessages["DispatcherMessages"]
+    message: DispatcherApprovementMessage
   ): Promise<void> {
     if (message.redisMetadata.to !== this.providedUUID && message.redisMetadata.to !== this.baseUUID) {
       return;

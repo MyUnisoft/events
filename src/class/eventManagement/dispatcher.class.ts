@@ -9,7 +9,7 @@ import {
   Channel,
   getRedis
 } from "@myunisoft/redis";
-import { pino } from "pino";
+import { pino, type Logger } from "pino";
 
 // Import Internal Dependencies
 import {
@@ -20,7 +20,6 @@ import {
 } from "../store/transaction.class.js";
 import type {
   Prefix,
-  DispatcherChannelMessages,
   IncomerChannelMessages,
   DispatcherApprovementMessage,
   IncomerRegistrationMessage,
@@ -30,8 +29,7 @@ import type {
   CloseMessage,
   RetryMessage,
   DistributedEventMessage,
-  DispatcherTransactionMetadata,
-  PartialLogger,
+  TransactionMetadata,
   RegisteredIncomer
 } from "../../types/index.js";
 import {
@@ -75,7 +73,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   instanceName?: string;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
-  logger?: PartialLogger;
+  logger?: Logger;
   standardLog?: StandardLog<T>;
   pingInterval?: number;
   idleTime?: number;
@@ -100,7 +98,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private instanceName: string | undefined;
   private isWorking = false;
   private dispatcherChannel: Channel<
-    DispatcherChannelMessages["DispatcherMessages"] |
+    DispatcherApprovementMessage |
     { name: "ABORT_TAKING_LEAD", redisMetadata: { origin: string } } |
     { name: "ABORT_TAKING_LEAD_BACK", redisMetadata: { origin: string } }
   >;
@@ -112,7 +110,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private transactionHandler: TransactionHandler;
 
-  private logger: PartialLogger;
+  private logger: Logger;
   private incomerChannelHandler: IncomerChannelHandler<T>;
   private activeChannels = new Set<string>();
 
@@ -347,7 +345,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   async handleMessages(channel: string, message: string) {
-    let parsedMessage: DispatcherChannelMessages["IncomerMessages"] |
+    let parsedMessage: IncomerRegistrationMessage |
         IncomerChannelMessages<T>["IncomerMessages"];
 
     try {
@@ -800,7 +798,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       this.incomerChannelHandler.set({ uuid: providedUUID, prefix });
 
     const event: Omit<DistributedEventMessage, "redisMetadata"> & {
-      redisMetadata: Omit<DispatcherTransactionMetadata, "iteration" | "transactionId">
+      redisMetadata: Omit<TransactionMetadata<"dispatcher">, "iteration" | "transactionId">
     } = {
       ...customEvent,
       redisMetadata: {
@@ -958,7 +956,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     const event: Omit<DispatcherApprovementMessage, "redisMetadata"> & {
-      redisMetadata: Omit<DispatcherTransactionMetadata, "transactionId" | "iteration">
+      redisMetadata: Omit<TransactionMetadata<"dispatcher">, "transactionId" | "iteration">
     } = {
       name: "APPROVEMENT",
       data: {
@@ -972,7 +970,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     };
 
     await this.eventsHandler.dispatch({
-      channel: this.dispatcherChannel as Channel<DispatcherChannelMessages["DispatcherMessages"]>,
+      channel: this.dispatcherChannel as Channel<DispatcherApprovementMessage>,
       store: this.dispatcherTransactionStore,
       redisMetadata: {
         mainTransaction: false,
