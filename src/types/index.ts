@@ -1,5 +1,5 @@
 // Import Internal Dependencies
-import { Events } from "./events";
+import { Events } from "./events.js";
 
 export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -30,5 +30,5 @@ export type WebhooksResponse<T extends (keyof Events)[] = (keyof Events)[]> = [
   ...(WebhookResponse<T[number]>)[]
 ];
 
-export * from "./eventManagement/index";
-export * from "./events";
+export * from "./eventManagement/index.js";
+export * from "./events.js";

@@ -2,8 +2,12 @@
 import { Channel, getRedis } from "@myunisoft/redis";
 
 // Import Internal Dependencies
-import { DistributedEventMessage, GenericEvent, IncomerChannelMessages } from "../../../types";
-import { PartialLogger } from "../dispatcher.class";
+import type {
+  DistributedEventMessage,
+  GenericEvent,
+  IncomerChannelMessages
+} from "../../../types/index.js";
+import { PartialLogger } from "../dispatcher.class.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
   logger: PartialLogger;

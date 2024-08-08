@@ -6,8 +6,8 @@ import { Channel } from "@myunisoft/redis";
 import Ajv, { ValidateFunction } from "ajv";
 
 // Import Internal Dependencies
-import { TransactionStore } from "../../store/transaction.class";
-import {
+import { TransactionStore } from "../../store/transaction.class.js";
+import type {
   DispatcherChannelMessages,
   DispatcherApprovementMessage,
   EventMessage,
@@ -17,16 +17,16 @@ import {
   CloseMessage,
   RetryMessage,
   DispatcherTransactionMetadata
-} from "../../../types";
-import * as eventsSchema from "../../../schema/eventManagement/index";
+} from "../../../types/index.js";
+import * as eventsSchema from "../../../schema/eventManagement/index.js";
 import {
   NestedValidationFunctions,
-  StandardLog,
-  StandardLogOpts,
+  type StandardLog,
+  type StandardLogOpts,
   concatErrors,
   defaultStandardLog
-} from "../../../utils";
-import { PartialLogger } from "../dispatcher.class";
+} from "../../../utils/index.js";
+import { PartialLogger } from "../dispatcher.class.js";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -225,6 +225,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   private dispatcherChannelMessagesSchemaValidation(
     event: IncomerRegistrationMessage | DispatcherApprovementMessage
   ): void {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { redisMetadata, ...eventRest } = event;
 
     this.redisMetadataValidation(event);
@@ -245,6 +246,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   private incomerChannelMessagesSchemaValidation(
     event: IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage
   ): void {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { redisMetadata, ...eventRest } = event;
 
     this.redisMetadataValidation(event);

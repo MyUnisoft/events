@@ -8,7 +8,7 @@ import * as Logger from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
-import { Incomer } from "../../../../src/index";
+import { Incomer } from "../../../../src/index.js";
 
 const incomerLogger = Logger.pino({
   level: "debug"

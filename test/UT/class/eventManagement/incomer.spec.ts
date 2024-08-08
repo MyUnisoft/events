@@ -10,7 +10,10 @@ import {
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
-import { Dispatcher, Incomer } from "../../../../src/index";
+import {
+  Dispatcher,
+  Incomer
+} from "../../../../src/index.js";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");

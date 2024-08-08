@@ -1,6 +1,6 @@
 // Import Node.js Dependencies
 import { randomUUID } from "node:crypto";
-import timers from "timers/promises";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
@@ -13,7 +13,10 @@ import * as Logger from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
-import { Dispatcher, Incomer } from "../../../../src/index";
+import {
+  Dispatcher,
+  Incomer
+} from "../../../../src/index.js";
 
 const dispatcherLogger = Logger.pino({
   level: "debug"

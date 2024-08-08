@@ -17,7 +17,7 @@ import {
   PartialTransaction,
   Transaction,
   TransactionStore
-} from "../store/transaction.class";
+} from "../store/transaction.class.js";
 import {
   Prefix,
   DispatcherChannelMessages,
@@ -29,14 +29,18 @@ import {
   GenericEvent,
   CloseMessage,
   RetryMessage,
-  DispatcherTransactionMetadata,
-  DistributedEventMessage
-} from "../../types/eventManagement/index";
-import { defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
-import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
-import { TransactionHandler } from "./dispatcher/transaction-handler.class";
-import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class";
-import { EventsHandler, customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class";
+  DistributedEventMessage,
+  DispatcherTransactionMetadata
+} from "../../types/eventManagement/index.js";
+import { defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index.js";
+import { IncomerStore, RegisteredIncomer } from "../store/incomer.class.js";
+import { TransactionHandler } from "./dispatcher/transaction-handler.class.js";
+import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class.js";
+import {
+  EventsHandler,
+  customValidationCbFn,
+  eventsValidationFn
+} from "./dispatcher/events.class.js";
 
 // CONSTANTS
 const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
