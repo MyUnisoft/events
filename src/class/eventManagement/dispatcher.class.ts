@@ -28,7 +28,9 @@ import {
   EventMessage,
   GenericEvent,
   CloseMessage,
-  RetryMessage
+  RetryMessage,
+  DispatcherTransactionMetadata,
+  DistributedEventMessage
 } from "../../types/eventManagement/index";
 import { defaultStandardLog, handleLoggerMode, StandardLog } from "../../utils/index";
 import { IncomerStore, RegisteredIncomer } from "../store/incomer.class";
@@ -73,15 +75,12 @@ export type SharedOptions<T extends GenericEvent> = {
 }
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOptions<T> & {
-  /* Commonly used to distinguish envs */
   prefix?: Prefix;
   eventsValidation?: {
     eventsValidationFn?: eventsValidationFn<T>;
     customValidationCbFn?: customValidationCbFn<T>;
   };
-  /** Used to avoid self ping & as discriminant for dispatcher instance that scale */
   incomerUUID?: string;
-  /** Used as discriminant for dispatcher instance that scale */
   instanceName?: string;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
@@ -89,13 +88,22 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = DefaultOp
 
 export type DispatcherChannelEvents = { name: "REGISTER" | "APPROVEMENT" | "ABORT_TAKING_LEAD" | "ABORT_TAKING_LEAD_BACK" };
 
-type anyFn = (...args: any[]) => any;
+type anyFn = (...args: any[]) => void;
 
-export type PartialLogger = Record<string, any> & {
+export type PartialLogger = {
   info: anyFn;
   warn: anyFn;
   debug: anyFn;
   error: anyFn;
+  [key: string]: any;
+};
+
+interface DispatchEventToIncomer<T extends GenericEvent = GenericEvent> {
+  incomer: RegisteredIncomer;
+  customEvent: EventMessage<T>;
+  transactionId: string;
+  senderTransactionStore: TransactionStore<"incomer">;
+  relatedTransaction: Transaction<"incomer">;
 }
 
 export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
@@ -373,7 +381,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         throw new Error("Malformed message");
       }
 
-      // Avoid reacting to his own message
       if (parsedMessage.redisMetadata.origin === this.privateUUID) {
         return;
       }
@@ -747,8 +754,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async handleCustomEvents(channel: string, customEvent: EventMessage<T>) {
-    const { redisMetadata, ...event } = customEvent;
-    const { name } = event;
+    const { redisMetadata, ...eventRest } = customEvent;
     const { transactionId } = redisMetadata;
 
     const logData = {
@@ -763,43 +769,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const relatedTransaction = await senderTransactionStore.getTransactionById(transactionId);
 
-    if (!relatedTransaction) {
-      throw new Error(this.standardLogFn(logData)(`Couldn't find the related main transaction for: ${transactionId}`));
-    }
+    const filteredConcernedIncomers = await this.getFilteredConcernedIncomers(eventRest.name);
 
-    const incomers = await this.incomerStore.getIncomers();
+    if (filteredConcernedIncomers.length === 0) {
+      if (eventRest.name !== "PING") {
+        this.logger.warn(this.standardLogFn(logData)(`No concerned incomers found for event: ${eventRest.name}`));
 
-    const concernedIncomers = [...incomers]
-      .filter(
-        (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name)
-      );
-
-    if (concernedIncomers.length === 0) {
-      if (name === "PING") {
-        this.logger.warn(this.standardLogFn(logData)("No concerned Incomer found"));
-      }
-      else {
-        await Promise.all([
-          senderTransactionStore.updateTransaction(transactionId, {
-            ...relatedTransaction,
-            redisMetadata: {
-              ...relatedTransaction.redisMetadata,
-              mainTransaction: true,
-              relatedTransaction: null,
-              published: true
-            }
-          } as Transaction<"incomer">),
-          this.backupDispatcherTransactionStore.setTransaction({
-            ...event,
-            redisMetadata: {
-              origin: this.privateUUID,
-              to: "",
-              mainTransaction: false,
-              relatedTransaction: transactionId,
-              resolved: false
-            }
-          } as unknown as PartialTransaction<"dispatcher">)
-        ]);
+        await this.backupNotdistributableEvents(senderTransactionStore, relatedTransaction, eventRest);
 
         this.logger.warn(this.standardLogFn(logData)("Backed-up event"));
       }
@@ -807,11 +783,87 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
+    if (!relatedTransaction) {
+      this.logger.warn(this.standardLogFn(logData)(`Couldn't find the related main transaction for: ${transactionId}`));
+
+      return;
+    }
+
+    await Promise.all(filteredConcernedIncomers.map((incomer) => this.dispatchEventToIncomer({
+      incomer,
+      customEvent,
+      transactionId,
+      senderTransactionStore,
+      relatedTransaction
+    })));
+
+    this.logger.info(this.standardLogFn(
+      Object.assign({}, logData, {
+        redisMetadata: {
+          ...redisMetadata,
+          eventTransactionId: transactionId,
+          to: `[${filteredConcernedIncomers.map((incomer) => incomer.providedUUID)}]`
+        }
+      })
+    )("Custom event distributed"));
+  }
+
+  private async dispatchEventToIncomer(options: DispatchEventToIncomer<T>) {
+    const { incomer, customEvent, transactionId, senderTransactionStore, relatedTransaction } = options;
+
+    const { providedUUID, prefix } = incomer;
+
+    const concernedIncomerChannel = this.incomerChannelHandler.get(providedUUID) ??
+      this.incomerChannelHandler.set({ uuid: providedUUID, prefix });
+
+    const event: Omit<DistributedEventMessage, "redisMetadata"> & {
+      redisMetadata: Omit<DispatcherTransactionMetadata, "iteration" | "transactionId">
+    } = {
+      ...customEvent,
+      redisMetadata: {
+        origin: this.privateUUID,
+        to: providedUUID,
+        incomerName: incomer.name
+      }
+    };
+
+    await Promise.all([
+      this.eventsHandler.dispatch({
+        channel: concernedIncomerChannel,
+        store: this.dispatcherTransactionStore,
+        redisMetadata: {
+          mainTransaction: false,
+          relatedTransaction: transactionId,
+          eventTransactionId: transactionId,
+          iteration: 0,
+          resolved: false
+        },
+        event
+      }),
+      senderTransactionStore.updateTransaction(transactionId, {
+        ...relatedTransaction,
+        redisMetadata: {
+          ...relatedTransaction.redisMetadata,
+          mainTransaction: true,
+          relatedTransaction: null,
+          published: true
+        }
+      } as Transaction<"incomer">)
+    ]);
+
+    await this.incomerStore.updateIncomerState(providedUUID);
+  }
+
+  private async getFilteredConcernedIncomers(eventName: string): Promise<RegisteredIncomer[]> {
+    const incomers = await this.incomerStore.getIncomers();
+
+    const concernedIncomers = [...incomers]
+      .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === eventName));
+
     const filteredConcernedIncomers: RegisteredIncomer[] = [];
     for (const incomer of concernedIncomers) {
-      const relatedEvent = incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === name);
+      const relatedEvent = incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === eventName);
 
-      // Prevent publishing an event to multiple instance of a same service if no horizontalScale of the event
       if (!relatedEvent.horizontalScale &&
         filteredConcernedIncomers.find(
           (filteredConcernedIncomer) => filteredConcernedIncomer.eventsSubscribe.find(
@@ -825,39 +877,17 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       filteredConcernedIncomers.push(incomer);
     }
 
-    const toResolve: Promise<any>[] = [];
-    for (const incomer of filteredConcernedIncomers) {
-      const { providedUUID, prefix } = incomer;
+    return filteredConcernedIncomers;
+  }
 
-      const concernedIncomerChannel = this.incomerChannelHandler.get(providedUUID) ??
-        this.incomerChannelHandler.set({ uuid: providedUUID, prefix });
+  private async backupNotdistributableEvents(
+    senderTransactionStore: TransactionStore<"incomer">,
+    relatedTransaction: Transaction<"incomer">,
+    eventRest: Omit<EventMessage, "redisMetadata">
+  ) {
+    const { transactionId } = relatedTransaction.redisMetadata;
 
-      const formattedEvent = {
-        ...customEvent,
-        redisMetadata: {
-          origin: this.privateUUID,
-          to: providedUUID,
-          incomerName: incomer.name
-        }
-      };
-
-      toResolve.push(this.eventsHandler.dispatch({
-        channel: concernedIncomerChannel,
-        store: this.dispatcherTransactionStore,
-        redisMetadata: {
-          mainTransaction: false,
-          relatedTransaction: transactionId,
-          eventTransactionId: transactionId,
-          iteration: 0,
-          resolved: false
-        },
-        event: formattedEvent as any
-      }));
-    }
-
-    await this.incomerStore.updateIncomerState(redisMetadata.origin);
     await Promise.all([
-      ...toResolve,
       senderTransactionStore.updateTransaction(transactionId, {
         ...relatedTransaction,
         redisMetadata: {
@@ -866,18 +896,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           relatedTransaction: null,
           published: true
         }
-      } as Transaction<"incomer">)
-    ]);
-
-    this.logger.info(this.standardLogFn(
-      Object.assign({}, logData, {
+      } as Transaction<"incomer">),
+      this.backupDispatcherTransactionStore.setTransaction({
+        ...eventRest as Omit<EventMessage, "redisMetadata">,
         redisMetadata: {
-          ...redisMetadata,
-          eventTransactionId: transactionId,
-          to: `[${filteredConcernedIncomers.map((incomer) => incomer.providedUUID)}]`
+          origin: this.privateUUID,
+          to: "",
+          mainTransaction: false,
+          relatedTransaction: transactionId,
+          resolved: false
         }
-      })
-    )("Custom event distributed"));
+      } as PartialTransaction<"dispatcher">)
+    ]);
   }
 
   private async approveIncomer(message: IncomerRegistrationMessage) {
@@ -945,7 +975,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
 
     const event: Omit<DispatcherApprovementMessage, "redisMetadata"> & {
-      redisMetadata: Omit<DispatcherApprovementMessage["redisMetadata"], "transactionId">
+      redisMetadata: Omit<DispatcherTransactionMetadata, "transactionId" | "iteration">
     } = {
       name: "APPROVEMENT",
       data: {
@@ -967,7 +997,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         eventTransactionId: transactionId,
         resolved: false
       },
-      event: event as any
+      event
     });
 
     this.logger.info("Approved Incomer");
