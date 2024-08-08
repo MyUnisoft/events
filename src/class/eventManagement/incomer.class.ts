@@ -35,7 +35,7 @@ import type {
   IncomerRegistrationMessage,
   RetryMessage,
   PartialLogger
-} from "../../types/eventManagement/index.js";
+} from "../../types/index.js";
 import {
   type NestedValidationFunctions,
   type StandardLog,

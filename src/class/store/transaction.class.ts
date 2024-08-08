@@ -16,7 +16,7 @@ import type {
   DispatcherPingMessage,
   DistributedEventMessage,
   Instance
-} from "../../types/eventManagement/index.js";
+} from "../../types/index.js";
 
 type MainTransaction = {
   published?: boolean;

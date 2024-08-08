@@ -1,10 +1,8 @@
-import { Events } from "../index.js";
-
 export type Prefix = "test" | "development" | "staging" | "production";
 
-export type EventCast<T extends string | keyof Events = string> = T;
+export type EventCast<T extends string = string> = T;
 
-export type EventSubscribe<T extends string | keyof Events = string> = {
+export type EventSubscribe<T extends string = string> = {
   name: T;
   delay?: number;
   horizontalScale?: boolean;
@@ -57,5 +55,3 @@ export interface RegisteredIncomer {
 
 export type Instance = "dispatcher" | "incomer";
 
-export * from "./dispatcherChannel.js";
-export * from "./incomerChannel.js";

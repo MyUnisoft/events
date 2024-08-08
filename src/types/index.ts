@@ -31,4 +31,6 @@ export type WebhooksResponse<T extends (keyof Events)[] = (keyof Events)[]> = [
 ];
 
 export * from "./eventManagement/index.js";
+export * from "./eventManagement/dispatcherChannel.js";
+export * from "./eventManagement/incomerChannel.js";
 export * from "./events.js";

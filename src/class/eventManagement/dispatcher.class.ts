@@ -33,7 +33,7 @@ import type {
   DispatcherTransactionMetadata,
   PartialLogger,
   RegisteredIncomer
-} from "../../types/eventManagement/index.js";
+} from "../../types/index.js";
 import {
   defaultStandardLog,
   handleLoggerMode, type StandardLog
