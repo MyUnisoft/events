@@ -18,38 +18,29 @@ import type {
   Instance
 } from "../../types/index.js";
 
-type MainTransaction = {
+type BaseTransaction<
+  isMain extends boolean = true,
+  relatedTransaction = isMain extends true ? null : string
+> = {
   published?: boolean;
-  mainTransaction: true;
-  relatedTransaction: null;
+  mainTransaction: isMain;
+  relatedTransaction: relatedTransaction;
   resolved: boolean;
 };
-
-type SpreadTransaction = {
-  published?: boolean;
-  mainTransaction: false;
-  relatedTransaction: string;
-  resolved: boolean;
-};
-
-type HandlerTransaction = {
-  published?: boolean;
+type HandlerTransaction = BaseTransaction<false> & {
   eventTransactionId?: string;
-  mainTransaction: false;
-  relatedTransaction: string;
-  resolved: boolean;
 };
 
 export type DispatcherMainTransaction = DispatcherPingMessage & {
-  redisMetadata: MainTransaction & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
+  redisMetadata: BaseTransaction<true> & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
 }
 
 type DispatcherApprovementTransaction = DispatcherChannelMessages["DispatcherMessages"] & {
-  redisMetadata: SpreadTransaction & DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"];
+  redisMetadata: BaseTransaction<false> & DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"];
 };
 
 type DispatcherDistributedEventTransaction = DistributedEventMessage & {
-  redisMetadata: SpreadTransaction & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
+  redisMetadata: BaseTransaction<false> & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
 }
 
 export interface DispatcherSpreadTransaction {
@@ -57,17 +48,12 @@ export interface DispatcherSpreadTransaction {
   dispatcherDistributedEventTransaction: DispatcherDistributedEventTransaction;
 }
 
-type DispatcherTransaction = (
-  DispatcherSpreadTransaction["dispatcherApprovementTransaction"] |
-  DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"]
-) | DispatcherMainTransaction;
-
 type IncomerApprovementTransaction = DispatcherChannelMessages["IncomerMessages"] & {
-  redisMetadata: MainTransaction & DispatcherChannelMessages["IncomerMessages"]["redisMetadata"];
+  redisMetadata: BaseTransaction<true> & DispatcherChannelMessages["IncomerMessages"]["redisMetadata"];
 };
 
 type IncomerEventCastTransaction = IncomerChannelMessages["IncomerMessages"] & {
-  redisMetadata: MainTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
+  redisMetadata: BaseTransaction<true> & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
 }
 
 export interface IncomerMainTransaction {
@@ -96,6 +82,11 @@ type IncomerTransaction = (
   IncomerHandlerTransaction["incomerPongTransaction"]
 );
 
+type DispatcherTransaction = (
+  DispatcherSpreadTransaction["dispatcherApprovementTransaction"] |
+  DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"]
+) | DispatcherMainTransaction;
+
 export type Transaction<
   T extends Instance = Instance
 > = (
@@ -105,8 +96,10 @@ export type Transaction<
 };
 
 type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "dispatcher" ?
-  Omit<DispatcherTransactionMetadata, "to" | "transactionId"> & { to?: string } & (MainTransaction | SpreadTransaction) :
-  Omit<IncomerTransactionMetadata, "transactionId"> & (MainTransaction | HandlerTransaction);
+  Omit<DispatcherTransactionMetadata, "to" | "transactionId">
+    & { to?: string }
+    & (BaseTransaction<true> | BaseTransaction<false>) :
+  Omit<IncomerTransactionMetadata, "transactionId"> & (BaseTransaction<true> | HandlerTransaction);
 
 export type PartialTransaction<
   T extends Instance = Instance
@@ -129,20 +122,35 @@ export class TransactionStore<
   T extends Instance = Instance
 >
   extends KVPeer<Transaction<T>> {
-  private key: string;
+  #key: string;
 
   constructor(options: TransactionStoreOptions<T>) {
-    super({ ...options, prefix: undefined, type: "object" });
+    super({
+      ...options,
+      prefix: undefined,
+      type: "object"
+    });
 
-    this.key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
+    this.#key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }
 
-  async* transactionLazyFetch() {
-    const count = 5000;
+  #buildTransactionKey(
+    transactionId: string
+  ): string {
+    return `${this.#key}-${transactionId}`;
+  }
+
+  async* transactionLazyFetch(count = 5000) {
     let cursor = 0;
 
     do {
-      const [lastCursor, elements] = await this.redis.scan(cursor, "MATCH", `${this.key}-*`, "COUNT", count);
+      const [lastCursor, elements] = await this.redis.scan(
+        cursor,
+        "MATCH",
+        `${this.#key}-*`,
+        "COUNT",
+        count
+      );
 
       cursor = Number(lastCursor);
       yield elements;
@@ -161,7 +169,10 @@ export class TransactionStore<
       ));
 
       for (const transaction of transactions) {
-        if (transaction !== null && (transaction.redisMetadata && "transactionId" in transaction.redisMetadata)) {
+        if (
+          transaction !== null &&
+          (transaction.redisMetadata && "transactionId" in transaction.redisMetadata)
+        ) {
           mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
         }
       }
@@ -170,9 +181,10 @@ export class TransactionStore<
     return mappedTransactions;
   }
 
-  async setTransaction(transaction: PartialTransaction<T>, transactionId: string = randomUUID()): Promise<Transaction<T>> {
-    const transactionKey = `${this.key}-${transactionId}`;
-
+  async setTransaction(
+    transaction: PartialTransaction<T>,
+    transactionId: string = randomUUID()
+  ): Promise<Transaction<T>> {
     const formattedTransaction = {
       ...transaction,
       redisMetadata: {
@@ -183,26 +195,46 @@ export class TransactionStore<
       aliveSince: Date.now()
     } as unknown as Transaction<T>;
 
-    await this.setValue({ key: transactionKey, value: formattedTransaction });
+    await this.setValue({
+      key: this.#buildTransactionKey(transactionId),
+      value: formattedTransaction
+    });
 
     return formattedTransaction;
   }
 
-  async updateTransaction(transactionId: string, transaction: Transaction<T>): Promise<void> {
-    const key = `${this.key}-${transactionId}`;
-
-    this.setValue({ key, value: { ...transaction, aliveSince: Date.now() } });
+  async updateTransaction(
+    transactionId: string,
+    transaction: Transaction<T>
+  ): Promise<void> {
+    this.setValue({
+      key: this.#buildTransactionKey(transactionId),
+      value: {
+        ...transaction,
+        aliveSince: Date.now()
+      }
+    });
   }
 
-  async getTransactionById(transactionId: string): Promise<Transaction<T> | null> {
-    return await this.getValue(`${this.key}-${transactionId}`);
+  getTransactionById(
+    transactionId: string
+  ): Promise<Transaction<T> | null> {
+    return this.getValue(
+      this.#buildTransactionKey(transactionId)
+    );
   }
 
-  async deleteTransaction(transactionId: string): Promise<void> {
-    await this.deleteValue(`${this.key}-${transactionId}`);
+  async deleteTransaction(
+    transactionId: string
+  ): Promise<void> {
+    await this.deleteValue(
+      this.#buildTransactionKey(transactionId)
+    );
   }
 
-  async deleteTransactions(transactionIds: string[]): Promise<void> {
+  async deleteTransactions(
+    transactionIds: string[]
+  ): Promise<void> {
     await this.redis.del(transactionIds);
   }
 }

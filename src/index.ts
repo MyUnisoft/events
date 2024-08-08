@@ -19,7 +19,9 @@ const ajv = new Ajv();
 const metadataValidationFunction = ajv.compile(metadataSchema);
 const scopeValidationFunction = ajv.compile(scopeSchema);
 
-export function validate<T extends keyof Events = keyof Events>(options: EventOptions<T>) {
+export function validate<T extends keyof Events = keyof Events>(
+  options: EventOptions<T>
+) {
   const { name, operation, data, scope, metadata } = options;
 
   if (!eventsValidationFn.has(name)) {

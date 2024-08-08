@@ -534,7 +534,10 @@ export class Incomer <
     })("Published event"));
   }
 
-  private async handleMessages(channel: string, message: string) {
+  private async handleMessages(
+    channel: string,
+    message: string
+  ) {
     if (!message) {
       return;
     }
@@ -638,8 +641,10 @@ export class Incomer <
     this.logger.debug(this.standardLogFn(logData as any)("Resolved Ping event"));
   }
 
-  private async customEvent(opts: { name: string, channel: string, message: DistributedEventMessage<T> }) {
-    const { message, channel } = opts;
+  private async customEvent(
+    options: { name: string, channel: string, message: DistributedEventMessage<T> }
+  ) {
+    const { message, channel } = options;
     const { redisMetadata, ...event } = message;
     const { eventTransactionId, iteration } = redisMetadata;
 
@@ -743,7 +748,9 @@ export class Incomer <
     this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${String(callbackResult.val)}`));
   }
 
-  private async handleApprovement(message: DispatcherApprovementMessage) {
+  private async handleApprovement(
+    message: DispatcherApprovementMessage
+  ) {
     const { data } = message;
 
     this.incomerChannelName = this.prefixedName + data.uuid;

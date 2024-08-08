@@ -20,26 +20,28 @@ export interface SetChannelOptions {
   subscribe?: boolean;
 }
 
-export interface RemoveChannelOptions {
-  uuid: string;
-}
-
 export type ChannelMessages<T extends GenericEvent> = Channel<
   IncomerChannelMessages<T>["DispatcherMessages"]
 >;
 
-export class IncomerChannelHandler<T extends GenericEvent = GenericEvent> {
+export class IncomerChannelHandler<
+  T extends GenericEvent = GenericEvent
+> {
   public channels: Map<string, ChannelMessages<T>> = new Map();
 
-  constructor(opts: IncomerChannelHandlerOptions<T>) {
-    Object.assign(this, opts);
+  constructor(
+    options: IncomerChannelHandlerOptions<T>
+  ) {
+    Object.assign(this, options);
   }
 
   get subscriber() {
     return getRedis("subscriber");
   }
 
-  public set(options: SetChannelOptions) {
+  set(
+    options: SetChannelOptions
+  ) {
     const { uuid, prefix } = options;
 
     const channel = new Channel({
@@ -52,19 +54,20 @@ export class IncomerChannelHandler<T extends GenericEvent = GenericEvent> {
     return channel;
   }
 
-  public get(uuid: string): ChannelMessages<T> | null {
+  get(
+    uuid: string
+  ): ChannelMessages<T> | null {
     return this.channels.get(uuid);
   }
 
-  public async remove(uuid: string): Promise<void> {
-    const channel = this.channels.get(uuid);
-
-    if (!channel) {
+  async remove(
+    uuid: string
+  ): Promise<void> {
+    if (!this.channels.has(uuid)) {
       return;
     }
 
     await this.subscriber.unsubscribe(uuid);
-
     this.channels.delete(uuid);
   }
 }
