@@ -33,18 +33,85 @@ $ npm i @myunisoft/events
 $ yarn add @myunisoft/events
 ```
 
----
+<details>
+<summary>Configure environment variables</summary>
+<br>
 
-## Publishing Events
+| variable | description | default |
+| --- | --- | --- |
+| `MYUNISOFT_EVENTS_LOGGER_MODE` | Set log level for the default logger | `info` |
+| <b>Dispatcher</b> |
+| `MYUNISOFT_DISPATCHER_IDLE_TIME` | Interval threshold when Dispatcher become idle | `600_000` |
+| `MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL` | Dispatcher checking last activity interval | `120_000` |
+| `MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME` | Default name for backup transaction store | `backup` |
+| `MYUNISOFT_DISPATCHER_INIT_TIMEOUT` | Dispatcher initialisation timeout | `3_500` |
+| `MYUNISOFT_DISPATCHER_PING_INTERVAL` | Dispatcher ping interval | `3_500` |
+| <b>Incomer</b> |
+| `MYUNISOFT_INCOMER_INIT_TIMEOUT` | Incomer initialisation timeout | `3_500` |
+| `MYUNISOFT_EVENTS_INIT_EXTERNAL` | Whenever Incomer should initialize an external Dispatcher | `false` |
+| `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` | Maximum ping interval | `60_000` |
+| `MYUNISOFT_INCOMER_PUBLISH_INTERVAL` | Publish interval | `60_000` |
+| `MYUNISOFT_INCOMER_IS_DISPATCHER` | Weither Incomer is a Dispatcher | `false` |
 
-### Events
+Some options takes the lead over environment variables.
+For instance with: `new Incomer({ dispatcherInactivityOptions: { maxPingInterval: 900_000 }})` the max ping interval will be `900_000` even if `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` variable is set.
 
-An Event fully constituted is composed by a `name`, an `operation` and multiple objects such as `data`, `scope` and `metadata`.
-- The `name` identify the event.
-- The `operation` will define if it is a creation, update or deletion.
-- According to the name, we know the `data` and the different `metadata.origin.method` related.
-- The `metadata` object is used to determine different information as the ecosystem, the entry point etc.
-- The `scope` will define the **who**.
+</details>
+
+## 📚 Usage example
+
+```ts
+import * as Events, { type EventOptions } from "@myunisoft/events";
+
+const event: EventOptions<"connector"> = {
+  name: "connector",
+  operation: "CREATE",
+  scope: {
+    schemaId: 1
+  },
+  metadata: {
+    agent: "Node",
+    origin: {
+      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
+      method: "POST",
+      requestId: crypto.randomUUID();
+    },
+    createdAt: Date.now()
+  },
+  data: {
+    id: 1,
+    code: "JFAC"
+  }
+};
+
+Events.validate(event);
+```
+
+You can also use additional APIs to validate and narrow the data type depending on the operation:
+
+```ts
+if (Events.isCreateOperation(event.operation)) {
+  // Do some code
+}
+else if (Events.isUpdateOperation(event.operation)) {
+  // Do some code
+}
+else if (Events.isDeleteOperation(event.operation)) {
+  // Do some code
+}
+```
+
+> [!NOTE]
+> 👀 See [**here**](./docs/events.md) for the exhaustive list of Events.
+
+## 💡 What is an Event?
+
+A fully constituted event is composed of a `name`, an `operation`, and multiple objects such as `data`, `scope` and `metadata`.
+- The `name` identifies the event.
+- The `operation` defines if it is a creation, update, or deletion.
+- Based on the name, we know the **data** and the different `metadata.origin.method` related to it.
+- The `metadata` object is used to determine various pieces of information, such as the entry point.
+- The `scope` defines the **who**.
 
 ```ts
 export interface Scope {
@@ -70,239 +137,38 @@ export interface Metadata {
 }
 ```
 
-### 📚 Usage
+## API
 
-> Define and validate an event.
+- [Dispatcher](./docs/class/dispatcher.md)
+- [Incomer](./docs/class/incomer.md)
 
-```ts
-import * as MyEvents, { EventOptions } from "@myunisoft/events";
+### validate< T extends keyof Events >(options: EventOptions<T>): void
 
-const event: EventOptions<"connector"> = {
-  name: "connector",
-  operation: "CREATE",
-  scope: {
-    schemaId: 1
-  },
-  metadata: {
-    agent: "Node",
-    origin: {
-      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
-      method: "POST",
-      requestId: crypto.randomUUID();
-    },
-    createdAt: Date.now()
-  },
-  data: {
-    id: 1,
-    code: "JFAC"
-  }
-};
+Throw an error if a given event is not recognized internally.
 
-MyEvents.validate<"connector">(event);
-```
+### isCreateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["create"]
 
-> Define which operation the event has.
+### isUpdateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["update"]
 
-```ts
-const event: EventOptions<"connector"> = {
-  name: "connector",
-  operation: "CREATE",
-  scope: {
-    schemaId: 1
-  },
-  metadata: {
-    agent: "Node",
-    origin: {
-      endpoint: "http://localhost:12080/api/v1/my-custom-feature",
-      method: "POST",
-      requestId: crypto.randomUUID();
-    },
-    createdAt: Date.now()
-  },
-  data: {
-    id: 1,
-    code: "JFAC"
-  }
-};
-
-if (isCreateOperation(event.operation)) {
-  // Do some code
-}
-
-if (isUpdateOperation(event.operation)) {
-  // Do some code
-}
-
-if (isDeleteOperation(event.operation)) {
-  // Do some code
-}
-```
-
-### Environment Variables
-
-> [!IMPORTANT]
-> Some options takes the lead over environment variables. For instance with: `new Incomer({ dispatcherInactivityOptions: { maxPingInterval: 900_000 }})` the max ping interval will be `900_000` even if `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` variable is set.
-
-| variable | description | default |
-| --- | --- | --- |
-| `MYUNISOFT_EVENTS_LOGGER_MODE` | Set log level for the default logger | `info` |
-| <b>Dispatcher</b> |
-| `MYUNISOFT_DISPATCHER_IDLE_TIME` | Interval threshold when Dispatcher become idle | `600_000` |
-| `MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL` | Dispatcher checking last activity interval | `120_000` |
-| `MYUNISOFT_DISPATCHER_BACKUP_TRANSACTION_STORE_NAME` | Default name for backup transaction store | `backup` |
-| `MYUNISOFT_DISPATCHER_INIT_TIMEOUT` | Dispatcher initialisation timeout | `3_500` |
-| `MYUNISOFT_DISPATCHER_PING_INTERVAL` | Dispatcher ping interval | `3_500` |
-| <b>Incomer</b> |
-| `MYUNISOFT_INCOMER_INIT_TIMEOUT` | Incomer initialisation timeout | `3_500` |
-| `MYUNISOFT_EVENTS_INIT_EXTERNAL` | Whenever Incomer should initialize an external Dispatcher | `false` |
-| `MYUNISOFT_INCOMER_MAX_PING_INTERVAL` | Maximum ping interval | `60_000` |
-| `MYUNISOFT_INCOMER_PUBLISH_INTERVAL` | Publish interval | `60_000` |
-| `MYUNISOFT_INCOMER_IS_DISPATCHER` | Weither Incomer is a Dispatcher | `false` |
-
-### API
-
-#### Dispatcher & Incomer class
-
-> There is the documentation of [**Dispatcher**](./docs/class/dispatcher.md), and [**Incomer**](./docs/class/incomer.md) classes.
+### isDeleteOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["delete"]
 
 ---
 
-#### validate< T extends keyof Events >(options: EventOptions<T>): void
-
-> Throw an error if a given event is not internally known.
-
----
-
-#### isCreateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["create"]
-
----
-
-#### isUpdateOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["update"]
-
----
-
-#### isDeleteOperation< T extends keyof Events >(operation: EventOptions<T>["operation"]): operation is Operation["delete"]
-
-### Types
-
-#### EventOptions
-
+EventOptions is described by the following type:
 ```ts
 export type EventOptions<K extends keyof EventsDefinition.Events> = {
   scope: Scope;
   metadata: Metadata;
 } & EventsDefinition.Events[K];
-
-const event: EventOptions<"connector"> = {
-  name: "connector",
-  operation: "CREATE",
-  scope: {
-    schemaId: 1
-  },
-  metadata: {
-    agent: "Node",
-    createdAt: Date.now(),
-    requestId: crypto.randomUUID();
-  },
-  data: {
-    id: 1,
-    code: "JFAC"
-  }
-}
 ```
-
-#### EventsOptions
-
-```ts
-type TupleToObject<T extends readonly any[],
-  M extends Record<Exclude<keyof T, keyof any[]>, PropertyKey>> =
-  { [K in Exclude<keyof T, keyof any[]> as M[K]]: T[K] };
-
-export type EventsOptions<T extends (keyof EventsDefinition.Events)[] = (keyof EventsDefinition.Events)[]> = TupleToObject<[
-  ...(EventOptions<T[number]>)[]
-], []>;
-
-const events: EventsOptions<["connector", "accountingFolder"]> = [
-  {
-    name: "connector",
-    operation: "CREATE",
-    scope: {
-      schemaId: 1
-    },
-    metadata: {
-      agent: "Node",
-      createdAt: Date.now(),
-      requestId: crypto.randomUUID();
-    },
-    data: {
-      id: 1,
-      code: "JFAC"
-    }
-  },
-  {
-    name: "accountingFolder",
-    operation: "CREATE",
-    scope: {
-      schemaId: 1
-    },
-    metadata: {
-      agent: "Windev",
-      createdAt: Date.now(),
-      requestId: crypto.randomUUID();
-    },
-    data: {
-      id: 1
-    }
-  }
-];
-
-const event: EventsOptions<["connector", "accountingFolder"]> = {
-  name: "connector",
-  operation: "CREATE",
-  scope: {
-    schemaId: 1
-  },
-  metadata: {
-    agent: "Node",
-    createdAt: Date.now(),
-    requestId: 0
-  },
-  data: {
-    id: 1,
-    code: "JFAC"
-  }
-}
-```
-
-
----
 
 ## Exploiting Webhooks
 
-### 📚 Usage
+👀 See [**the root example/fastify**](./example/fastify/feature/webhook.ts) for an example of utilizing webhooks with an HTTP server.
 
-> 👀 See [**here**](./example/fastify/feature/webhook.ts) for an example of exploiting webhooks with an http server.
-
-> 👀 See [**here**](./docs/events.md) for an exhaustive list of MyUnisoft Events you can subscribe to.
-
-> ⚠️ A Webhook can send multiple Events on a single HTTP POST request.
-
-### Types
-
-#### WebhooksResponse
-
-[JSON Schema](./docs/json-schema/webhook.md)
-
+In TypeScript, webhooks can be described using the `WebhookResponse` type:
 ```ts
-type WebhookResponse<K extends keyof EventTypes.Events> = {
-  scope: Scope;
-  webhookId: string;
-  createdAt: number;
-} & EventTypes.Events[K];
-
-export type WebhooksResponse<T extends (keyof EventTypes.Events)[] = (keyof EventTypes.Events)[]> = [
-  ...(WebhookResponse<T[number]>)[]
-];
+import type { WebhookResponse } from "@myunisoft/events";
 
 const response: WebhooksResponse<["connector", "accountingFolder"]> = [
   {
@@ -333,8 +199,52 @@ const response: WebhooksResponse<["connector", "accountingFolder"]> = [
 ];
 ```
 
+<details>
+<summary>Webhook JSON Schema</summary>
 
-<br/>
+```json
+{
+  "description": "Webhook",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "scope": {
+        "$ref": "Scope"
+      },
+      "webhookId": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "number"
+      },
+      "name": {
+        "type": "string",
+        "description": "event related name"
+      },
+      "operation": {
+        "type": "string",
+        "description": "event related operation",
+        "enum": ["CREATE", "UPDATE", "DELETE", "VOID"]
+      },
+      "data": {
+        "type": "object",
+        "description": "event related data",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "required": ["id"],
+          "additionalProperties": true
+        }
+      }
+    },
+    "required": ["scope", "webhookId", "createdAt", "name", "operation", "data"],
+    "additionalProperties": false
+  }
+}
+```
+</details>
 
 ## Contributors ✨
 
