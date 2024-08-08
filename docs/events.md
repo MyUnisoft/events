@@ -1,3 +1,5 @@
+# Event
+
 ```ts
 export interface Operation {
   create: "CREATE";
@@ -17,24 +19,58 @@ export interface Scope {
 }
 ```
 
-# Connector
+<details>
+<summary>Scope JSON Schema</summary>
+
+```json
+{
+  "$id": "Scope",
+  "description": "Object related to the scope of an event",
+  "type": "object",
+  "properties": {
+    "schemaId": {
+      "type": "number"
+    },
+    "firmId": {
+      "type": "number",
+      "nullable": true
+    },
+    "firmSIRET": {
+        "type": "number",
+        "nullable": true
+      },
+    "accountingFolderId": {
+      "type": "number",
+      "nullable": true
+    },
+    "accountingFolderSIRET": {
+      "type": "number",
+      "nullable": true
+    },
+    "accountingFolderRef": {
+      "type": "string",
+      "nullable": true
+    },
+    "persPhysiqueId": {
+      "type": "number",
+      "nullable": true
+    }
+  },
+  "required": ["schemaId"],
+  "additionalProperties": false
+}
+```
+</details>
+
+## Connector
 
 Event notifying the modification of a partner integration.
 
-- **Operations**: CREATE, UPDATE, DELETE
-- [JSON Schema](./json-schema/events/connector.md)
-
 ```ts
-export type ConnectorOperation = Operation[
-  keyof Omit<Operation, "void">
-];
-
-export type ConnectorScope = Scope;
-
 export interface Connector {
   name: "connector";
-  scope: ConnectorScope;
-  operation: ConnectorOperation;
+  scope: Scope;
+  operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
     code: string;
@@ -43,44 +79,137 @@ export interface Connector {
 }
 ```
 
-# AccountingFolder
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "Connector event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "connector"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "UPDATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": ["id", "code"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
+
+## AccountingFolder
 
 Event notifying the creation of a new Accounting Folder (a company). 
 
-- **Operations**: CREATE, UPDATE
-- [JSON Schema](./json-schema/events/accountingFolder.md)
-
 ```ts
-export type AccountingFolderOperation = Operation[
-  keyof Pick<Operation, "create" | "update" | "delete">
-];
-
-export type AccountingFolderScope = Scope & Required<Pick<Scope, "firmId">>;
-
 export interface AccountingFolder {
   name: "accountingFolder";
-  scope: AccountingFolderScope;
-  operation: AccountingFolderOperation;
+  scope: Scope & Required<Pick<Scope, "firmId">>;
+  operation: "CREATE" | "UPDATE";
   data: {
     id: string;
   };
 }
 ```
 
-# Document
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "AccountingFolder event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "accountingFolder"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "UPDATE", "DELETE"]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number"
+        },
+        "firmSIRET": {
+            "type": "number",
+            "nullable": true
+          },
+        "accountingFolderId": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "persPhysiqueId": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "firmId"],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
+
+## Document
 
 Event notifying the creation/addition of a document.
 
-- **Operations**: CREATE
-- [JSON Schema](./json-schema/events/document.md)
-
 ```ts
-export type DocumentOperation = Operation[
-  keyof Pick<Operation, "create" | "delete">
-];
-
-export type DocumentScope = Scope;
-
 export enum DocumentKind {
   DossierAnnuel = "AF",
   DossierPermanent = "PF",
@@ -90,8 +219,8 @@ export enum DocumentKind {
 
 export interface Document {
   name: "document";
-  scope: DocumentScope;
-  operation: DocumentOperation;
+  scope: Scope;
+  operation: "CREATE" | "DELETE";
   data: {
     id: string;
     kind: DocumentKind;
@@ -100,68 +229,154 @@ export interface Document {
 }
 ```
 
-# Portfolio
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "Document event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "document"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["AF", "PF", "DB", "ED"]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "kind", "name"]
+    }
+  },
+  "required": ["name", "operation", "scope", "data"]
+}
+```
+</details>
+
+## Portfolio
 
 Event notifying the creation or deletion of an Accounting Portfolio (or Accounting Wallet). Wallet allow to define access to a set of accounting folders.
 
-- **Operations**: CREATE, DELETE
-- [JSON Schema](./json-schema/events/portfolio.md)
-
 ```ts
-export type PortfolioOperation = Operation[
-  keyof Omit<Operation, "update" | "void">
-];
-
-export type PortfolioScope = Scope;
-
 export interface Portfolio {
   name: "portfolio";
-  scope: PortfolioScope;
-  operation: PortfolioOperation;
+  scope: Scope;
+  operation: "CREATE" | "DELETE";
   data: {
     id: string;
   }
 }
 ```
 
-# AccountingLineEntry
+<details>
+<summary>JSON Schema</summary>
 
-- **Operations**: CREATE 
-- [JSON Schema](./json-schema/events/accountingLineEntry.md)
+```json
+{
+  "description": "Portfolio event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "portfolio"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
+
+## AccountingLineEntry
 
 ```ts
-export type AccountingLineEntryOperation = Operation[
-  keyof Pick<Operation, "create">
-];
-
-export type AccountingLineEntryScope = Scope;
-
 export interface AccountingLineEntry {
   name: "accountingLineEntry";
-  scope: AccountingLineEntryScope;
-  operation: AccountingLineEntryOperation;
+  scope: Scope;
+  operation: "CREATE;
   data: {
     id: string;
   }
 }
 ```
 
-# AdminMessage
+<details>
+<summary>JSON Schema</summary>
 
-- **Operations**: VOID 
-- [JSON Schema](./json-schema/events/adminMessage.md)
+```json
+{
+  "description": "accountingLineEntry event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "accountingLineEntry"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": ["id"]
+    }
+  },
+  "required": ["name", "operation", "scope", "data"]
+}
+```
+</details>
+
+## AdminMessage
 
 ```ts
-export type AdminMessageOperation = Operation[
-  keyof Pick<Operation, "void">
-];
-
-export type AdminMessageScope = Scope;
-
 export interface AdminMessage {
   name: "adminMessage";
-  scope: AdminMessageScope;
-  operation: AdminMessageOperation;
+  scope: Scope;
+  operation: "VOID;
   data: {
     event: "admin_message";
     socketMessage: {
@@ -174,45 +389,102 @@ export interface AdminMessage {
 }
 ```
 
-# ThirdParty
+<details>
+<summary>JSON Schema</summary>
 
-- **Operations**: CREATE, UPDATE, DELETE
-- [JSON Schema](./json-schema/events/thirdParty.md)
+```json
+{
+  "description": "adminMessage event",
+  "type": "object",
+  "properties": {
+    "event": {
+      "type": "string",
+      "value": "admin_message"
+    },
+    "socketMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "title", "message"]
+    },
+    "receivers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["event", "socketMessage", "receivers"]
+}
+```
+</details>
+
+## ThirdParty
 
 ```ts
-export type ThirdPartyOperation = Operation[
-  keyof Omit<Operation, "void">
-];
-
-export type ThirdPartyScope = Scope;
-
-
 export interface ThirdParty {
   name: "thirdParty";
-  scope: ThirdPartyScope;
-  operation: ThirdPartyOperation;
+  scope: Scope;
+  operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     code: string;
   }
 }
 ```
 
-# AccountingEntryLettering
+<details>
+<summary>JSON Schema</summary>
 
-- **Operations**: CREATE
-- [JSON Schema](./json-schema/events/accountingEntryLettering.md)
+```json
+{
+  "description": "Third-party event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "thirdParty"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "UPDATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        }
+      },
+      "required": ["code"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
+
+## AccountingEntryLettering
 
 ```ts
-export type AccountingEntryLetteringOperation = Operation[
-  keyof Pick<Operation, "create" | "delete">
-];
-
-export type AccountingEntryLetteringScope = Scope;
-
 export interface AccountingEntryLettering {
   name: "accountingEntryLettering";
-  scope: AccountingEntryLetteringScope;
-  operation: AccountingEntryLetteringOperation;
+  scope: Scope;
+  operation: "CREATE";
   data: {
     id: string;
     piece2: string;
@@ -222,22 +494,60 @@ export interface AccountingEntryLettering {
 }
 ```
 
-# CloudDocument
+<details>
+<summary>JSON Schema</summary>
 
-- **Operations**: CREATE, UPDATE
-- [JSON Schema](./json-schema/events/cloudDocument.md)
+```json
+{
+  "description": "accountingEntryLettering event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "accountingEntryLettering"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "piece2": {
+          "type": "string"
+        },
+        "paymentType": {
+          "type": "string"
+        },
+        "piece1": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "piece2", "paymentType"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
+
+## CloudDocument
 
 ```ts
-export type CloudDocumentOperation = Operation[
-  keyof Pick<Operation, "create" | "update">
-];
-
-export type CloudDocumentScope = Scope;
-
 export interface CloudDocument {
   name: "cloudDocument";
-  scope: CloudDocumentScope;
-  operation: CloudDocumentOperation;
+  scope: Scope;
+  operation: "CREATE" | "UPDATE";
   data: {
     id: string;
     status: "rejected" | "completed";
@@ -245,3 +555,47 @@ export interface CloudDocument {
   }
 }
 ```
+
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "CloudDocument event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "cloudDocument"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "UPDATE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["reject", "completed"]
+        },
+        "reason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": ["id", "status"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
