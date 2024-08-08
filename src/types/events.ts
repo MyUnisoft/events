@@ -15,16 +15,12 @@ export interface Scope {
   persPhysiqueId?: number | null;
 }
 
-export type ConnectorOperation = Operation[
-  keyof Omit<Operation, "void">
-];
-
 export type ConnectorScope = Scope;
 
 export interface Connector {
   name: "connector";
   scope: ConnectorScope;
-  operation: ConnectorOperation;
+  operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
     code: string;
@@ -32,24 +28,16 @@ export interface Connector {
   }
 }
 
-export type AccountingFolderOperation = Operation[
-  keyof Pick<Operation, "create" | "update" | "delete">
-];
-
 export type AccountingFolderScope = Scope & Required<Pick<Scope, "firmId">>;
 
 export interface AccountingFolder {
   name: "accountingFolder";
   scope: AccountingFolderScope;
-  operation: AccountingFolderOperation;
+  operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
   };
 }
-
-export type DocumentOperation = Operation[
-  keyof Pick<Operation, "create" | "delete">
-];
 
 export type DocumentScope = Scope;
 
@@ -63,7 +51,7 @@ export enum DocumentKind {
 export interface Document {
   name: "document";
   scope: DocumentScope;
-  operation: DocumentOperation;
+  operation: "CREATE" | "DELETE";
   data: {
     id: string;
     kind: DocumentKind;
@@ -71,46 +59,34 @@ export interface Document {
   }
 }
 
-export type PortfolioOperation = Operation[
-  keyof Omit<Operation, "update" | "void">
-];
-
 export type PortfolioScope = Scope;
 
 export interface Portfolio {
   name: "portfolio";
   scope: PortfolioScope;
-  operation: PortfolioOperation;
+  operation: "CREATE" | "DELETE";
   data: {
     id: string;
   }
 }
-
-export type AccountingLineEntryOperation = Operation[
-  keyof Pick<Operation, "create">
-];
 
 export type AccountingLineEntryScope = Scope;
 
 export interface AccountingLineEntry {
   name: "accountingLineEntry";
   scope: AccountingLineEntryScope;
-  operation: AccountingLineEntryOperation;
+  operation: "CREATE";
   data: {
     id: string;
   }
 }
-
-export type AdminMessageOperation = Operation[
-  keyof Pick<Operation, "void">
-];
 
 export type AdminMessageScope = Scope;
 
 export interface AdminMessage {
   name: "adminMessage";
   scope: AdminMessageScope;
-  operation: AdminMessageOperation;
+  operation: "VOID";
   data: {
     event: "admin_message";
     socketMessage: {
@@ -122,31 +98,23 @@ export interface AdminMessage {
   }
 }
 
-export type ThirdPartyOperation = Operation[
-  keyof Omit<Operation, "void">
-];
-
 export type ThirdPartyScope = Scope;
 
 export interface ThirdParty {
   name: "thirdParty";
   scope: ThirdPartyScope;
-  operation: ThirdPartyOperation;
+  operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     code: string;
   }
 }
-
-export type AccountingEntryLetteringOperation = Operation[
-  keyof Pick<Operation, "create" | "delete">
-];
 
 export type AccountingEntryLetteringScope = Scope;
 
 export interface AccountingEntryLettering {
   name: "accountingEntryLettering";
   scope: AccountingEntryLetteringScope;
-  operation: AccountingEntryLetteringOperation;
+  operation: "CREATE" | "DELETE";
   data: {
     id: string;
     piece2: string;
@@ -155,16 +123,12 @@ export interface AccountingEntryLettering {
   }
 }
 
-export type CloudDocumentOperation = Operation[
-  keyof Pick<Operation, "create" | "update">
-];
-
 export type CloudDocumentScope = Scope;
 
 export interface CloudDocument {
   name: "cloudDocument";
   scope: CloudDocumentScope;
-  operation: CloudDocumentOperation;
+  operation: "CREATE" | "UPDATE";
   data: {
     id: string;
     status: "rejected" | "completed";

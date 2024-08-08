@@ -15,7 +15,8 @@ import {
   IncomerChannelMessages,
   IncomerRegistrationMessage,
   CloseMessage,
-  RetryMessage
+  RetryMessage,
+  DispatcherTransactionMetadata
 } from "../../../types";
 import * as eventsSchema from "../../../schema/eventManagement/index";
 import {
@@ -78,9 +79,9 @@ function isRetryMessage<T extends GenericEvent>(
 }
 
 type DispatchedEvent<T extends GenericEvent> = (
-  IncomerChannelMessages<T>["DispatcherMessages"] | DispatcherApprovementMessage
+  Omit<IncomerChannelMessages<T>["DispatcherMessages"] | DispatcherApprovementMessage, "redisMetadata">
 ) & {
-  redisMetadata: Omit<DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"], "transactionId">
+  redisMetadata: Omit<DispatcherTransactionMetadata, "transactionId" | "iteration">
 };
 
 export interface DispatchEventOptions<T extends GenericEvent> {

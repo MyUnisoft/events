@@ -304,7 +304,7 @@ export class Incomer <
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch {
-      this.logger.error("Failed to register in time.");
+      this.logger.error("Failed to register in time");
       this.dispatcherConnectionState = false;
 
       this.checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
@@ -371,10 +371,11 @@ export class Incomer <
       }, this.maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
+
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch {
-      this.logger.error("Failed to register in time.");
+      this.logger.error("Failed to register in time");
 
       this.dispatcherConnectionState = false;
 
@@ -383,42 +384,61 @@ export class Incomer <
   }
 
   public async initialize() {
-    if (this.providedUUID) {
-      throw new Error("Cannot init multiple times.");
+    try {
+      if (this.providedUUID) {
+        throw new Error("Cannot init multiple times");
+      }
+
+      await this.externals?.initialize();
+      await this.subscriber.subscribe(this.dispatcherChannelName);
+
+      this.subscriber.on(
+        "message",
+        (channel: string, message: string) => this.handleMessages(channel, message)
+          .catch((error) => this.logger.error({ error }, "Failed at resolving message"))
+      );
+
+      await this.registrationAttempt();
     }
+    catch (error) {
+      this.logger.error({ error }, "Failed to initialize Incomer");
 
-    await this.externals?.initialize();
-
-    await this.subscriber.subscribe(this.dispatcherChannelName);
-
-    this.subscriber.on(
-      "message",
-      (channel: string, message: string) => this.handleMessages(channel, message)
-        .catch((error) => this.logger.error({ error: error.stack }, "Failed at resolving message"))
-    );
-
-    await this.registrationAttempt();
+      throw error;
+    }
   }
 
   public async close() {
-    await this.externals?.close();
+    try {
+      await this.externals?.close();
 
-    await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
-    this.subscriber.removeAllListeners("message");
+      await this.subscriber.unsubscribe(this.dispatcherChannelName, this.incomerChannelName);
+      this.subscriber.removeAllListeners("message");
 
-    clearInterval(this.checkTransactionsStateInterval);
-    this.checkTransactionsStateInterval = undefined;
+      clearInterval(this.checkTransactionsStateInterval);
+      this.checkTransactionsStateInterval = undefined;
 
-    if (this.checkRegistrationInterval) {
-      clearInterval(this.checkRegistrationInterval);
-      this.checkRegistrationInterval = undefined;
+      if (this.checkRegistrationInterval) {
+        clearInterval(this.checkRegistrationInterval);
+        this.checkRegistrationInterval = undefined;
+      }
+
+      if (this.checkDispatcherStateTimeout) {
+        clearTimeout(this.checkDispatcherStateTimeout);
+        this.checkDispatcherStateTimeout = undefined;
+      }
+
+      await this.cleaupTransactions();
+
+      this.logger.info("Incomer closed successfully");
     }
+    catch (error) {
+      this.logger.error({ error }, "Failed to close Incomer");
 
-    if (this.checkDispatcherStateTimeout) {
-      clearTimeout(this.checkDispatcherStateTimeout);
-      this.checkDispatcherStateTimeout = undefined;
+      throw error;
     }
+  }
 
+  private async cleaupTransactions() {
     if (this.incomerChannel) {
       await this.incomerChannel.publish({
         name: "CLOSE",
