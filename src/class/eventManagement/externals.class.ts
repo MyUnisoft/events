@@ -9,7 +9,9 @@ export class Externals<T extends GenericEvent = GenericEvent> {
   public incomer: Incomer<T>;
   public dispatcher: Dispatcher<T>;
 
-  constructor(options: IncomerOptions<T>) {
+  constructor(
+    options: IncomerOptions<T>
+  ) {
     this.incomer = new Incomer({
       ...options,
       eventsCast: options.eventsSubscribe.map((val) => val.name),

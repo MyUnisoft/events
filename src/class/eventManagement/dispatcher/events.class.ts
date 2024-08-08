@@ -120,7 +120,9 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   #logger: PartialLogger;
   #standardLogFn: StandardLog<T>;
 
-  constructor(options: EventsHandlerOptions<T>) {
+  constructor(
+    options: EventsHandlerOptions<T>
+  ) {
     super();
 
     Object.assign(this, { ...options });
@@ -136,7 +138,9 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     }
   }
 
-  public async dispatch(options: DispatchEventOptions<T>): Promise<void> {
+  public async dispatch(
+    options: DispatchEventOptions<T>
+  ): Promise<void> {
     const { channel, store, redisMetadata, event, dispatcherTransactionUUID } = options;
 
     const transaction = await store.setTransaction({
@@ -249,16 +253,11 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
     this.redisMetadataValidation(event);
 
-    if (event.name === "CLOSE") {
-      return;
-    }
-
-    if (event.name === "RETRY") {
+    if (event.name === "CLOSE" || event.name === "RETRY") {
       return;
     }
 
     const eventValidation = this.#eventsValidationFn.get(eventRest.name) as ValidateFunction<T>;
-
     if (!eventValidation) {
       throw new Error(`Unknown Event ${event.name}`);
     }
