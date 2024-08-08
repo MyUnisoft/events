@@ -1,8 +1,13 @@
-export interface Operation {
-  create: "CREATE";
-  update: "UPDATE";
-  delete: "DELETE";
-  void: "VOID";
+export type Operation = "CREATE" | "UPDATE" | "DELETE" | "VOID";
+
+export interface Metadata {
+  agent: string;
+  origin?: {
+    endpoint: string;
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS";
+    requestId?: string;
+  };
+  createdAt: number;
 }
 
 export interface Scope {
@@ -15,11 +20,9 @@ export interface Scope {
   persPhysiqueId?: number | null;
 }
 
-export type ConnectorScope = Scope;
-
 export interface Connector {
   name: "connector";
-  scope: ConnectorScope;
+  scope: Scope;
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
@@ -28,18 +31,14 @@ export interface Connector {
   }
 }
 
-export type AccountingFolderScope = Scope & Required<Pick<Scope, "firmId">>;
-
 export interface AccountingFolder {
   name: "accountingFolder";
-  scope: AccountingFolderScope;
+  scope: Scope & Required<Pick<Scope, "firmId">>;
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
   };
 }
-
-export type DocumentScope = Scope;
 
 export enum DocumentKind {
   DossierAnnuel = "AF",
@@ -50,7 +49,7 @@ export enum DocumentKind {
 
 export interface Document {
   name: "document";
-  scope: DocumentScope;
+  scope: Scope;
   operation: "CREATE" | "DELETE";
   data: {
     id: string;
@@ -59,33 +58,27 @@ export interface Document {
   }
 }
 
-export type PortfolioScope = Scope;
-
 export interface Portfolio {
   name: "portfolio";
-  scope: PortfolioScope;
+  scope: Scope;
   operation: "CREATE" | "DELETE";
   data: {
     id: string;
   }
 }
 
-export type AccountingLineEntryScope = Scope;
-
 export interface AccountingLineEntry {
   name: "accountingLineEntry";
-  scope: AccountingLineEntryScope;
+  scope: Scope;
   operation: "CREATE";
   data: {
     id: string;
   }
 }
 
-export type AdminMessageScope = Scope;
-
 export interface AdminMessage {
   name: "adminMessage";
-  scope: AdminMessageScope;
+  scope: Scope;
   operation: "VOID";
   data: {
     event: "admin_message";
@@ -98,22 +91,18 @@ export interface AdminMessage {
   }
 }
 
-export type ThirdPartyScope = Scope;
-
 export interface ThirdParty {
   name: "thirdParty";
-  scope: ThirdPartyScope;
+  scope: Scope;
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     code: string;
   }
 }
 
-export type AccountingEntryLetteringScope = Scope;
-
 export interface AccountingEntryLettering {
   name: "accountingEntryLettering";
-  scope: AccountingEntryLetteringScope;
+  scope: Scope;
   operation: "CREATE" | "DELETE";
   data: {
     id: string;
@@ -123,11 +112,9 @@ export interface AccountingEntryLettering {
   }
 }
 
-export type CloudDocumentScope = Scope;
-
 export interface CloudDocument {
   name: "cloudDocument";
-  scope: CloudDocumentScope;
+  scope: Scope;
   operation: "CREATE" | "UPDATE";
   data: {
     id: string;

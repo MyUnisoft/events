@@ -4,11 +4,11 @@ import { EventEmitter } from "node:events";
 // Import Third-party Dependencies
 import { Channel } from "@myunisoft/redis";
 import Ajv, { ValidateFunction } from "ajv";
+import type { Logger } from "pino";
 
 // Import Internal Dependencies
 import { TransactionStore } from "../../store/transaction.class.js";
 import type {
-  DispatcherChannelMessages,
   DispatcherApprovementMessage,
   EventMessage,
   GenericEvent,
@@ -16,8 +16,7 @@ import type {
   IncomerRegistrationMessage,
   CloseMessage,
   RetryMessage,
-  DispatcherTransactionMetadata,
-  PartialLogger
+  TransactionMetadata
 } from "../../../types/index.js";
 import * as eventsSchema from "../../../schema/eventManagement/index.js";
 import {
@@ -30,21 +29,18 @@ import {
 
 // CONSTANTS
 const ajv = new Ajv();
-const kDispatcherChannelEvents = ["REGISTER"];
-
-type AnyDispatcherChannelMessage = (
-  DispatcherChannelMessages["IncomerMessages"]
-);
+const kDispatcherChannelEvents = ["REGISTER"] as const;
 
 type AnyIncomerChannelMessage<T extends GenericEvent> = (
   IncomerChannelMessages<T>["DispatcherMessages"] | (IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage)
 );
 
+type AnyEventChannelMessage<T extends GenericEvent> = IncomerRegistrationMessage | AnyIncomerChannelMessage<T>;
+
 function isIncomerChannelMessage<
   T extends GenericEvent
 >(
-  event: AnyDispatcherChannelMessage |
-    AnyIncomerChannelMessage<T>
+  event: AnyEventChannelMessage<T>
 ): event is IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage {
   return kDispatcherChannelEvents.find((message) => message === event.name) === undefined;
 }
@@ -52,9 +48,8 @@ function isIncomerChannelMessage<
 function isDispatcherChannelMessage<
   T extends GenericEvent
 >(
-  event: AnyDispatcherChannelMessage |
-    AnyIncomerChannelMessage<T>
-): event is AnyDispatcherChannelMessage {
+  event: AnyEventChannelMessage<T>
+): event is IncomerRegistrationMessage {
   return kDispatcherChannelEvents.find((message) => message === event.name) !== undefined;
 }
 
@@ -79,7 +74,7 @@ function isRetryMessage<T extends GenericEvent>(
 type DispatchedEvent<T extends GenericEvent> = (
   Omit<IncomerChannelMessages<T>["DispatcherMessages"] | DispatcherApprovementMessage, "redisMetadata">
 ) & {
-  redisMetadata: Omit<DispatcherTransactionMetadata, "transactionId" | "iteration">
+  redisMetadata: Omit<TransactionMetadata<"dispatcher">, "transactionId" | "iteration">
 };
 
 export interface DispatchEventOptions<T extends GenericEvent> {
@@ -107,7 +102,7 @@ export interface EventsHandlerOptions<T extends GenericEvent> {
     customValidationCbFn?: customValidationCbFn<T>;
   };
   standardLog?: StandardLog<T>;
-  parentLogger: PartialLogger;
+  parentLogger: Logger;
 }
 
 export class EventsHandler<T extends GenericEvent> extends EventEmitter {
@@ -117,7 +112,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   #eventsValidationFn: eventsValidationFn<T>;
   #customValidationCbFn: customValidationCbFn<T>;
 
-  #logger: PartialLogger;
+  #logger: Logger;
   #standardLogFn: StandardLog<T>;
 
   constructor(
@@ -164,8 +159,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
   public async handleEvents(
     channel: string,
-    event: AnyDispatcherChannelMessage |
-    AnyIncomerChannelMessage<T>
+    event: AnyEventChannelMessage<T>
   ) {
     if (channel === this.dispatcherChannelName) {
       if (!isDispatcherChannelMessage(event)) {
@@ -208,9 +202,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   }
 
   private redisMetadataValidation(
-    event: AnyDispatcherChannelMessage |
-      AnyIncomerChannelMessage<T> |
-      DispatcherApprovementMessage
+    event: AnyEventChannelMessage<T> | DispatcherApprovementMessage
   ) {
     const { redisMetadata } = event;
 

@@ -1,28 +1,21 @@
 export type Prefix = "test" | "development" | "staging" | "production";
 
-export type EventCast<T extends string = string> = T;
-
 export type EventSubscribe<T extends string = string> = {
   name: T;
   delay?: number;
   horizontalScale?: boolean;
 };
 
-export interface SharedTransactionMetadata {
+export type TransactionMetadata<T extends Instance> = (
+  T extends "dispatcher" ?
+    { to: string; iteration: number; } :
+    { to?: string }
+) & {
   origin: string;
   incomerName: string;
   transactionId: string;
   prefix?: Prefix;
   eventTransactionId?: string;
-}
-
-export interface DispatcherTransactionMetadata extends SharedTransactionMetadata {
-  to: string;
-  iteration: number;
-}
-
-export interface IncomerTransactionMetadata extends SharedTransactionMetadata {
-  to?: string;
 }
 
 export type GenericEvent = {
@@ -33,14 +26,6 @@ export type GenericEvent = {
 
 export type anyFn = (...args: any[]) => void;
 
-export type PartialLogger = {
-  info: anyFn;
-  warn: anyFn;
-  debug: anyFn;
-  error: anyFn;
-  [key: string]: any;
-};
-
 export interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
@@ -48,7 +33,7 @@ export interface RegisteredIncomer {
   isDispatcherActiveInstance: boolean;
   lastActivity: number;
   aliveSince: number;
-  eventsCast: EventCast[];
+  eventsCast: string[];
   eventsSubscribe: EventSubscribe[];
   prefix?: string;
 }

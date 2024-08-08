@@ -11,7 +11,7 @@ import {
   clearAllKeys,
   getRedis
 } from "@myunisoft/redis";
-import * as Logger from "pino";
+import { pino } from "pino";
 import Ajv from "ajv";
 
 // Import Internal Dependencies
@@ -29,7 +29,7 @@ import {
 } from "../../../../src/class/eventManagement/dispatcher/transaction-handler.class.js";
 
 // Internal Dependencies Mocks
-const logger = Logger.pino({
+const logger = pino({
   level: "debug"
 });
 const mockedLoggerError = jest.spyOn(logger, "error");

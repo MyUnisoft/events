@@ -1,18 +1,18 @@
 // Import Internal Dependencies
 import type {
-  DispatcherTransactionMetadata,
+  TransactionMetadata,
   GenericEvent,
-  IncomerTransactionMetadata,
   Prefix
 } from "./index.js";
 
 export type DispatcherPingMessage = {
   name: "PING";
   data: null;
-  redisMetadata: Omit<DispatcherTransactionMetadata, "iteration">;
+  redisMetadata: Omit<TransactionMetadata<"dispatcher">, "iteration">;
 };
+
 export type DistributedEventMessage<T extends GenericEvent = GenericEvent> = T & {
-  redisMetadata: DispatcherTransactionMetadata;
+  redisMetadata: TransactionMetadata<"dispatcher">;
 };
 
 export type CallBackEventMessage<T extends GenericEvent = GenericEvent> = T & {
@@ -20,7 +20,7 @@ export type CallBackEventMessage<T extends GenericEvent = GenericEvent> = T & {
 };
 
 export type EventMessage<T extends GenericEvent = GenericEvent> = T & {
-  redisMetadata: IncomerTransactionMetadata;
+  redisMetadata: TransactionMetadata<"incomer">;
 };
 
 export type CloseMessage = {

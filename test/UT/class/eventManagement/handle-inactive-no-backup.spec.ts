@@ -9,7 +9,7 @@ import {
   closeAllRedis,
   getRedis
 } from "@myunisoft/redis";
-import * as Logger from "pino";
+import { pino } from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
@@ -24,7 +24,7 @@ import {
 import { TransactionStore } from "../../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
-const dispatcherLogger = Logger.pino({
+const dispatcherLogger = pino({
   level: "debug"
 });
 const mockedEventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));

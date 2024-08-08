@@ -68,8 +68,6 @@ type GenericEvent = {
   [key: string]: any;
 };
 
-type EventCast<T extends string | keyof Events = string> = T;
-
 type EventSubscribe<T extends string | keyof Events = string> = {
   name: T;
   delay?: number;
@@ -107,7 +105,7 @@ type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   prefix?: Prefix;
   logger?: Partial<Logger> & Pick<Logger, "info" | "warn">;
   standardLog?: StandardLog<T>;
-  eventsCast: EventCast[];
+  eventsCast: string[];
   eventsSubscribe: EventSubscribe[];
   eventsValidation?: {
     eventsValidationFn?: eventsValidationFn<T>;

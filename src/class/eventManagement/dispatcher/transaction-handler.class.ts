@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 // Import Third-party Dependencies
 import { Channel } from "@myunisoft/redis";
 import { Mutex } from "@openally/mutex";
+import type { Logger } from "pino";
 
 // Import Internal Dependencies
 import {
@@ -23,12 +24,11 @@ import {
 } from "../../../utils/index.js";
 import { EventsHandler } from "./events.class.js";
 import type {
-  DispatcherChannelMessages,
-  DispatcherTransactionMetadata,
+  DispatcherApprovementMessage,
+  TransactionMetadata,
   DistributedEventMessage,
   GenericEvent,
   IncomerChannelMessages,
-  PartialLogger,
   RegisteredIncomer
 } from "../../../types/index.js";
 
@@ -73,9 +73,9 @@ function findISOIncomer(options: FindISOIncomerOptions):
 }
 
 type DispatchedEvent<T extends GenericEvent> = (
-  IncomerChannelMessages<T>["DispatcherMessages"] | DispatcherChannelMessages["DispatcherMessages"]
+  IncomerChannelMessages<T>["DispatcherMessages"] | DispatcherApprovementMessage
 ) & {
-  redisMetadata: Omit<DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"], "transactionId">
+  redisMetadata: Omit<DispatcherApprovementMessage["redisMetadata"], "transactionId">
 };
 
 export interface DispatchEventOptions<T extends GenericEvent> {
@@ -98,8 +98,8 @@ export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = {
   incomerStore: IncomerStore;
   privateUUID: string;
   formattedPrefix: string;
-  parentLogger: PartialLogger;
-  logger?: PartialLogger;
+  parentLogger: Logger;
+  logger?: Logger;
   standardLog?: StandardLog<T>;
   pingInterval?: number;
   idleTime?: number;
@@ -115,7 +115,7 @@ export interface RedistributeUnresolvedSpreadTransactionOptions {
 export interface RedistributeUnresolvedSpreadTransactionResponse<T extends GenericEvent = GenericEvent> {
   dispatcherTransactionUUID: string;
   event: Omit<DistributedEventMessage, "redisMetadata"> & {
-    redisMetadata: Omit<DispatcherTransactionMetadata, "iteration" | "transactionId">
+    redisMetadata: Omit<TransactionMetadata<"dispatcher">, "iteration" | "transactionId">
   };
   redisMetadata: DispatchEventOptions<T>["redisMetadata"];
 }
@@ -139,7 +139,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
   private incomerChannelHandler: IncomerChannelHandler<T>;
   private eventsHandler: EventsHandler<T>;
-  private logger: PartialLogger;
+  private logger: Logger;
   private standardLogFn: StandardLog<T>;
 
   private resolveTransactionsLock = new Mutex({ concurrency: 1 });
@@ -609,7 +609,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
     const dispatcherTransactionUUID = randomUUID();
     const event: Omit<DistributedEventMessage, "redisMetadata"> & {
-      redisMetadata: Omit<DispatcherTransactionMetadata, "iteration" | "transactionId">
+      redisMetadata: Omit<TransactionMetadata<"dispatcher">, "iteration" | "transactionId">
     } = {
       ...backupIncomerTransaction as IncomerHandlerTransaction["incomerDistributedEventTransaction"],
       redisMetadata: {

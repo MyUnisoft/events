@@ -10,12 +10,22 @@ import {
 // Import Internal Dependencies
 import type { RegisteredIncomer } from "../../types/index.js";
 
+export type IncomerStoreOptions = Partial<KVOptions<RegisteredIncomer>> & {
+  idleTime: number;
+}
+
 export class IncomerStore extends KVPeer<RegisteredIncomer> {
   #key: string;
   #idleTime: number;
 
-  constructor(options: Partial<KVOptions<RegisteredIncomer>> & { idleTime: number; }) {
-    super({ ...options, prefix: undefined, type: "object" });
+  constructor(
+    options: IncomerStoreOptions
+  ) {
+    super({
+      ...options,
+      prefix: undefined,
+      type: "object"
+    });
 
     this.#key = `${options.prefix ? `${options.prefix}-` : ""}incomer`;
     this.#idleTime = options.idleTime;

@@ -1,17 +1,5 @@
 // Import Internal Dependencies
-import { Events } from "./events.js";
-
-export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
-
-export interface Metadata {
-  agent: string;
-  origin?: {
-    endpoint: string;
-    method: Method;
-    requestId?: string;
-  };
-  createdAt: number;
-}
+import { Events, Metadata } from "./events.js";
 
 export type EventOptions<T extends keyof Events = keyof Events> = {
   metadata: Metadata;
@@ -21,7 +9,7 @@ export type EventsOptions<T extends (keyof Events)[] = (keyof Events)[]> = [
   ...(EventOptions<T[number]>)[]
 ];
 
-type WebhookResponse<K extends keyof Events> = {
+export type WebhookResponse<K extends keyof Events> = {
   webhookId: string;
   createdAt: number;
 } & Events[K];

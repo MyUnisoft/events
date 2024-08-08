@@ -9,7 +9,7 @@ import {
   Channel,
   getRedis
 } from "@myunisoft/redis";
-import * as Logger from "pino";
+import { pino } from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
@@ -24,7 +24,7 @@ import {
 import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
-const incomerLogger = Logger.pino({
+const incomerLogger = pino({
   level: "debug"
 });
 const mockedEventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));

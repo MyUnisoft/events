@@ -4,13 +4,13 @@ import {
   closeAllRedis,
   getRedis
 } from "@myunisoft/redis";
-import * as Logger from "pino";
+import { pino } from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
 import { Incomer } from "../../../../src/index.js";
 
-const incomerLogger = Logger.pino({
+const incomerLogger = pino({
   level: "debug"
 });
 
