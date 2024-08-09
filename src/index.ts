@@ -10,8 +10,7 @@ import {
 import type {
   EventOptions,
   EventSubscribe,
-  Events,
-  Operation
+  Events
 } from "./types/index";
 
 // CONSTANTS
@@ -57,19 +56,19 @@ export function validate<T extends keyof Events = keyof Events>(
 
 export function isCreateOperation<T extends keyof Events>(
   operation: EventOptions<T>["operation"]
-): operation is Operation["create"] {
+): operation is "CREATE" {
   return operation === "CREATE";
 }
 
 export function isUpdateOperation<T extends keyof Events>(
   operation: EventOptions<T>["operation"]
-): operation is Operation["update"] {
+): operation is "UPDATE" {
   return operation === "UPDATE";
 }
 
 export function isDeleteOperation<T extends keyof Events>(
   operation: EventOptions<T>["operation"]
-): operation is Operation["delete"] {
+): operation is "DELETE" {
   return operation === "DELETE";
 }
 

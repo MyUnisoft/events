@@ -9,9 +9,9 @@ import {
 
 // Import Internal Dependencies
 import type {
-  DispatcherTransactionMetadata,
-  IncomerTransactionMetadata,
-  DispatcherChannelMessages,
+  TransactionMetadata,
+  DispatcherApprovementMessage,
+  IncomerRegistrationMessage,
   IncomerChannelMessages,
   DispatcherPingMessage,
   DistributedEventMessage,
@@ -19,12 +19,12 @@ import type {
 } from "../../types/index.js";
 
 type BaseTransaction<
-  isMain extends boolean = true,
-  relatedTransaction = isMain extends true ? null : string
+  IsMain extends boolean = true,
+  RelatedTransaction = IsMain extends true ? null : string
 > = {
   published?: boolean;
-  mainTransaction: isMain;
-  relatedTransaction: relatedTransaction;
+  mainTransaction: IsMain;
+  relatedTransaction: RelatedTransaction;
   resolved: boolean;
 };
 type HandlerTransaction = BaseTransaction<false> & {
@@ -35,71 +35,56 @@ export type DispatcherMainTransaction = DispatcherPingMessage & {
   redisMetadata: BaseTransaction<true> & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
 }
 
-type DispatcherApprovementTransaction = DispatcherChannelMessages["DispatcherMessages"] & {
-  redisMetadata: BaseTransaction<false> & DispatcherChannelMessages["DispatcherMessages"]["redisMetadata"];
-};
-
-type DispatcherDistributedEventTransaction = DistributedEventMessage & {
-  redisMetadata: BaseTransaction<false> & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
-}
-
 export interface DispatcherSpreadTransaction {
-  dispatcherApprovementTransaction: DispatcherApprovementTransaction;
-  dispatcherDistributedEventTransaction: DispatcherDistributedEventTransaction;
-}
-
-type IncomerApprovementTransaction = DispatcherChannelMessages["IncomerMessages"] & {
-  redisMetadata: BaseTransaction<true> & DispatcherChannelMessages["IncomerMessages"]["redisMetadata"];
-};
-
-type IncomerEventCastTransaction = IncomerChannelMessages["IncomerMessages"] & {
-  redisMetadata: BaseTransaction<true> & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
+  dispatcherApprovementTransaction: DispatcherApprovementMessage & {
+    redisMetadata: BaseTransaction<false> & DispatcherApprovementMessage["redisMetadata"];
+  };
+  dispatcherDistributedEventTransaction: DistributedEventMessage & {
+    redisMetadata: BaseTransaction<false> & IncomerChannelMessages["DispatcherMessages"]["redisMetadata"];
+  };
 }
 
 export interface IncomerMainTransaction {
-  incomerApprovementTransaction: IncomerApprovementTransaction;
-  incomerEventCastTransaction: IncomerEventCastTransaction;
-}
-
-type IncomerDistributedEventTransaction = IncomerChannelMessages["IncomerMessages"] & {
-  redisMetadata: HandlerTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
-}
-
-type IncomerPongTransaction = DispatcherPingMessage & {
-  redisMetadata: HandlerTransaction & DispatcherPingMessage["redisMetadata"];
+  incomerApprovementTransaction: IncomerRegistrationMessage & {
+    redisMetadata: BaseTransaction<true> & IncomerRegistrationMessage["redisMetadata"];
+  };
+  incomerEventCastTransaction: IncomerChannelMessages["IncomerMessages"] & {
+    redisMetadata: BaseTransaction<true> & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
+  };
 }
 
 export interface IncomerHandlerTransaction {
-  incomerDistributedEventTransaction: IncomerDistributedEventTransaction;
-  incomerPongTransaction: IncomerPongTransaction;
+  incomerDistributedEventTransaction: IncomerChannelMessages["IncomerMessages"] & {
+    redisMetadata: HandlerTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
+  };
+  incomerPongTransaction: DispatcherPingMessage & {
+    redisMetadata: HandlerTransaction & DispatcherPingMessage["redisMetadata"];
+  };
 }
 
-type IncomerTransaction = (
+type IncomerTransaction =
   IncomerMainTransaction["incomerApprovementTransaction"] |
-  IncomerMainTransaction["incomerEventCastTransaction"]
-) | (
+  IncomerMainTransaction["incomerEventCastTransaction"] |
   IncomerHandlerTransaction["incomerDistributedEventTransaction"] |
-  IncomerHandlerTransaction["incomerPongTransaction"]
-);
+  IncomerHandlerTransaction["incomerPongTransaction"];
 
-type DispatcherTransaction = (
+type DispatcherTransaction =
   DispatcherSpreadTransaction["dispatcherApprovementTransaction"] |
-  DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"]
-) | DispatcherMainTransaction;
+  DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"] |
+  DispatcherMainTransaction;
 
-export type Transaction<
-  T extends Instance = Instance
-> = (
+export type Transaction<T extends Instance> = (
   T extends "dispatcher" ? DispatcherTransaction : IncomerTransaction
 ) & {
   aliveSince: number;
 };
 
-type MetadataWithoutTransactionId<T extends Instance = Instance> = T extends "dispatcher" ?
-  Omit<DispatcherTransactionMetadata, "to" | "transactionId">
+type MetadataWithoutTransactionId<T extends Instance> = T extends "dispatcher"
+  ? Omit<TransactionMetadata<"dispatcher">, "to" | "transactionId">
     & { to?: string }
-    & (BaseTransaction<true> | BaseTransaction<false>) :
-  Omit<IncomerTransactionMetadata, "transactionId"> & (BaseTransaction<true> | HandlerTransaction);
+    & (BaseTransaction<true> | BaseTransaction<false>)
+  : Omit<TransactionMetadata<"incomer">, "transactionId">
+    & (BaseTransaction<true> | HandlerTransaction);
 
 export type PartialTransaction<
   T extends Instance = Instance
@@ -107,12 +92,10 @@ export type PartialTransaction<
   redisMetadata: MetadataWithoutTransactionId<T>
 };
 
-export type Transactions<
-  T extends Instance = Instance,
-> = Map<string, Transaction<T>>;
+export type Transactions<T extends Instance> = Map<string, Transaction<T>>;
 
 export type TransactionStoreOptions<
-  T extends Instance = Instance
+  T extends Instance
 > = (Partial<KVOptions<Transactions<T>>> &
   T extends "incomer" ? { prefix: string; } : { prefix?: string; }) & {
     instance: T;
@@ -120,11 +103,12 @@ export type TransactionStoreOptions<
 
 export class TransactionStore<
   T extends Instance = Instance
->
-  extends KVPeer<Transaction<T>> {
+> extends KVPeer<Transaction<T>> {
   #key: string;
 
-  constructor(options: TransactionStoreOptions<T>) {
+  constructor(
+    options: TransactionStoreOptions<T>
+  ) {
     super({
       ...options,
       prefix: undefined,
