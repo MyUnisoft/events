@@ -1,37 +1,19 @@
 {
-    "compilerOptions": {
-      /* Base Options: */
-      "target": "ES2022",
-      "module": "commonjs",
-      "allowJs": true,
-      "moduleResolution": "node",
-      "resolveJsonModule": true,
-      "esModuleInterop": true,
-      "moduleDetection": "force",
-      "isolatedModules": true,
-      "verbatimModuleSyntax": false,
-
-      /* Strictness */
-      "strict": false,
-      "noUncheckedIndexedAccess": false,
-      "noImplicitOverride": true,
-
-      /* Others */
-      "sourceMap": true,
-      "declaration": true,
-      "declarationMap": true,
-      "lib": ["es2022"],
-      "baseUrl": "./src",
-      "outDir": "./dist",
-      "types": ["jest", "node"],
-      "paths": {
-        "#src/*": ["./src/*"]
-      },
-      "typeRoots": ["node_modules/@types", "./types"]
-    },
-    "include": [
-      "src/**/**/*.ts",
-      "./types"
-    ],
-    "exclude": ["node_modules", "example"]
+  "extends": "@openally/config.typescript/cjs",
+  "compilerOptions": {
+    "strictNullChecks": false,
+    "baseUrl": "./src",
+    "outDir": "./dist",
+    "types": [
+      "jest",
+      "node"
+    ]
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "example"
+  ]
 }
