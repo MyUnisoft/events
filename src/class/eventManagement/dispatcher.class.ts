@@ -41,8 +41,8 @@ import { TransactionHandler } from "./dispatcher/transaction-handler.class.js";
 import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class.js";
 import {
   EventsHandler,
-  type customValidationCbFn,
-  type eventsValidationFn
+  type CustomValidationCbFn,
+  type EventsValidationFn
 } from "./dispatcher/events.class.js";
 
 // CONSTANTS
@@ -66,8 +66,8 @@ export const PING_INTERVAL = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHE
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   prefix?: Prefix;
   eventsValidation?: {
-    eventsValidationFn?: eventsValidationFn<T>;
-    customValidationCbFn?: customValidationCbFn<T>;
+    eventsValidationFn?: EventsValidationFn<T>;
+    customValidationCbFn?: CustomValidationCbFn<T>;
   };
   incomerUUID?: string;
   instanceName?: string;

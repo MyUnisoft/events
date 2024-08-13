@@ -41,7 +41,7 @@ import {
 } from "../../utils/index.js";
 import { Externals } from "./externals.class.js";
 import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class.js";
-import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class.js";
+import { CustomValidationCbFn, EventsValidationFn } from "./dispatcher/events.class.js";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -102,8 +102,8 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   eventsCast: string[];
   eventsSubscribe: EventSubscribe[];
   eventsValidation?: {
-    eventsValidationFn?: eventsValidationFn<T>;
-    customValidationCbFn?: customValidationCbFn<T>;
+    eventsValidationFn?: EventsValidationFn<T>;
+    customValidationCbFn?: CustomValidationCbFn<T>;
   };
   eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
   dispatcherInactivityOptions?: {

@@ -24,8 +24,10 @@ import {
   type StandardLog,
   type StandardLogOpts,
   concatErrors,
-  defaultStandardLog
+  defaultStandardLog,
+  eventsValidationFn
 } from "../../../utils/index.js";
+import { validate } from "../../../index.js";
 
 // CONSTANTS
 const ajv = new Ajv();
@@ -91,15 +93,15 @@ export interface DispatchEventOptions<T extends GenericEvent> {
   dispatcherTransactionUUID?: string;
 }
 
-export type customValidationCbFn<T extends GenericEvent> = (event: T) => void;
-export type eventsValidationFn<T extends GenericEvent> = Map<string, ValidateFunction<T> | NestedValidationFunctions>;
+export type CustomValidationCbFn<T extends GenericEvent> = (event: T) => void;
+export type EventsValidationFn<T extends GenericEvent> = Map<string, ValidateFunction<T> | NestedValidationFunctions>;
 
 export interface EventsHandlerOptions<T extends GenericEvent> {
   privateUUID: string;
   dispatcherChannelName: string;
   eventsValidation?: {
-    eventsValidationFn?: eventsValidationFn<T>;
-    customValidationCbFn?: customValidationCbFn<T>;
+    eventsValidationFn?: EventsValidationFn<T>;
+    customValidationCbFn?: CustomValidationCbFn<T>;
   };
   standardLog?: StandardLog<T>;
   parentLogger: Logger;
@@ -109,8 +111,8 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   readonly privateUUID: string;
   readonly dispatcherChannelName: string;
 
-  #eventsValidationFn: eventsValidationFn<T>;
-  #customValidationCbFn: customValidationCbFn<T>;
+  #eventsValidationFn: EventsValidationFn<T>;
+  #customValidationCbFn: CustomValidationCbFn<T>;
 
   #logger: Logger;
   #standardLogFn: StandardLog<T>;
@@ -125,8 +127,8 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
     this.#logger = options.parentLogger.child({ module: "events-handler" }) || options.parentLogger;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
 
-    this.#eventsValidationFn = options.eventsValidation?.eventsValidationFn ?? new Map();
-    this.#customValidationCbFn = options.eventsValidation?.customValidationCbFn;
+    this.#eventsValidationFn = options.eventsValidation?.eventsValidationFn ?? eventsValidationFn;
+    this.#customValidationCbFn = options.eventsValidation?.customValidationCbFn ?? validate as any;
 
     for (const [eventName, validationSchema] of Object.entries(eventsSchema)) {
       this.#eventsValidationFn.set(eventName, ajv.compile(validationSchema));
