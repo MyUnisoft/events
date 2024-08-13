@@ -57,7 +57,7 @@ export class IncomerChannelHandler<
   get(
     uuid: string
   ): ChannelMessages<T> | null {
-    return this.channels.get(uuid);
+    return this.channels.get(uuid) ?? null;
   }
 
   async remove(
@@ -67,7 +67,7 @@ export class IncomerChannelHandler<
       return;
     }
 
-    await this.subscriber.unsubscribe(uuid);
+    await this.subscriber?.unsubscribe(uuid);
     this.channels.delete(uuid);
   }
 }

@@ -93,7 +93,9 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
       const foundIncomers = await Promise.all(incomerKeys.map(
         (incomerKey) => this.getValue(incomerKey)
       ));
-      foundIncomers.forEach((incomer) => incomers.add(incomer));
+      foundIncomers
+        .filter((incomer) => incomer !== null)
+        .forEach((incomer) => incomers.add(incomer));
     }
 
     return incomers;
@@ -101,7 +103,7 @@ export class IncomerStore extends KVPeer<RegisteredIncomer> {
 
   getIncomer(
     incomerId: string
-  ): Promise<RegisteredIncomer> {
+  ): Promise<RegisteredIncomer | null> {
     return this.getValue(
       this.#buildIncomerKey(incomerId)
     );

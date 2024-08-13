@@ -157,7 +157,7 @@ export class TransactionStore<
           transaction !== null &&
           (transaction.redisMetadata && "transactionId" in transaction.redisMetadata)
         ) {
-          mappedTransactions.set(transaction.redisMetadata.transactionId, transaction);
+          mappedTransactions.set(transaction.redisMetadata.transactionId!, transaction);
         }
       }
     }

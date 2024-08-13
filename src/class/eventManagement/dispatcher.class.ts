@@ -108,20 +108,20 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
   private backupIncomerTransactionStore: TransactionStore<"incomer">;
 
-  private transactionHandler: TransactionHandler;
+  private transactionHandler: TransactionHandler<T>;
 
   private logger: Logger;
   private incomerChannelHandler: IncomerChannelHandler<T>;
   private activeChannels = new Set<string>();
 
   private pingInterval: number;
-  private pingIntervalTimer: NodeJS.Timeout;
+  private pingIntervalTimer: NodeJS.Timeout | undefined;
   private checkLastActivityInterval: number;
-  private checkLastActivityIntervalTimer: NodeJS.Timeout;
+  private checkLastActivityIntervalTimer: NodeJS.Timeout | undefined;
   private resolveTransactionInterval: number;
-  private checkDispatcherStateInterval: NodeJS.Timeout;
-  private resetCheckLastActivityTimeout: NodeJS.Timeout;
-  private resolveTransactionsInterval: NodeJS.Timeout;
+  private checkDispatcherStateInterval: NodeJS.Timeout | undefined;
+  private resetCheckLastActivityTimeout: NodeJS.Timeout | undefined;
+  private resolveTransactionsInterval: NodeJS.Timeout | undefined;
   private idleTime: number;
   private minTimeout = 0;
   // Arbitrary value according to fastify default pluginTimeout
@@ -288,6 +288,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   public async initialize() {
+    if (!this.subscriber) {
+      throw new Error(`redis subscriber not available`);
+    }
+
     await this.subscriber.subscribe(this.dispatcherChannelName);
     this.subscriber.on("message", (channel, message) => {
       this.handleMessages(channel, message).catch((error) => this.logger.error({ error: error.stack }));
@@ -333,7 +337,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.eventsHandler.removeAllListeners();
     this.removeAllListeners();
 
-    await this.subscriber.unsubscribe(
+    await this.subscriber?.unsubscribe(
       this.dispatcherChannelName,
       ...this.incomerChannelHandler.channels.keys(),
       ...this.activeChannels.values()
@@ -351,7 +355,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     try {
       parsedMessage = JSON.parse(message);
     }
-    catch (error) {
+    catch (error: any) {
       this.logger.error({ channel, error: error.message });
 
       return;
@@ -383,7 +387,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       await this.eventsHandler.handleEvents(channel, parsedMessage);
     }
-    catch (error) {
+    catch (error: any) {
       this.logger.error({
         channel,
         message: parsedMessage,
@@ -485,7 +489,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           dispatcherToRemove ? this.removeNonActives([dispatcherToRemove]) : () => void 0
         ]);
       }
-      catch (error) {
+      catch (error: any) {
         this.logger.error({ error: error.stack }, `${this.selfProvidedUUID} failed while taking back the lead`);
 
         return;
@@ -529,7 +533,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const inactiveIncomers = await this.incomerStore.getNonActives();
 
-    const toResolve = [];
+    const toResolve: Promise<void>[] = [];
 
     let index = 0;
     for (const inactive of inactiveIncomers) {
@@ -545,10 +549,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         .map(([transactionId]) => transactionId);
 
       if (recentPingTransactionKeys.length > 0) {
-        toResolve.push(Promise.all([
+        toResolve.push(...[
           this.incomerStore.updateIncomerState(inactive.providedUUID),
           transactionStore.deleteTransactions(recentPingTransactionKeys)
-        ]));
+        ]);
 
         inactiveIncomers.splice(index, 1);
       }
@@ -563,7 +567,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async ping() {
     const incomers = await this.incomerStore.getIncomers();
-    const pingToResolve = [];
+    const pingToResolve: Promise<void>[] = [];
     const concernedIncomers: string[] = [];
     for (const incomer of incomers) {
       if (incomer === null) {
@@ -615,14 +619,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async removeNonActives(inactiveIncomers: RegisteredIncomer[]) {
-    const toHandle = [];
+    const toHandle: Promise<void>[] = [];
 
     for (const inactive of inactiveIncomers) {
-      toHandle.push(Promise.all([
+      toHandle.push(...[
         this.incomerStore.deleteIncomer(inactive.providedUUID),
-        this.transactionHandler.resolveInactiveIncomerTransactions(inactive),
-        this.activeChannels.add(`${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`)
-      ]));
+        this.transactionHandler.resolveInactiveIncomerTransactions(inactive)
+      ]);
+      this.activeChannels.add(
+        `${inactive.prefix ? `${inactive.prefix}-` : ""}${inactive.providedUUID}`
+      );
     }
 
     await Promise.all(toHandle);
@@ -845,7 +851,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     for (const incomer of concernedIncomers) {
       const relatedEvent = incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === eventName);
 
-      if (!relatedEvent.horizontalScale &&
+      if (relatedEvent && !relatedEvent.horizontalScale &&
         filteredConcernedIncomers.find(
           (filteredConcernedIncomer) => filteredConcernedIncomer.eventsSubscribe.find(
             (subscribedEvent) => subscribedEvent.name === relatedEvent.name && filteredConcernedIncomer.name === incomer.name

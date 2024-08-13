@@ -24,7 +24,6 @@ export class Externals<T extends GenericEvent = GenericEvent> {
     });
 
     this.dispatcher = new Dispatcher({
-      name: "pulsar",
       ...options,
       pingInterval: Number(process.env.MYUNISOFT_DISPATCHER_PING) || undefined,
       checkLastActivityInterval: Number(process.env.MYUNISOFT_DISPATCHER_ACTIVITY_CHECK) || undefined,
