@@ -1,3 +1,7 @@
+// Import Node.js Dependencies
+import assert from "node:assert";
+import { describe, test } from "node:test";
+
 // Import Internal Dependencies
 import { defaultStandardLog } from "../../../src/utils/index.js";
 
@@ -33,7 +37,7 @@ describe("defaultStandardLog", () => {
 
     const expected = `(event-id:none|t-id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4|req-id:1)(name:foo|ope:CREATE|from:bar|to:none) foo`;
 
-    expect(defaultStandardLog(payload)("foo")).toBe(expected);
+    assert.equal(defaultStandardLog(payload)("foo"), expected);
   });
 
   test("given a payload without scope object, it should just return data about the event & the message", () => {
@@ -52,7 +56,7 @@ describe("defaultStandardLog", () => {
 
     const expected = `(event-id:none|t-id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none|req-id:none)(name:foo|ope:none|from:bar|to:[foo, bar]) foo`;
 
-    expect(defaultStandardLog(payload)("foo")).toBe(expected);
+    assert.equal(defaultStandardLog(payload)("foo"), expected);
   });
 
   test("given a payload with any of the specified property in the scope object, it should return the props", () => {
@@ -76,7 +80,7 @@ describe("defaultStandardLog", () => {
 
     const expected = `(event-id:${eventTransactionId}|t-id:${transactionId}|s:none|f:none|acf:none|p:none|req-id:none)(name:foo|ope:none|from:none|to:none) foo`;
 
-    expect(defaultStandardLog(payload)("foo")).toBe(expected);
+    assert.equal(defaultStandardLog(payload)("foo"), expected);
   });
 });
 
