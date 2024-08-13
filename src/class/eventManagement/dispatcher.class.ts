@@ -908,7 +908,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const incomers = await this.incomerStore.getIncomers();
     const now = Date.now();
 
-    let providedUUID;
+    let providedUUID: string;
     if (data.providedUUID) {
       providedUUID = data.providedUUID;
 
