@@ -145,8 +145,8 @@ export class Incomer <
   private checkTransactionsStateInterval: NodeJS.Timeout;
   private checkDispatcherStateTimeout: NodeJS.Timeout;
   private lastPingDate: number;
-  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions>;
-  private customValidationCbFn: (event: T) => void;
+  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
+  private customValidationCbFn: ((event: T) => void) | undefined;
 
   public externals: Externals<T> | undefined;
 
@@ -557,7 +557,7 @@ export class Incomer <
         await this.handleIncomerMessages(channel, formattedMessage);
       }
     }
-    catch (error) {
+    catch (error: any) {
       this.logger.error({ channel, message: formattedMessage, error: error.stack });
     }
   }
@@ -588,7 +588,7 @@ export class Incomer <
           throw new Error("Unknown event");
         });
     }
-    catch (error) {
+    catch (error: any) {
       this.logger.error({
         channel: "dispatcher",
         error: error.stack,
@@ -770,29 +770,27 @@ export class Incomer <
       instance: "incomer"
     });
 
-    const transactionToUpdate = [];
+    const transactionToUpdate: Promise<any>[] = [];
     for (const [transactionId, transaction] of oldTransactions.entries()) {
       if (transaction.name === "REGISTER") {
-        transactionToUpdate.push([
-          Promise.all([
-            this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
-            this.newTransactionStore.setTransaction({
-              ...transaction,
-              redisMetadata: {
-                ...transaction.redisMetadata,
-                origin: this.providedUUID,
-                relatedTransaction: message.redisMetadata.transactionId,
-                published: true,
-                resolved: true
-              }
-            } as Transaction<"incomer">, transactionId)
-          ])
+        transactionToUpdate.push(...[
+          this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
+          this.newTransactionStore.setTransaction({
+            ...transaction,
+            redisMetadata: {
+              ...transaction.redisMetadata,
+              origin: this.providedUUID,
+              relatedTransaction: message.redisMetadata.transactionId,
+              published: true,
+              resolved: true
+            }
+          } as Transaction<"incomer">, transactionId)
         ]);
 
         continue;
       }
 
-      transactionToUpdate.push(Promise.all([
+      transactionToUpdate.push(...[
         this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
         this.newTransactionStore.setTransaction({
           ...transaction,
@@ -801,7 +799,7 @@ export class Incomer <
             origin: this.providedUUID
           }
         })
-      ]));
+      ]);
     }
 
     await Promise.all(transactionToUpdate);

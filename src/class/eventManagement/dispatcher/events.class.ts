@@ -110,7 +110,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
   readonly dispatcherChannelName: string;
 
   #eventsValidationFn: eventsValidationFn<T>;
-  #customValidationCbFn: customValidationCbFn<T>;
+  #customValidationCbFn: customValidationCbFn<T> | undefined;
 
   #logger: Logger;
   #standardLogFn: StandardLog<T>;
@@ -169,7 +169,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
       try {
         this.dispatcherChannelMessagesSchemaValidation(event);
       }
-      catch (error) {
+      catch (error: any) {
         this.#logger.error(this.#standardLogFn({
           ...event,
           redisMetadata: {

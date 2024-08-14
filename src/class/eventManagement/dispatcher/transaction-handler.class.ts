@@ -221,7 +221,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
               return this.dispatcherTransactionStore.deleteTransaction(relatedPingTransactionId);
             }
 
-            const relatedIncomerPingTransaction = incomerPingTransactions.get(relatedPingTransactionId);
+            const relatedIncomerPingTransaction = incomerPingTransactions.get(relatedPingTransactionId)!;
 
             return Promise.all([
               inactiveIncomerTransactionStore.deleteTransaction(relatedIncomerPingTransaction.redisMetadata.transactionId),
@@ -336,7 +336,9 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         relatedHandlerTransaction,
         relatedHandlerTransaction.redisMetadata.transactionId
       ),
-      incomerToRemoveTransactionStore.deleteTransaction(relatedHandlerTransaction.redisMetadata.transactionId)
+      incomerToRemoveTransactionStore.deleteTransaction(
+        relatedHandlerTransaction.redisMetadata.transactionId
+      )
     ]);
 
     this.logger.debug(
@@ -683,7 +685,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   private async resolveSpreadTransactions(options: ResolveTransactions): Promise<ResolveTransactions> {
     const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
 
-    const toResolve = [];
+    const toResolve: any[] = [];
     const incomerStateToUpdate = new Set<string>();
 
     for (const [dispatcherTransactionId, dispatcherTransaction] of dispatcherTransactions.entries()) {
@@ -738,7 +740,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       }
 
       for (const filteredIncomerTransaction of filteredIncomerTransactions) {
-        const filteredIncomerTransactionId = filteredIncomerTransaction.redisMetadata.transactionId;
+        const filteredIncomerTransactionId = filteredIncomerTransaction.redisMetadata.transactionId!;
 
         if (dispatcherTransaction.redisMetadata.mainTransaction) {
           // Only in case of ping event
@@ -794,7 +796,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   private async resolveMainTransactions(options: ResolveTransactions) {
     const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
 
-    const toResolve = [];
+    const toResolve: Promise<void>[] = [];
     const incomerStateToUpdate = new Set<string>();
 
     for (const incomer of incomers) {
@@ -856,7 +858,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       }
     }
 
-    toResolve.push([...incomerStateToUpdate.values()].map(
+    toResolve.push(...[...incomerStateToUpdate.values()].map(
       (incomerId) => this.incomerStore.updateIncomerState(incomerId))
     );
 
