@@ -678,7 +678,8 @@ export class Incomer <
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
     if (callbackResult && callbackResult.ok) {
-      if (Symbol.for(callbackResult.val.status) === RESOLVED) {
+      const resolvedCallbackResult = callbackResult.unwrap();
+      if (Symbol.for(resolvedCallbackResult.status) === RESOLVED) {
         await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
           ...formattedTransaction,
           redisMetadata: {
@@ -693,8 +694,9 @@ export class Incomer <
       }
 
       if (isUnresolvedEvent(callbackResult)) {
-        if (callbackResult.val.retryStrategy) {
-          const { maxIteration } = callbackResult.val.retryStrategy;
+        const unresolvedCallbackResult = callbackResult.unwrap();
+        if (unresolvedCallbackResult.retryStrategy) {
+          const { maxIteration } = unresolvedCallbackResult.retryStrategy;
 
           if (iteration < maxIteration) {
             await this.incomerChannel.publish({
@@ -711,7 +713,7 @@ export class Incomer <
             });
 
             this.logger.info(
-              this.standardLogFn(logData)(`Callback Resolved but retry for the given reason: ${callbackResult.val.reason}`)
+              this.standardLogFn(logData)(`Callback Resolved but retry for the given reason: ${unresolvedCallbackResult.reason}`)
             );
 
             return;
@@ -726,7 +728,7 @@ export class Incomer <
           } as Transaction<"incomer">);
 
           this.logger.info(
-            this.standardLogFn(logData)(`Callback Resolved but failed for the given reason: ${callbackResult.val.reason}`)
+            this.standardLogFn(logData)(`Callback Resolved but failed for the given reason: ${unresolvedCallbackResult.reason}`)
           );
 
           return;
