@@ -20,13 +20,13 @@ export type GenericOptions = {
 
 export async function createResolvedTransactions(options: GenericOptions) {
   const { publisher, dispatcher, event } = options;
-  const listener = options.listener ?? Object.assign({}, options.listener, { incomerName: "bar" });
+  const listener = options.listener ?? Object.assign({}, options.listener, { name: "bar" });
 
   const mainTransactionPayload: PartialTransaction<"incomer"> = {
     ...event,
     redisMetadata: {
       origin: publisher.instance.providedUUID,
-      incomerName: publisher["incomerName"],
+      incomerName: publisher.instance.name,
       published: true,
       relatedTransaction: null,
       mainTransaction: true,
@@ -61,7 +61,7 @@ export async function createResolvedTransactions(options: GenericOptions) {
     redisMetadata: {
       origin: dispatcher.instance.providedUUID,
       to: listener.instance.providedUUID,
-      incomerName: listener["incomerName"],
+      incomerName: listener.instance.name,
       mainTransaction: false,
       resolved: true,
       relatedTransaction: spreadTransaction.redisMetadata.transactionId,
@@ -82,13 +82,13 @@ export async function createResolvedTransactions(options: GenericOptions) {
 
 export async function createUnresolvedTransactions(options: GenericOptions) {
   const { publisher, dispatcher, event } = options;
-  const listener = options.listener ?? Object.assign({}, options.listener, { incomerName: "bar" });
+  const listener = options.listener ?? Object.assign({}, options.listener, { name: "bar" });
 
   const mainTransactionPayload: PartialTransaction<"incomer"> = {
     ...event,
     redisMetadata: {
       origin: publisher.instance.providedUUID,
-      incomerName: publisher["incomerName"],
+      incomerName: publisher.instance.name,
       published: true,
       relatedTransaction: null,
       mainTransaction: true,
@@ -123,7 +123,7 @@ export async function createUnresolvedTransactions(options: GenericOptions) {
     redisMetadata: {
       origin: dispatcher.instance.providedUUID,
       to: listener.instance.providedUUID,
-      incomerName: listener["incomerName"],
+      incomerName: listener.instance.name,
       mainTransaction: false,
       resolved: false,
       relatedTransaction: spreadTransaction.redisMetadata.transactionId,
@@ -144,13 +144,13 @@ export async function createUnresolvedTransactions(options: GenericOptions) {
 
 export async function createUndistributedTransactions(options: GenericOptions) {
   const { publisher, dispatcher, event } = options;
-  const listener = options.listener ?? Object.assign({}, options.listener, { incomerName: "bar" });
+  const listener = options.listener ?? Object.assign({}, options.listener, { name: "bar" });
 
   const mainTransactionPayload: PartialTransaction<"incomer"> = {
     ...event,
     redisMetadata: {
       origin: publisher.instance.providedUUID,
-      incomerName: publisher["incomerName"],
+      incomerName: publisher.instance.name,
       published: true,
       relatedTransaction: null,
       mainTransaction: true,
