@@ -6,8 +6,9 @@ import { randomUUID } from "node:crypto";
 // Import Third-Party Dependencies
 import {
   closeAllRedis,
-  getRedis,
-  initRedis
+  closeRedis,
+  initRedis,
+  Redis
 } from "@myunisoft/redis";
 import pino, { Logger } from "pino";
 
@@ -29,17 +30,25 @@ const kBackupTransactionStoreName = "backup";
 const kIdleTime = 60_000;
 
 describe("transactionHandler", () => {
+  let redis: Redis;
+
   before(async() => {
-    const redis = await initRedis({
+    await initRedis({
       port: Number(process.env.REDIS_PORT),
       host: process.env.REDIS_HOST
     });
+
+    redis = await initRedis({
+      port: Number(process.env.REDIS_PORT),
+      host: process.env.REDIS_HOST
+    }, undefined, true);
 
     await redis.flushall();
   });
 
   after(async() => {
     await closeAllRedis();
+    await closeRedis(undefined, redis);
   });
 
   describe("transactionHandler with default options", () => {
@@ -102,84 +111,85 @@ describe("transactionHandler", () => {
     });
 
     describe("resolveInactiveIncomerTransactions", () => {
-      const now = Date.now();
+      describe("Given a resolved event", () => {
+        const now = Date.now();
 
-      const publisher = {
-        name: "publisher",
-        eventsCast: [],
-        eventsSubscribe: [],
-        providedUUID: randomUUID(),
-        isDispatcherActiveInstance: false,
-        baseUUID: randomUUID(),
-        lastActivity: now,
-        aliveSince: now
-      };
-      const dispatcher = {
-        name: "dispatcher",
-        eventsCast: [],
-        eventsSubscribe: [],
-        providedUUID: randomUUID(),
-        isDispatcherActiveInstance: false,
-        baseUUID: randomUUID(),
-        lastActivity: now,
-        aliveSince: now
-      };
-      const listener = {
-        name: "listener",
-        eventsCast: [],
-        eventsSubscribe: [],
-        providedUUID: randomUUID(),
-        isDispatcherActiveInstance: false,
-        baseUUID: randomUUID(),
-        lastActivity: now,
-        aliveSince: now
-      };
+        const publisher = {
+          name: "publisher",
+          eventsCast: [],
+          eventsSubscribe: [],
+          providedUUID: randomUUID(),
+          isDispatcherActiveInstance: false,
+          baseUUID: randomUUID(),
+          lastActivity: now,
+          aliveSince: now
+        };
+        const dispatcher = {
+          name: "dispatcher",
+          eventsCast: [],
+          eventsSubscribe: [],
+          providedUUID: randomUUID(),
+          isDispatcherActiveInstance: false,
+          baseUUID: randomUUID(),
+          lastActivity: now,
+          aliveSince: now
+        };
+        const listener = {
+          name: "listener",
+          eventsCast: [],
+          eventsSubscribe: [],
+          providedUUID: randomUUID(),
+          isDispatcherActiveInstance: false,
+          baseUUID: randomUUID(),
+          lastActivity: now,
+          aliveSince: now
+        };
 
-      const publisherTransactionStore = new TransactionStore({
-        prefix: publisher.providedUUID,
-        instance: "incomer"
-      });
-
-      const listenerTransactionStore = new TransactionStore({
-        prefix: listener.providedUUID,
-        instance: "incomer"
-      });
-
-      let resolvedEvent;
-
-      before(async() => {
-        await incomerStore.setIncomer(publisher, publisher.providedUUID);
-        await incomerStore.setIncomer(listener, listener.providedUUID);
-
-        resolvedEvent = await createResolvedTransactions({
-          publisher: {
-            transactionStore: publisherTransactionStore,
-            instance: publisher
-          },
-          dispatcher: {
-            transactionStore: dispatcherTransactionStore,
-            instance: dispatcher
-          },
-          event: {
-            name: "connector",
-            data: {}
-          },
-          listener: {
-            transactionStore: listenerTransactionStore,
-            instance: listener
-          }
+        const publisherTransactionStore = new TransactionStore({
+          prefix: publisher.providedUUID,
+          instance: "incomer"
         });
-      });
 
-      test("foo", async() => {
-        assert.ok(resolvedEvent.mainTransaction.redisMetadata.mainTransaction);
+        const listenerTransactionStore = new TransactionStore({
+          prefix: listener.providedUUID,
+          instance: "incomer"
+        });
 
-        assert.ok(!resolvedEvent.spreadTransaction.mainTransaction);
-        assert.ok(resolvedEvent.spreadTransaction.redisMetadata.resolved);
-        assert.equal(resolvedEvent.spreadTransaction.redisMetadata.iteration, 0);
+        let resolvedEvent;
 
-        assert.ok(!resolvedEvent.handlerTransaction.redisMetadata.mainTransaction);
-        assert.ok(resolvedEvent.handlerTransaction.redisMetadata.resolved);
+        before(async() => {
+          await incomerStore.setIncomer(publisher, publisher.providedUUID);
+          await incomerStore.setIncomer(listener, listener.providedUUID);
+
+          resolvedEvent = await createResolvedTransactions({
+            publisher: {
+              transactionStore: publisherTransactionStore,
+              instance: publisher
+            },
+            dispatcher: {
+              transactionStore: dispatcherTransactionStore,
+              instance: dispatcher
+            },
+            event: {
+              name: "connector",
+              data: {}
+            },
+            listener: {
+              transactionStore: listenerTransactionStore,
+              instance: listener
+            }
+          });
+        });
+
+        test("it should backup the handler transaction", async() => {
+          await transactionHandler.resolveInactiveIncomerTransactions(listener);
+
+          const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
+            .get(resolvedEvent.handlerTransaction.redisMetadata.transactionId);
+
+          assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, resolvedEvent.spreadTransaction.redisMetadata.transactionId);
+          assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+        });
       });
     });
   });
