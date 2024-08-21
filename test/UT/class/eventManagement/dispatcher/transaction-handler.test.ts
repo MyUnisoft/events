@@ -21,7 +21,7 @@ import { IncomerChannelHandler } from "../../../../../src/class/eventManagement/
 import { IncomerStore } from "../../../../../src/class/store/incomer.class";
 import { EventsHandler } from "../../../../../src/class/eventManagement/dispatcher/events.class";
 import { EventOptions, GenericEvent } from "../../../../../src/types";
-import { createResolvedTransactions, createUnresolvedTransactions } from "../../../../fixtures/transactions";
+import { createResolvedTransactions, createUnresolvedTransactions } from "../../../../utils/transactions";
 
 // CONSTANTS
 const kPrefix = "test";
