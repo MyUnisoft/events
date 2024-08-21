@@ -177,7 +177,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
     const incomers = await this.incomerStore.getIncomers();
 
-    delete incomers[inactiveIncomer.providedUUID];
+    for (const incomer of incomers.values()) {
+      if (incomer.providedUUID === inactiveIncomer.providedUUID) {
+        incomers.delete(incomer);
+        
+        break;
+      }
+    }
 
     const transactionsToResolve: Promise<any>[] = [];
 
