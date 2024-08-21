@@ -43,7 +43,7 @@ export async function createResolvedTransactions(options: GenericOptions) {
     redisMetadata: {
       origin: dispatcher.instance.providedUUID,
       to: listener.instance.providedUUID,
-      incomerName: "dispatcher",
+      incomerName: listener.instance.name,
       mainTransaction: false,
       relatedTransaction: mainTransaction.redisMetadata.transactionId!,
       eventTransactionId: mainTransaction.redisMetadata.transactionId!,
@@ -105,7 +105,7 @@ export async function createUnresolvedTransactions(options: GenericOptions) {
     redisMetadata: {
       origin: dispatcher.instance.providedUUID,
       to: listener.instance.providedUUID,
-      incomerName: "dispatcher",
+      incomerName: listener.instance.name,
       mainTransaction: false,
       relatedTransaction: mainTransaction.redisMetadata.transactionId!,
       eventTransactionId: mainTransaction.redisMetadata.transactionId!,
@@ -167,7 +167,7 @@ export async function createUndistributedTransactions(options: GenericOptions) {
     redisMetadata: {
       origin: dispatcher.instance.providedUUID,
       to: listener.instance.providedUUID,
-      incomerName: "dispatcher",
+      incomerName: listener.instance.name,
       mainTransaction: false,
       relatedTransaction: mainTransaction.redisMetadata.transactionId!,
       eventTransactionId: mainTransaction.redisMetadata.transactionId!,
