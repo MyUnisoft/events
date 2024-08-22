@@ -195,6 +195,14 @@ export class Incomer <
     }
   }
 
+  get redis() {
+    return getRedis();
+  }
+
+  get subscriber() {
+    return getRedis("subscriber");
+  }
+
   private async checkDispatcherState() {
     const date = Date.now();
 
@@ -213,36 +221,36 @@ export class Incomer <
         (transactionKey) => store.getValue(transactionKey)
       ));
 
-      await Promise.race([
-        Promise.all(transactions.map((transaction) => {
-          if (
-            transaction.redisMetadata.mainTransaction &&
-            !transaction.redisMetadata.published &&
-            Number(transaction.aliveSince) + Number(this.maxPingInterval) < Date.now()
-          ) {
-            return this.incomerChannel.publish({
-              ...transaction,
-              redisMetadata: {
-                transactionId: transaction.redisMetadata.transactionId,
-                origin: transaction.redisMetadata.origin,
-                prefix: transaction.redisMetadata.prefix
-              }
-            } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
-          }
+      const eventToPublish = transactions.map((transaction) => {
+        if (
+          transaction.redisMetadata.mainTransaction &&
+          !transaction.redisMetadata.published &&
+          Number(transaction.aliveSince) + Number(this.maxPingInterval) < Date.now()
+        ) {
+          return this.retryPublish(transaction);
+        }
 
-          return void 0;
-        })),
+        return void 0;
+      });
+
+      await Promise.race([
+        Promise.all(eventToPublish),
         new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
       ]);
     }
   }
 
-  get redis() {
-    return getRedis();
-  }
+  private async retryPublish(transaction: any) {
+    await this.incomerChannel.publish({
+      ...transaction,
+      redisMetadata: {
+        transactionId: transaction.redisMetadata.transactionId,
+        origin: transaction.redisMetadata.origin,
+        prefix: transaction.redisMetadata.prefix
+      }
+    } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
 
-  get subscriber() {
-    return getRedis("subscriber");
+    this.logger.info(this.standardLogFn(transaction)("Retried event publish"));
   }
 
   private async registrationAttempt() {

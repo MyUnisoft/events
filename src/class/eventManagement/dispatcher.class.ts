@@ -758,7 +758,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const filteredConcernedIncomers = await this.getFilteredConcernedIncomers(eventRest.name);
 
-    if (filteredConcernedIncomers.length === 0) {
+    if (filteredConcernedIncomers.length === 0 && relatedTransaction !== null) {
       if (eventRest.name !== "PING") {
         this.logger.warn(this.standardLogFn(logData)(`No concerned incomers found for event: ${eventRest.name}`));
 
@@ -770,7 +770,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
-    if (!relatedTransaction) {
+    if (!relatedTransaction || relatedTransaction === null) {
       this.logger.warn(this.standardLogFn(logData)(`Couldn't find the related main transaction for: ${transactionId}`));
 
       return;
