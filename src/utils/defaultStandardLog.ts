@@ -22,16 +22,20 @@ export type StandardLogOpts<T extends GenericEvent = GenericEvent> = T & {
     origin?: string;
     to?: string;
     eventTransactionId?: string;
-  }
+  },
+  dispatcherConnectionState?: boolean;
 }
 
 export function defaultStandardLog<
   T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { redisMetadata: { transactionId: string; origin?: string; to?: string, eventTransactionId?: string } }) {
+>(event: StandardLogOpts<T>) {
   const logs = Array.from(mapped<T>(event)).join("|");
 
+
+  const state = typeof event.dispatcherConnectionState === "undefined" ? "none" : String(event.dispatcherConnectionState);
+
   // eslint-disable-next-line max-len
-  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}`;
+  const eventMeta = `name:${logValueFallback(event.name)}|ope:${logValueFallback(event.operation)}|from:${logValueFallback(event.redisMetadata.origin)}|to:${logValueFallback(event.redisMetadata.to)}|state:${state}`;
 
   function log(message: string) {
     return `(${logs})(${eventMeta}) ${message}`;
@@ -46,7 +50,7 @@ function logValueFallback(value: string): string {
 
 function* mapped<
   T extends GenericEvent = EventOptions<keyof Events>
->(event: T & { redisMetadata: { transactionId: string } }) {
+>(event: StandardLogOpts<T>) {
   for (const [key, formattedKey] of Object.entries(kScopeKeys)) {
     if (key === "transactionId") {
       yield `${formattedKey}:${logValueFallback(event.redisMetadata[key])}`;
