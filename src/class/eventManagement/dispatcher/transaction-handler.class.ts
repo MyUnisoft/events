@@ -60,18 +60,6 @@ interface FindISOIncomerOptions {
   key: "eventsCast" | "eventsSubscribe";
 }
 
-function findISOIncomer(options: FindISOIncomerOptions):
-  RegisteredIncomer | undefined {
-  const { incomers, incomerName, eventName, key } = options;
-
-  return incomers.find((incomer) => {
-    const isoEvent = key === "eventsCast" ? incomer.eventsCast.find((event) => event === eventName) :
-      incomer.eventsSubscribe.find((event) => event.name === eventName);
-
-    return incomer.name === incomerName && isoEvent;
-  });
-}
-
 type DispatchedEvent<T extends GenericEvent> = (
   IncomerChannelMessages<T>["DispatcherMessages"] | DispatcherApprovementMessage
 ) & {
@@ -102,13 +90,12 @@ export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = {
   logger?: Logger;
   standardLog?: StandardLog<T>;
   pingInterval?: number;
-  idleTime?: number;
 };
 
 export interface RedistributeUnresolvedSpreadTransactionOptions {
   backupIncomerTransaction: Transaction<"incomer">;
-  isoListener: RegisteredIncomer,
-  relatedDispatcherTransactionId: string,
+  isoListener: RegisteredIncomer;
+  relatedDispatcherTransactionId: string;
   backupTransactionId: string;
 }
 
@@ -190,7 +177,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
     const incomers = await this.incomerStore.getIncomers();
 
-    delete incomers[inactiveIncomer.providedUUID];
+    for (const incomer of incomers.values()) {
+      if (incomer.providedUUID === inactiveIncomer.providedUUID) {
+        incomers.delete(incomer);
+        
+        break;
+      }
+    }
 
     const transactionsToResolve: Promise<any>[] = [];
 
@@ -280,7 +273,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     const mainTransactionResolutionPromises = [...restIncomerTransaction.entries()]
       .flatMap(([incomerTransactionId, incomerTransaction]) => {
         if (incomerTransaction.redisMetadata.mainTransaction) {
-          const isoPublisherIncomer = findISOIncomer({
+          const isoPublisherIncomer = this.findISOIncomer({
             incomers: [...incomers.values()],
             incomerName: inactiveIncomer.name,
             eventName: incomerTransaction.name,
@@ -363,7 +356,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         continue;
       }
 
-      const isoSubscriberIncomer = findISOIncomer({
+      const isoSubscriberIncomer = this.findISOIncomer({
         incomers: [...incomers],
         incomerName: dispatcherTransaction.redisMetadata.incomerName,
         eventName: dispatcherTransaction.name,
@@ -496,7 +489,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
     for (const [backupTransactionId, backupIncomerTransaction] of backupIncomerTransactions.entries()) {
       if (backupIncomerTransaction.redisMetadata.mainTransaction) {
-        const isoPublisher = findISOIncomer({
+        const isoPublisher = this.findISOIncomer({
           incomers: [...incomers.values()],
           incomerName: backupIncomerTransaction.redisMetadata.incomerName,
           eventName: backupIncomerTransaction.name,
@@ -515,7 +508,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       }
 
       if (backupIncomerTransaction.redisMetadata.relatedTransaction) {
-        const isoListener = findISOIncomer({
+        const isoListener = this.findISOIncomer({
           incomers: [...incomers.values()],
           incomerName: backupIncomerTransaction.redisMetadata.incomerName,
           eventName: backupIncomerTransaction.name,
@@ -577,6 +570,17 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     await Promise.all(toResolve);
 
     return { incomers, backupIncomerTransactions, dispatcherTransactions };
+  }
+
+  private findISOIncomer(options: FindISOIncomerOptions) : RegisteredIncomer | undefined {
+    const { incomers, incomerName, eventName, key } = options;
+
+    return incomers.find((incomer) => {
+      const isoEvent = key === "eventsCast" ? incomer.eventsCast.find((event) => event === eventName) :
+        incomer.eventsSubscribe.find((event) => event.name === eventName);
+
+      return incomer.name === incomerName && isoEvent;
+    });
   }
 
   private async redistributeMainTransaction(

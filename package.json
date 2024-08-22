@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "test": "jest && tsx ./test/run.ts",
     "test:jest": "jest",
     "test:node": "tsx ./test/run.ts",
     "coverage": "c8 --all --src ./src -r html npm test",
