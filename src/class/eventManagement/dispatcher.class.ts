@@ -762,7 +762,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       if (eventRest.name !== "PING") {
         this.logger.warn(this.standardLogFn(logData)(`No concerned incomers found for event: ${eventRest.name}`));
 
-        await this.backupNotdistributableEvents(senderTransactionStore, relatedTransaction, eventRest);
+        await this.backupUndeliverableEvents(senderTransactionStore, relatedTransaction, eventRest);
 
         this.logger.warn(this.standardLogFn(logData)("Backed-up event"));
       }
@@ -867,7 +867,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     return filteredConcernedIncomers;
   }
 
-  private async backupNotdistributableEvents(
+  private async backupUndeliverableEvents(
     senderTransactionStore: TransactionStore<"incomer">,
     relatedTransaction: Transaction<"incomer">,
     eventRest: Omit<EventMessage, "redisMetadata">
