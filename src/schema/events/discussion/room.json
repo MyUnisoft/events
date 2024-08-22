@@ -1,0 +1,64 @@
+{
+  "discussion_room": {
+    "create": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "folderId": {
+          "type": "number"
+        },
+        "roomTypeId": {
+          "type": "number"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": ["id", "folderId", "roomTypeId"],
+      "additionalProperties": false
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "folderId": {
+          "type": "number"
+        },
+        "roomTypeId": {
+          "type": "number"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": ["id", "folderId", "roomTypeId", "memberIds"],
+      "additionalProperties": false
+    },
+    "delete": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "folderId": {
+          "type": "number"
+        },
+        "roomTypeId": {
+          "type": "number"
+        }
+      },
+      "required": ["id", "folderId", "roomTypeId"],
+      "additionalProperties": false
+    }
+  }
+}
