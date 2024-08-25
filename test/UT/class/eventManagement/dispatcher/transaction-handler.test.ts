@@ -487,7 +487,7 @@ describe("transactionHandler", () => {
 
             await subscriber.subscribe(`${kPrefix}-${backupListener.providedUUID}`);
 
-            subscriber.on("message", (channel: string, message: string) => {
+            subscriber.on("message", (__: string, message: string) => {
               backupEvent = message;
             });
           });

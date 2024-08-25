@@ -1,6 +1,15 @@
 // Import Internals Dependencies
-import { DispatcherSpreadTransaction, IncomerHandlerTransaction, IncomerMainTransaction, PartialTransaction, TransactionStore } from "../../src/class/store/transaction.class";
-import { GenericEvent, RegisteredIncomer } from "../../src/types";
+import {
+  type DispatcherSpreadTransaction,
+  type IncomerHandlerTransaction,
+  type IncomerMainTransaction,
+  type PartialTransaction,
+  TransactionStore
+} from "../../src/class/store/transaction.class.js";
+import type {
+  GenericEvent,
+  RegisteredIncomer
+} from "../../src/types";
 
 export type GenericOptions = {
   publisher: {
