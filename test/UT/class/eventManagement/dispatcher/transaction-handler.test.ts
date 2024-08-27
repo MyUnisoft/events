@@ -2,6 +2,7 @@
 import assert from "node:assert";
 import { describe, before, after, test } from "node:test";
 import { randomUUID } from "node:crypto";
+import { setTimeout} from "node:timers/promises";
 
 // Import Third-Party Dependencies
 import {
@@ -30,6 +31,7 @@ const kBackupTransactionStoreName = "backup";
 const kIdleTime = 60_000;
 
 describe("transactionHandler", () => {
+  let subscriber: Redis;
   let redis: Redis;
 
   before(async() => {
@@ -37,6 +39,11 @@ describe("transactionHandler", () => {
       port: Number(process.env.REDIS_PORT),
       host: process.env.REDIS_HOST
     });
+
+    subscriber = await initRedis({
+      port: Number(process.env.REDIS_PORT),
+      host: process.env.REDIS_HOST
+    }, "subscriber");
 
     redis = await initRedis({
       port: Number(process.env.REDIS_PORT),
@@ -111,7 +118,7 @@ describe("transactionHandler", () => {
     });
 
     describe("resolveInactiveIncomerTransactions", () => {
-      const event: EventOptions<"connector"> = {
+      const connectorEvent: EventOptions<"connector"> = {
         name: "connector",
         scope: {
           schemaId: 1
@@ -127,274 +134,566 @@ describe("transactionHandler", () => {
         }
       };
 
-      describe("Given a resolved event and no available backup", () => {
-        const now = Date.now();
+      describe("Given a spread transaction resolved by the listener", () => {
+        describe("Given no available backup", () => {
+          const now = Date.now();
 
-        const publisher = {
-          name: "publisher",
-          prefix: kPrefix,
-          eventsCast: [event.name],
-          eventsSubscribe: [],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const dispatcher = {
-          name: "dispatcher",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const listener = {
-          name: "listener",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [{ name: event.name }],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
+          const publisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const dispatcher = {
+            name: "dispatcher",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const listener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
 
-        const publisherTransactionStore = new TransactionStore({
-          prefix: `${kPrefix}-${publisher.providedUUID}`,
-          instance: "incomer"
-        });
+          const publisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            instance: "incomer"
+          });
 
-        const listenerTransactionStore = new TransactionStore({
-          prefix: `${kPrefix}-${listener.providedUUID}`,
-          instance: "incomer"
-        });
+          const listenerTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${listener.providedUUID}`,
+            instance: "incomer"
+          });
 
-        let resolvedEvent;
+          let spreadedEvent;
 
-        before(async() => {
-          await incomerStore.setIncomer(publisher, publisher.providedUUID);
-          await incomerStore.setIncomer(listener, listener.providedUUID);
+          before(async() => {
+            await incomerStore.setIncomer(publisher, publisher.providedUUID);
+            await incomerStore.setIncomer(listener, listener.providedUUID);
 
-          resolvedEvent = await createResolvedTransactions({
-            publisher: {
-              transactionStore: publisherTransactionStore,
-              instance: publisher
-            },
-            dispatcher: {
-              transactionStore: dispatcherTransactionStore,
-              instance: dispatcher
-            },
-            event,
-            listener: {
-              transactionStore: listenerTransactionStore,
-              instance: listener
-            }
+            spreadedEvent = await createResolvedTransactions({
+              publisher: {
+                transactionStore: publisherTransactionStore,
+                instance: publisher
+              },
+              dispatcher: {
+                transactionStore: dispatcherTransactionStore,
+                instance: dispatcher
+              },
+              event: connectorEvent,
+              listener: {
+                transactionStore: listenerTransactionStore,
+                instance: listener
+              }
+            });
+          });
+
+          after(async() => {
+            await redis.flushall();
+          });
+
+          test("it should backup the handler transaction", async() => {
+            await transactionHandler.resolveInactiveIncomerTransactions(listener);
+
+            const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
+              .get(spreadedEvent.handlerTransaction.redisMetadata.transactionId);
+
+            assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, spreadedEvent.spreadTransaction.redisMetadata.transactionId);
+            assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
           });
         });
 
-        after(async() => {
-          await redis.flushall();
-        });
+        describe("Given an available backup", () => {
+          const now = Date.now();
 
-        test("it should backup the handler transaction", async() => {
-          await transactionHandler.resolveInactiveIncomerTransactions(listener);
+          const publisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const dispatcher = {
+            name: "dispatcher",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const listener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const backupListener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
 
-          const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
-            .get(resolvedEvent.handlerTransaction.redisMetadata.transactionId);
+          const publisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            instance: "incomer"
+          });
 
-          assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, resolvedEvent.spreadTransaction.redisMetadata.transactionId);
-          assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+          const listenerTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${listener.providedUUID}`,
+            instance: "incomer"
+          });
+
+          let resolvedEvent;
+
+          before(async() => {
+            await incomerStore.setIncomer(publisher, publisher.providedUUID);
+            await incomerStore.setIncomer(listener, listener.providedUUID);
+            await incomerStore.setIncomer(backupListener, backupListener.providedUUID);
+
+            resolvedEvent = await createResolvedTransactions({
+              publisher: {
+                transactionStore: publisherTransactionStore,
+                instance: publisher
+              },
+              dispatcher: {
+                transactionStore: dispatcherTransactionStore,
+                instance: dispatcher
+              },
+              event: connectorEvent,
+              listener: {
+                transactionStore: listenerTransactionStore,
+                instance: listener
+              }
+            });
+          });
+
+          after(async() => {
+            await redis.flushall();
+          });
+
+          test("it should backup the handler transaction to the incomerBackupTransactionStore", async() => {
+            await transactionHandler.resolveInactiveIncomerTransactions(listener);
+
+            const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
+              .get(resolvedEvent.handlerTransaction.redisMetadata.transactionId);
+
+            assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, resolvedEvent.spreadTransaction.redisMetadata.transactionId);
+            assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+          });
         });
       });
 
-      describe("Given a resolved event and available backup to the incomerBackupTransactionStore", () => {
-        const now = Date.now();
+      describe("Given a spread transaction unresolved by the listener", () => {
+        describe("Given no available backup", () => {
+          const now = Date.now();
 
-        const publisher = {
-          name: "publisher",
-          prefix: kPrefix,
-          eventsCast: [event.name],
-          eventsSubscribe: [],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const dispatcher = {
-          name: "dispatcher",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const listener = {
-          name: "listener",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [{ name: event.name }],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const backupListener = {
-          name: "listener",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [{ name: event.name }],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
+          const publisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const dispatcher = {
+            name: "dispatcher",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const listener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
 
-        const publisherTransactionStore = new TransactionStore({
-          prefix: `${kPrefix}-${publisher.providedUUID}`,
-          instance: "incomer"
-        });
+          const publisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            instance: "incomer"
+          });
 
-        const listenerTransactionStore = new TransactionStore({
-          prefix: `${kPrefix}-${listener.providedUUID}`,
-          instance: "incomer"
-        });
+          const listenerTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${listener.providedUUID}`,
+            instance: "incomer"
+          });
 
-        let resolvedEvent;
+          let resolvedEvent;
 
-        before(async() => {
-          await incomerStore.setIncomer(publisher, publisher.providedUUID);
-          await incomerStore.setIncomer(listener, listener.providedUUID);
-          await incomerStore.setIncomer(backupListener, backupListener.providedUUID);
+          before(async() => {
+            await incomerStore.setIncomer(publisher, publisher.providedUUID);
+            await incomerStore.setIncomer(listener, listener.providedUUID);
 
-          resolvedEvent = await createResolvedTransactions({
-            publisher: {
-              transactionStore: publisherTransactionStore,
-              instance: publisher
-            },
-            dispatcher: {
-              transactionStore: dispatcherTransactionStore,
-              instance: dispatcher
-            },
-            event,
-            listener: {
-              transactionStore: listenerTransactionStore,
-              instance: listener
-            }
+            resolvedEvent = await createUnresolvedTransactions({
+              publisher: {
+                transactionStore: publisherTransactionStore,
+                instance: publisher
+              },
+              dispatcher: {
+                transactionStore: dispatcherTransactionStore,
+                instance: dispatcher
+              },
+              event: connectorEvent,
+              listener: {
+                transactionStore: listenerTransactionStore,
+                instance: listener
+              }
+            });
+          });
+
+          after(async() => {
+            await redis.flushall();
+          });
+
+          test("it should backup the handler transaction to the incomerBackupTransactionStore", async() => {
+            await transactionHandler.resolveInactiveIncomerTransactions(listener);
+
+            const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
+              .get(resolvedEvent.spreadTransaction.redisMetadata.transactionId);
+
+            assert.equal((resolvedBackupTransaction!.redisMetadata as any).eventTransactionId, resolvedEvent.spreadTransaction.redisMetadata.eventTransactionId);
+            assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
           });
         });
 
-        after(async() => {
-          await redis.flushall();
-        });
+        describe("Given an available backup", () => {
+          const now = Date.now();
 
-        test("it should backup the handler transaction to the incomerBackupTransactionStore", async() => {
-          await transactionHandler.resolveInactiveIncomerTransactions(listener);
+          const publisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const dispatcher = {
+            name: "dispatcher",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const listener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const backupListener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
 
-          const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
-            .get(resolvedEvent.handlerTransaction.redisMetadata.transactionId);
+          const publisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            instance: "incomer"
+          });
 
-          assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, resolvedEvent.spreadTransaction.redisMetadata.transactionId);
-          assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+          const listenerTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${listener.providedUUID}`,
+            instance: "incomer"
+          });
+
+          let backupEvent;
+
+          before(async() => {
+            await incomerStore.setIncomer(publisher, publisher.providedUUID);
+            await incomerStore.setIncomer(listener, listener.providedUUID);
+            await incomerStore.setIncomer(backupListener, backupListener.providedUUID);
+
+            await createUnresolvedTransactions({
+              publisher: {
+                transactionStore: publisherTransactionStore,
+                instance: publisher
+              },
+              dispatcher: {
+                transactionStore: dispatcherTransactionStore,
+                instance: dispatcher
+              },
+              event: connectorEvent,
+              listener: {
+                transactionStore: listenerTransactionStore,
+                instance: listener
+              }
+            });
+
+            await subscriber.subscribe(`${kPrefix}-${backupListener.providedUUID}`);
+
+            subscriber.on("message", (__: string, message: string) => {
+              backupEvent = message;
+            });
+          });
+
+          after(async() => {
+            await redis.flushall();
+          });
+
+          test("it should backup the event to the backupListener", async() => {
+            await transactionHandler.resolveInactiveIncomerTransactions(listener);
+
+            await setTimeout(1_000);
+
+            assert.ok(backupEvent);
+          });
         });
       });
 
-      describe("Given an unresolved event and no available backup", () => {
-        const now = Date.now();
+      describe("Given a main transaction", () => {
+        describe("Given an available backup", () => {
+          const now = Date.now();
 
-        const publisher = {
-          name: "publisher",
-          prefix: kPrefix,
-          eventsCast: [event.name],
-          eventsSubscribe: [],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const dispatcher = {
-          name: "dispatcher",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
-        const listener = {
-          name: "listener",
-          prefix: kPrefix,
-          eventsCast: [],
-          eventsSubscribe: [{ name: event.name }],
-          providedUUID: randomUUID(),
-          isDispatcherActiveInstance: false,
-          baseUUID: randomUUID(),
-          lastActivity: now,
-          aliveSince: now
-        };
+          const publisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const backupPublisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const dispatcher = {
+            name: "dispatcher",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const listener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
 
-        const publisherTransactionStore = new TransactionStore({
-          prefix: `${kPrefix}-${publisher.providedUUID}`,
-          instance: "incomer"
-        });
+          const publisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            instance: "incomer"
+          });
 
-        const listenerTransactionStore = new TransactionStore({
-          prefix: `${kPrefix}-${listener.providedUUID}`,
-          instance: "incomer"
-        });
+          const backupPublisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${backupPublisher.providedUUID}`,
+            instance: "incomer"
+          });
 
-        let resolvedEvent;
+          const listenerTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${listener.providedUUID}`,
+            instance: "incomer"
+          });
 
-        before(async() => {
-          await incomerStore.setIncomer(publisher, publisher.providedUUID);
-          await incomerStore.setIncomer(listener, listener.providedUUID);
+          before(async() => {
+            await incomerStore.setIncomer(publisher, publisher.providedUUID);
+            await incomerStore.setIncomer(listener, listener.providedUUID);
+            await incomerStore.setIncomer(backupPublisher, backupPublisher.providedUUID);
 
-          resolvedEvent = await createUnresolvedTransactions({
-            publisher: {
-              transactionStore: publisherTransactionStore,
-              instance: publisher
-            },
-            dispatcher: {
-              transactionStore: dispatcherTransactionStore,
-              instance: dispatcher
-            },
-            event,
-            listener: {
-              transactionStore: listenerTransactionStore,
-              instance: listener
-            }
+            await createResolvedTransactions({
+              publisher: {
+                transactionStore: publisherTransactionStore,
+                instance: publisher
+              },
+              dispatcher: {
+                transactionStore: dispatcherTransactionStore,
+                instance: dispatcher
+              },
+              event: connectorEvent,
+              listener: {
+                transactionStore: listenerTransactionStore,
+                instance: listener
+              }
+            });
+          });
+
+          after(async() => {
+            await redis.flushall();
+          });
+
+          test("It should backup the main transaction to the backupPublisherTransactionStore", async() => {
+            let backupPublisherTransactions = await backupPublisherTransactionStore.getTransactions();
+
+            assert.equal([...backupPublisherTransactions.entries()].length, 0);
+
+            await transactionHandler.resolveInactiveIncomerTransactions(publisher);
+
+            backupPublisherTransactions = await backupPublisherTransactionStore.getTransactions();
+
+            assert.equal([...backupPublisherTransactions.entries()].length, 1);
           });
         });
 
-        after(async() => {
-          await redis.flushall();
+        describe("Given no available backup", () => {
+          const now = Date.now();
+
+          const publisher = {
+            name: "publisher",
+            prefix: kPrefix,
+            eventsCast: [connectorEvent.name],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const dispatcher = {
+            name: "dispatcher",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+          const listener = {
+            name: "listener",
+            prefix: kPrefix,
+            eventsCast: [],
+            eventsSubscribe: [{ name: connectorEvent.name }],
+            providedUUID: randomUUID(),
+            isDispatcherActiveInstance: false,
+            baseUUID: randomUUID(),
+            lastActivity: now,
+            aliveSince: now
+          };
+
+          const publisherTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            instance: "incomer"
+          });
+
+          const listenerTransactionStore = new TransactionStore({
+            prefix: `${kPrefix}-${listener.providedUUID}`,
+            instance: "incomer"
+          });
+
+          before(async() => {
+            await incomerStore.setIncomer(publisher, publisher.providedUUID);
+            await incomerStore.setIncomer(listener, listener.providedUUID);
+
+            await createResolvedTransactions({
+              publisher: {
+                transactionStore: publisherTransactionStore,
+                instance: publisher
+              },
+              dispatcher: {
+                transactionStore: dispatcherTransactionStore,
+                instance: dispatcher
+              },
+              event: connectorEvent,
+              listener: {
+                transactionStore: listenerTransactionStore,
+                instance: listener
+              }
+            });
+          });
+
+          after(async() => {
+            await redis.flushall();
+          });
+
+          test("It should backup the main transaction to the backupIncomerTransactionStore", async() => {
+            let backupPublisherTransactions = await backupIncomerTransactionStore.getTransactions();
+
+            assert.equal([...backupPublisherTransactions.entries()].length, 0);
+
+            await transactionHandler.resolveInactiveIncomerTransactions(publisher);
+
+            backupPublisherTransactions = await backupIncomerTransactionStore.getTransactions();
+
+            assert.equal([...backupPublisherTransactions.entries()].length, 1);
+          });
         });
-
-        test("it should backup the handler transaction to the incomerBackupTransactionStore", async() => {
-          let keys = await redis.keys("*");
-
-          await transactionHandler.resolveInactiveIncomerTransactions(listener);
-
-          const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
-            .get(resolvedEvent.spreadTransaction.redisMetadata.transactionId);
-
-          assert.equal((resolvedBackupTransaction!.redisMetadata as any).eventTransactionId, resolvedEvent.spreadTransaction.redisMetadata.eventTransactionId);
-          assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
-        });
-      });
+      })
     });
   });
 });

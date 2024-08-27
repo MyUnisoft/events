@@ -180,7 +180,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     for (const incomer of incomers.values()) {
       if (incomer.providedUUID === inactiveIncomer.providedUUID) {
         incomers.delete(incomer);
-        
+
         break;
       }
     }
@@ -401,7 +401,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             inactiveIncomerTransactionStore.deleteTransaction(relatedHandlerTransaction.redisMetadata.transactionId)
         ]));
 
-        this.logger.debug(this.standardLogFn({
+        this.logger.info(this.standardLogFn({
           ...dispatcherTransaction,
           redisMetadata: {
             ...dispatcherTransaction.redisMetadata,

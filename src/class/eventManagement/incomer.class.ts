@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // Import Node.js Dependencies
 import { once, EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
@@ -195,6 +196,14 @@ export class Incomer <
     }
   }
 
+  get redis() {
+    return getRedis();
+  }
+
+  get subscriber() {
+    return getRedis("subscriber");
+  }
+
   private async checkDispatcherState() {
     const date = Date.now();
 
@@ -213,36 +222,41 @@ export class Incomer <
         (transactionKey) => store.getValue(transactionKey)
       ));
 
-      await Promise.race([
-        Promise.all(transactions.map((transaction) => {
-          if (
-            transaction.redisMetadata.mainTransaction &&
-            !transaction.redisMetadata.published &&
-            Number(transaction.aliveSince) + Number(this.maxPingInterval) < Date.now()
-          ) {
-            return this.incomerChannel.publish({
-              ...transaction,
-              redisMetadata: {
-                transactionId: transaction.redisMetadata.transactionId,
-                origin: transaction.redisMetadata.origin,
-                prefix: transaction.redisMetadata.prefix
-              }
-            } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
-          }
+      const eventToPublish = transactions.map((transaction) => {
+        if (
+          transaction.redisMetadata.mainTransaction &&
+          !transaction.redisMetadata.published &&
+          Number(transaction.aliveSince) + Number(this.maxPingInterval) < Date.now()
+        ) {
+          return this.retryPublish(transaction);
+        }
 
-          return void 0;
-        })),
-        new Promise((_, reject) => timers.setTimeout(this.maxPingInterval).then(() => reject(new Error())))
+        return void 0;
+      });
+
+      await Promise.race([
+        Promise.all(eventToPublish),
+        timers.setTimeout(this.maxPingInterval)
       ]);
     }
   }
 
-  get redis() {
-    return getRedis();
-  }
+  private async retryPublish(transaction: any) {
+    await this.incomerChannel.publish({
+      ...transaction,
+      redisMetadata: {
+        transactionId: transaction.redisMetadata.transactionId,
+        origin: transaction.redisMetadata.origin,
+        prefix: transaction.redisMetadata.prefix
+      }
+    } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
 
-  get subscriber() {
-    return getRedis("subscriber");
+    this.logger.info(
+      this.standardLogFn({
+        ...transaction,
+        dispatcherConnectionState: this.dispatcherConnectionState
+      })("Retried event publish")
+    );
   }
 
   private async registrationAttempt() {
@@ -515,7 +529,8 @@ export class Incomer <
         ...finalEvent, redisMetadata: {
           ...finalEvent.redisMetadata,
           eventTransactionId: finalEvent.redisMetadata.transactionId
-        }
+        },
+        dispatcherConnectionState: this.dispatcherConnectionState
       })("Event Stored but not published"));
 
       return;
@@ -527,7 +542,8 @@ export class Incomer <
       ...finalEvent, redisMetadata: {
         ...finalEvent.redisMetadata,
         eventTransactionId: finalEvent.redisMetadata.transactionId
-      }
+      },
+      dispatcherConnectionState: this.dispatcherConnectionState
     })("Published event"));
   }
 
@@ -580,7 +596,12 @@ export class Incomer <
     try {
       match<DispatcherChannelEvents>({ name })
         .with({ name: "APPROVEMENT" }, async() => {
-          this.logger.info(logData, "New approvement message on Dispatcher Channel");
+          this.logger.info(
+            this.standardLogFn({
+              ...logData,
+              dispatcherConnectionState: this.dispatcherConnectionState
+            } as any)("New approvement message on Dispatcher Channel")
+          );
 
           await this.handleApprovement(message as DispatcherApprovementMessage);
         })
@@ -635,7 +656,9 @@ export class Incomer <
       }
     });
 
-    this.logger.debug(this.standardLogFn(logData as any)("Resolved Ping event"));
+    this.logger.debug(
+      this.standardLogFn({ ...logData, dispatcherConnectionState: this.dispatcherConnectionState } as any)("Resolved Ping event")
+    );
   }
 
   private async customEvent(
@@ -647,7 +670,8 @@ export class Incomer <
 
     const logData = {
       channel,
-      ...message
+      ...message,
+      dispatcherConnectionState: this.dispatcherConnectionState
     };
 
     if (this.eventsValidationFn) {
@@ -688,7 +712,11 @@ export class Incomer <
           }
         } as Transaction<"incomer">);
 
-        this.logger.info(this.standardLogFn(logData)("Resolved Custom event"));
+        this.logger.info(this.standardLogFn({
+          ...logData,
+          dispatcherConnectionState: this.dispatcherConnectionState
+        })("Resolved Custom event")
+        );
 
         return;
       }
@@ -713,7 +741,10 @@ export class Incomer <
             });
 
             this.logger.info(
-              this.standardLogFn(logData)(`Callback Resolved but retry for the given reason: ${unresolvedCallbackResult.reason}`)
+              this.standardLogFn({
+                ...logData,
+                dispatcherConnectionState: this.dispatcherConnectionState
+              } as any)(`Callback Resolved but retry for the given reason: ${unresolvedCallbackResult.reason}`)
             );
 
             return;
@@ -728,7 +759,10 @@ export class Incomer <
           } as Transaction<"incomer">);
 
           this.logger.info(
-            this.standardLogFn(logData)(`Callback Resolved but failed for the given reason: ${unresolvedCallbackResult.reason}`)
+            this.standardLogFn({
+              ...logData,
+              dispatcherConnectionState: this.dispatcherConnectionState
+            })(`Callback Resolved but failed for the given reason: ${unresolvedCallbackResult.reason}`)
           );
 
           return;
@@ -744,7 +778,10 @@ export class Incomer <
       }
     } as Transaction<"incomer">);
 
-    this.logger.info(this.standardLogFn(logData)(`Callback error reason: ${String(callbackResult.val)}`));
+    this.logger.info(this.standardLogFn({
+      ...logData,
+      dispatcherConnectionState: this.dispatcherConnectionState
+    })(`Callback error reason: ${String(callbackResult.val)}`));
   }
 
   private async handleApprovement(

@@ -30,12 +30,13 @@ describe("defaultStandardLog", () => {
         origin: "bar",
         transactionId: "foo"
       },
+      dispatcherConnectionState: true,
       data: {
         foo: "bar"
       }
     };
 
-    const expected = `(event-id:none|t-id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4|req-id:1)(name:foo|ope:CREATE|from:bar|to:none) foo`;
+    const expected = `(event-id:none|t-id:${payload.redisMetadata.transactionId}|s:1|f:2|acf:3|p:4|req-id:1)(name:foo|ope:CREATE|from:bar|to:none|state:${String(payload.dispatcherConnectionState)}) foo`;
 
     assert.equal(defaultStandardLog(payload)("foo"), expected);
   });
@@ -54,7 +55,7 @@ describe("defaultStandardLog", () => {
       }
     };
 
-    const expected = `(event-id:none|t-id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none|req-id:none)(name:foo|ope:none|from:bar|to:[foo, bar]) foo`;
+    const expected = `(event-id:none|t-id:${payload.redisMetadata.transactionId}|s:none|f:none|acf:none|p:none|req-id:none)(name:foo|ope:none|from:bar|to:[foo, bar]|state:none) foo`;
 
     assert.equal(defaultStandardLog(payload)("foo"), expected);
   });
@@ -78,7 +79,7 @@ describe("defaultStandardLog", () => {
     const { redisMetadata } = payload;
     const { transactionId, eventTransactionId } = redisMetadata;
 
-    const expected = `(event-id:${eventTransactionId}|t-id:${transactionId}|s:none|f:none|acf:none|p:none|req-id:none)(name:foo|ope:none|from:none|to:none) foo`;
+    const expected = `(event-id:${eventTransactionId}|t-id:${transactionId}|s:none|f:none|acf:none|p:none|req-id:none)(name:foo|ope:none|from:none|to:none|state:none) foo`;
 
     assert.equal(defaultStandardLog(payload)("foo"), expected);
   });
