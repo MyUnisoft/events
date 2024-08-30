@@ -4,7 +4,8 @@ export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS";
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | (string & {});
     requestId?: string;
   };
   createdAt: number;
