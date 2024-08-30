@@ -128,7 +128,7 @@ export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS";
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | (string & {});
     requestId?: string;
   };
   createdAt: number;
