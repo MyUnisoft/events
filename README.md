@@ -124,13 +124,11 @@ export interface Scope {
   persPhysiqueId?: number | null;
 }
 
-export type Method = "POST" | "PATCH" | "PUT" | "DELETE";
-
 export interface Metadata {
   agent: string;
   origin?: {
     endpoint: string;
-    method: Method;
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS";
     requestId?: string;
   };
   createdAt: number;
