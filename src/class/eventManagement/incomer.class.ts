@@ -303,7 +303,7 @@ export class Incomer <
       });
 
       this.checkTransactionsStateInterval = setInterval(() => {
-        if (!this.lastPingDate || this.isDispatcherInstance) {
+        if (!this.lastPingDate) {
           return;
         }
 
@@ -376,7 +376,7 @@ export class Incomer <
       });
 
       this.checkTransactionsStateInterval = setInterval(() => {
-        if (!this.lastPingDate || this.isDispatcherInstance) {
+        if (!this.lastPingDate) {
           return;
         }
 
@@ -401,6 +401,10 @@ export class Incomer <
     try {
       if (this.providedUUID) {
         throw new Error("Cannot init multiple times");
+      }
+
+      if (!this.subscriber) {
+        throw new Error(`redis subscriber not available`);
       }
 
       await this.externals?.initialize();
