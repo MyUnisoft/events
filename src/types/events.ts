@@ -124,6 +124,42 @@ export interface CloudDocument {
   }
 }
 
+export type PushNotificationScope = Scope & {
+  persPhysiqueId: number;
+  accountingFolderId: number;
+};
+
+export type DiscussionRoomOperation = Operation[
+  keyof Pick<Operation, "create" | "update" | "delete">
+];
+
+
+export type DiscussionRoomScope = PushNotificationScope;
+
+export interface DiscussionRoom<T extends DiscussionRoomOperation = DiscussionRoomOperation> {
+  name: "discussion_room";
+  scope: DiscussionRoomScope;
+  operation: T;
+  data: (T extends Operation[keyof Pick<Operation, "create" | "update">] ? {
+    memberIds: number[];
+  } : unknown) & {
+    id: number;
+    folderId: number;
+    roomTypeId: number;
+  };
+}
+
+export type DiscussionMessageScope = PushNotificationScope;
+
+export interface DiscussionMessage {
+  name: "discussion_message";
+  scope: DiscussionMessageScope;
+  operation: "CREATE" | "UPDATE";
+  data: {
+    id: number;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -134,4 +170,6 @@ export interface Events {
   thirdParty: ThirdParty;
   accountingEntryLettering: AccountingEntryLettering;
   cloudDocument: CloudDocument;
+  discussionRoom: DiscussionRoom;
+  discussionMessage: DiscussionMessage;
 }
