@@ -124,6 +124,15 @@ export interface CloudDocument {
   }
 }
 
+export interface Exercice {
+  name: "exercice";
+  scope: Scope;
+  operation: "CREATE" | "UPDATE" | "DELETE";
+  data: {
+    id: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
