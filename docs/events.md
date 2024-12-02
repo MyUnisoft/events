@@ -599,3 +599,53 @@ export interface CloudDocument {
 }
 ```
 </details>
+
+## Exercice
+
+```ts
+export interface Exercice {
+  name: "exercice";
+  scope: Scope;
+  operation: "CREATE" | "UPDATE" | "DELETE";
+  data: {
+    id: string;
+  }
+}
+```
+
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "Exercice event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "exercice"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["CREATE", "UPDATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
