@@ -191,4 +191,24 @@ describe("eventsValidationFn", () => {
       assert.ok(!cloudDocument.has("void"));
     });
   });
+
+  describe("Exercice", () => {
+    let exercice;
+
+    before(() => {
+      assert.ok(eventsValidationFn.has("exercice"));
+
+      exercice = eventsValidationFn.get("exercice");
+    });
+
+    test("cloudDocument should have a validation function for \"create\", \"update\", \"delete\"", () => {
+      assert.ok(exercice.has("create"));
+      assert.ok(exercice.has("update"));
+      assert.ok(exercice.has("delete"));
+    });
+
+    test("cloudDocument should not have a validation function for \"delete\", \"void\"", () => {
+      assert.ok(!exercice.has("void"));
+    });
+  })
 });
