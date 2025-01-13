@@ -35,12 +35,12 @@
     "validation"
   ],
   "dependencies": {
-    "@myunisoft/redis": "^3.4.4",
+    "@myunisoft/redis": "^4.0.0",
     "@openally/mutex": "^1.0.0",
     "@openally/result": "^1.2.1",
     "ajv": "^8.16.0",
     "pino": "^9.3.2",
-    "pino-pretty": "^11.2.1",
+    "pino-pretty": "^13.0.0",
     "ts-pattern": "^5.2.0"
   },
   "devDependencies": {
