@@ -79,7 +79,7 @@ const event: EventOptions<"connector"> = {
     createdAt: Date.now()
   },
   data: {
-    id: 1,
+    id: "1",
     code: "JFAC"
   }
 };
