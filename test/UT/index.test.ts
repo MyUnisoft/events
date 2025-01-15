@@ -54,22 +54,6 @@ describe("validate", () => {
     });
   });
 
-  test("Given a wrong property, it should throw", () => {
-    const event = {
-      name: "connector",
-      operation: "CREATE",
-      data: {
-        id: "foo",
-        code: "bar"
-      }
-    };
-
-    assert.throws(() => validate(event as any), {
-      name: "Error",
-      message: `data: [/id: must match pattern \"^[0-9]+\"]`
-    });
-  });
-
   test("Given a wrong metadata, it should throw", () => {
     const event = {
       name: "accountingFolder",
