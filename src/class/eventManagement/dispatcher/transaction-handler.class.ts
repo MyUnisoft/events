@@ -34,7 +34,6 @@ import type {
   IncomerChannelMessages,
   RegisteredIncomer
 } from "../../../types/index.js";
-import { DatabaseConnection } from "@myunisoft/redis/dist/types/index.js";
 
 
 interface DistributeMainTransactionOptions {
@@ -82,7 +81,7 @@ export interface DispatchEventOptions<T extends GenericEvent> {
 }
 
 export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = {
-  redis: DatabaseConnection<RedisAdapter>;
+  redis: Types.DatabaseConnection<RedisAdapter>;
   eventsHandler: EventsHandler<T>;
   dispatcherTransactionStore: TransactionStore<"dispatcher">;
   backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -140,6 +139,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
   constructor(opts: TransactionHandlerOptions<T>) {
     Object.assign(this, opts);
+
+    this.#redis = opts.redis;
 
     this.#logger = opts.parentLogger.child({ module: "transaction-handler" }) || opts.parentLogger;
     this.#standardLogFn = opts.standardLog ?? defaultStandardLog;

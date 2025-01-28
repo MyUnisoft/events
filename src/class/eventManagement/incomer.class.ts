@@ -164,6 +164,9 @@ export class Incomer <
 
     this.#redis = options.redis;
     this.#subscriber = options.subscriber;
+    this.#eventsCast = options.eventsCast;
+    this.#eventsSubscribe = options.eventsSubscribe;
+    this.#logger = options.logger;
     this.#prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
     this.#dispatcherChannelName = this.#prefixedName + DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
@@ -186,7 +189,8 @@ export class Incomer <
     }).child({ incomer: this.#prefixedName + this.name });
 
     this.#dispatcherChannel = new Channel({
-      name: DISPATCHER_CHANNEL_NAME
+      redis: this.#redis,
+      name: this.#dispatcherChannelName
     });
 
     this.#defaultIncomerTransactionStore = new TransactionStore({
@@ -296,8 +300,6 @@ export class Incomer <
     };
 
     await this.#dispatcherChannel.pub(fullyFormattedEvent);
-
-    console.log("FIRIRSIT");
 
     try {
       await once(this, "registered", {
@@ -409,7 +411,6 @@ export class Incomer <
         throw new Error(`redis subscriber not available`);
       }
 
-      await this.#dispatcherChannel.initialize();
       await this.externals?.initialize();
       await this.#subscriber.subscribe(this.#dispatcherChannelName);
 
@@ -805,10 +806,9 @@ export class Incomer <
     this.#providedUUID = data.uuid;
 
     this.#incomerChannel = new Channel({
+      redis: this.#redis,
       name: this.#providedUUID
     });
-
-    await this.#incomerChannel.initialize();
 
     const oldTransactions = await this.#defaultIncomerTransactionStore.getTransactions();
 

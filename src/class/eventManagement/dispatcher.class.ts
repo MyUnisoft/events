@@ -43,7 +43,7 @@ import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class.js";
 import {
   EventsHandler,
   type customValidationCbFn,
-  type eventsValidationFn
+  eventsValidationFn as EventsValidationFn
 } from "./dispatcher/events.class.js";
 
 // CONSTANTS
@@ -69,7 +69,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   subscriber: Types.DatabaseConnection<RedisAdapter>;
   prefix?: Prefix;
   eventsValidation?: {
-    eventsValidationFn?: eventsValidationFn<T>;
+    eventsValidationFn?: EventsValidationFn<T>;
     customValidationCbFn?: customValidationCbFn<T>;
   };
   incomerUUID?: string;
@@ -187,11 +187,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.#incomerChannelHandler = new IncomerChannelHandler({
+      redis: this.#redis,
+      subscriber: this.#subscriber,
       logger: this.#logger
     });
 
     this.#dispatcherChannel = new Channel({
-      name: DISPATCHER_CHANNEL_NAME
+      redis: this.#redis,
+      name: this.dispatcherChannelName
     });
 
     this.#backupIncomerTransactionStore = new TransactionStore({
@@ -295,8 +298,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       throw new Error(`redis subscriber not available`);
     }
 
-    await this.#dispatcherChannel.initialize();
-
     await this.#subscriber.subscribe(this.dispatcherChannelName);
     this.#subscriber.on("message", (channel, message) => {
       this.handleMessages(channel, message).catch((error) => this.#logger.error({ error: error.stack }));
@@ -356,8 +357,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   async handleMessages(channel: string, message: string) {
     let parsedMessage: IncomerRegistrationMessage |
         IncomerChannelMessages<T>["IncomerMessages"];
-
-    console.log("REHHEREH NEW MESSAGE", channel, message);
 
     try {
       parsedMessage = JSON.parse(message);

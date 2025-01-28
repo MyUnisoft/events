@@ -14,6 +14,8 @@ import type {
 } from "../../../types/index.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
+  redis: Types.DatabaseConnection<RedisAdapter>;
+  subscriber: Types.DatabaseConnection<RedisAdapter>;
   logger: Logger;
   channels?: Map<string, Channel<DistributedEventMessage<T>>>;
 }
@@ -30,6 +32,7 @@ export type ChannelMessages<T extends GenericEvent> = Channel<
 export class IncomerChannelHandler<
   T extends GenericEvent = GenericEvent
 > {
+  #redis: Types.DatabaseConnection<RedisAdapter>;
   #subscriber: Types.DatabaseConnection<RedisAdapter>;
 
   public channels: Map<string, ChannelMessages<T>> = new Map();
@@ -38,6 +41,9 @@ export class IncomerChannelHandler<
     options: IncomerChannelHandlerOptions<T>
   ) {
     Object.assign(this, options);
+
+    this.#redis = options.redis;
+    this.#subscriber = options.subscriber;
   }
 
   set(
@@ -46,6 +52,7 @@ export class IncomerChannelHandler<
     const { uuid } = options;
 
     const channel = new Channel({
+      redis: this.#redis,
       name: uuid
     });
 
