@@ -95,6 +95,7 @@ async function handleRegistration(instance: Incomer, message: any) {
   instance["subscriber"]!.subscribe(data.uuid);
 
   Reflect.set(instance, "incomerChannel", new Channel({
+    redis,
     name: data.uuid
   }));
 
@@ -116,20 +117,18 @@ async function handleRegistration(instance: Incomer, message: any) {
 
 beforeAll(async() => {
   await redis.initialize();
-    await subscriber.initialize();
+  await subscriber.initialize();
 
-    await redis.flushall();
+  await redis.flushall();
 });
 
 afterAll(async() => {
   await redis.close();
-    await subscriber.close();
+  await subscriber.close();
 });
 
 afterEach(async() => {
   jest.clearAllMocks();
-  await redis.close();
-  await subscriber.close();
 });
 
 describe("Publishing an event without concerned Incomer", () => {
@@ -200,6 +199,7 @@ describe("Publishing an event without concerned Incomer", () => {
           publisher["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(publisher, "incomerChannel", new Channel({
+            redis,
             name: data.uuid
           }));
 
@@ -221,7 +221,8 @@ describe("Publishing an event without concerned Incomer", () => {
 
           unConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
-          Reflect.set(unConcernedIncomer, "incomerChannel", new Channel({
+          Reflect.set(unConcernedIncomer, "#incomerChannel", new Channel({
+            redis,
             name: data.uuid
           }));
 
@@ -403,7 +404,6 @@ describe("Event that doesn't scale", () => {
       redisMetadata: {
         incomerName: publisher.name,
         origin: expect.any(String),
-        prefix: publisher.prefix,
         published: false,
         mainTransaction: true,
         resolved: false,
@@ -419,7 +419,6 @@ describe("Event that doesn't scale", () => {
         eventTransactionId: expect.any(String),
         incomerName: expect.any(String),
         origin: expect.any(String),
-        prefix: publisher.prefix,
         mainTransaction: false,
         iteration: expect.any(Number),
         resolved: false,
@@ -608,7 +607,6 @@ describe("Event that scale", () => {
         redisMetadata: {
           incomerName: publisher.name,
           origin: expect.any(String),
-          prefix: publisher.prefix,
           published: false,
           mainTransaction: true,
           resolved: false,

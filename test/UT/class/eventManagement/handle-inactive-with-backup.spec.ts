@@ -109,8 +109,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           concernedIncomer["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(concernedIncomer, "incomerChannel", new Channel({
-            port: Number(process.env.REDIS_PORT),
-            host: process.env.REDIS_HOST,
+            redis,
             name: data.uuid
           }));
 
@@ -134,8 +133,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           secondConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
-            port: Number(process.env.REDIS_PORT),
-            host: process.env.REDIS_HOST,
+            redis,
             name: data.uuid
           }));
 

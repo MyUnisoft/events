@@ -95,7 +95,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("It should register when a Dispatcher is alive", async() => {
     await dispatcher!.initialize();
 
-    await timers.setTimeout(5_000);
+    await timers.setTimeout(6_000);
 
     expect(incomer.dispatcherConnectionState).toBe(true);
     expect(dispatcherIncomer.dispatcherConnectionState).toBe(true);
@@ -103,12 +103,11 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   test("Incomer calling close, it should remove the given Incomer", async() => {
-    await incomer["incomerChannel"].publish({
+    await incomer["incomerChannel"].pub({
       name: "CLOSE",
       redisMetadata: {
         origin: incomer["providedUUID"],
-        incomerName: incomer["name"],
-        prefix: incomer["prefix"]
+        incomerName: incomer["name"]
       }
     });
 
@@ -123,6 +122,7 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   afterAll(async() => {
     await dispatcherIncomer.close();
+    await dispatcher.close();
     await redis.close();
     await subscriber.close();
   });

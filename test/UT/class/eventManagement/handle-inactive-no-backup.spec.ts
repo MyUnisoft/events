@@ -111,6 +111,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           concernedIncomer["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(concernedIncomer, "incomerChannel", new Channel({
+            redis,
             name: data.uuid
           }));
 
@@ -134,6 +135,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           secondConcernedIncomer["subscriber"]!.subscribe(data.uuid);
 
           Reflect.set(secondConcernedIncomer, "incomerChannel", new Channel({
+            redis,
             name: data.uuid
           }));
 
