@@ -89,7 +89,6 @@ export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = {
   incomerChannelHandler: IncomerChannelHandler<T>;
   incomerStore: IncomerStore;
   privateUUID: string;
-  formattedPrefix: string;
   parentLogger: Logger;
   logger?: Logger;
   standardLog?: StandardLog<T>;
@@ -120,8 +119,6 @@ export interface RedistributeResolvedSpreadTransactionOptions {
 }
 
 export class TransactionHandler<T extends GenericEvent = GenericEvent> {
-  readonly prefix: string;
-  readonly formattedPrefix: string;
   readonly privateUUID;
 
   public incomerStore: IncomerStore;
@@ -141,6 +138,9 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     Object.assign(this, opts);
 
     this.#redis = opts.redis;
+
+    this.#incomerChannelHandler = opts.incomerChannelHandler;
+    this.#eventsHandler = opts.eventsHandler;
 
     this.#logger = opts.parentLogger.child({ module: "transaction-handler" }) || opts.parentLogger;
     this.#standardLogFn = opts.standardLog ?? defaultStandardLog;

@@ -1,4 +1,4 @@
-export type Prefix = "test" | "development" | "staging" | "production";
+export type Prefix = "test";
 
 export type EventSubscribe<T extends string = string> = {
   name: T;
@@ -14,7 +14,6 @@ export type TransactionMetadata<T extends Instance> = (
   origin: string;
   incomerName: string;
   transactionId: string;
-  prefix?: Prefix;
   eventTransactionId?: string;
 }
 

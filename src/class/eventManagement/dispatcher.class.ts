@@ -20,7 +20,6 @@ import {
   TransactionStore
 } from "../store/transaction.class.js";
 import type {
-  Prefix,
   IncomerChannelMessages,
   DispatcherApprovementMessage,
   IncomerRegistrationMessage,
@@ -67,7 +66,6 @@ export const PING_INTERVAL = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHE
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
   redis: Types.DatabaseConnection<RedisAdapter>;
   subscriber: Types.DatabaseConnection<RedisAdapter>;
-  prefix?: Prefix;
   eventsValidation?: {
     eventsValidationFn?: EventsValidationFn<T>;
     customValidationCbFn?: customValidationCbFn<T>;
@@ -92,13 +90,13 @@ interface DispatchEventToIncomer<T extends GenericEvent = GenericEvent> {
 
 export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
   readonly type = "dispatcher";
-  readonly formattedPrefix: string;
-  readonly prefix: string;
   readonly dispatcherChannelName: string;
   readonly privateUUID = randomUUID();
 
+  private incomerStore: IncomerStore;
+  private subscriber: Types.DatabaseConnection<RedisAdapter>;
+
   #redis: Types.DatabaseConnection<RedisAdapter>;
-  #subscriber: Types.DatabaseConnection<RedisAdapter>;
 
   #selfProvidedUUID: string;
   #instanceName: string | undefined;
@@ -108,7 +106,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     { name: "ABORT_TAKING_LEAD", redisMetadata: { origin: string } } |
     { name: "ABORT_TAKING_LEAD_BACK", redisMetadata: { origin: string } }
   >;
-  #incomerStore: IncomerStore;
   #eventsHandler: EventsHandler<T>;
   #dispatcherTransactionStore: TransactionStore<"dispatcher">;
   #backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -142,11 +139,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     Object.assign(this, options);
 
     this.#redis = options.redis;
-    this.#subscriber = options.subscriber;
+    this.subscriber = options.subscriber;
     this.#selfProvidedUUID = options.incomerUUID ?? randomUUID();
-    this.prefix = options.prefix ?? "";
-    this.formattedPrefix = options.prefix ? `${options.prefix}-` : "";
-    this.dispatcherChannelName = this.formattedPrefix + DISPATCHER_CHANNEL_NAME;
+    this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
     this.#idleTime = options.idleTime ?? kIdleTime;
     this.#pingInterval = options.pingInterval ?? PING_INTERVAL;
@@ -154,16 +149,15 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.#checkLastActivityInterval = options.checkLastActivityInterval ?? kCheckLastActivityInterval;
 
     this.#logger = options.logger ?? pino({
-      name: this.formattedPrefix + this.type,
+      name: this.type,
       level: kLoggerMode,
       transport: {
         target: "pino-pretty"
       }
     });
 
-    this.#incomerStore = new IncomerStore({
+    this.incomerStore = new IncomerStore({
       adapter: this.#redis,
-      prefix: this.prefix,
       idleTime: this.#idleTime
     });
 
@@ -176,19 +170,18 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.#backupDispatcherTransactionStore = new TransactionStore({
       adapter: this.#redis,
-      prefix: this.formattedPrefix + kBackupTransactionStoreName,
+      prefix: kBackupTransactionStoreName,
       instance: "dispatcher"
     });
 
     this.#dispatcherTransactionStore = new TransactionStore({
       adapter: this.#redis,
-      prefix: this.prefix,
       instance: "dispatcher"
     });
 
     this.#incomerChannelHandler = new IncomerChannelHandler({
       redis: this.#redis,
-      subscriber: this.#subscriber,
+      subscriber: this.subscriber,
       logger: this.#logger
     });
 
@@ -199,15 +192,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.#backupIncomerTransactionStore = new TransactionStore({
       adapter: this.#redis,
-      prefix: this.formattedPrefix + kBackupTransactionStoreName,
+      prefix: kBackupTransactionStoreName,
       instance: "incomer"
     });
 
     const sharedOptions = {
       privateUUID: this.privateUUID,
-      formattedPrefix: this.formattedPrefix,
       parentLogger: this.#logger,
-      incomerStore: this.#incomerStore,
+      incomerStore: this.incomerStore,
       incomerChannelHandler: this.#incomerChannelHandler,
       dispatcherTransactionStore: this.#dispatcherTransactionStore,
       backupDispatcherTransactionStore: this.#backupDispatcherTransactionStore,
@@ -234,7 +226,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       .on("CLOSE", (channel: string, closeEvent: CloseMessage) => {
         const { redisMetadata } = closeEvent;
 
-        this.#incomerStore.getIncomer(redisMetadata.origin)
+        this.incomerStore.getIncomer(redisMetadata.origin)
           .then((relatedIncomer) => {
             if (!relatedIncomer) {
               this.#logger.warn({ channel }, "Unable to find the Incomer closing the connection");
@@ -294,22 +286,22 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   public async initialize() {
-    if (!this.#subscriber) {
+    if (!this.subscriber) {
       throw new Error(`redis subscriber not available`);
     }
 
-    await this.#subscriber.subscribe(this.dispatcherChannelName);
-    this.#subscriber.on("message", (channel, message) => {
+    await this.subscriber.subscribe(this.dispatcherChannelName);
+    this.subscriber.on("message", (channel, message) => {
       this.handleMessages(channel, message).catch((error) => this.#logger.error({ error: error.stack }));
     });
 
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
 
     const activeDispatcher = [...incomers.values()]
       .find((incomer) => (incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID &&
         incomer.isDispatcherActiveInstance));
 
-    if (activeDispatcher && this.#incomerStore.isActive(activeDispatcher)) {
+    if (activeDispatcher && this.incomerStore.isActive(activeDispatcher)) {
       this.#checkDispatcherStateInterval = setInterval(() => this.takeLeadBack()
         .catch((error) => this.#logger.error({ error: error.stack }, "failed while taking lead back")),
       this.#pingInterval).unref();
@@ -343,7 +335,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.#eventsHandler.removeAllListeners();
     this.removeAllListeners();
 
-    await this.#subscriber?.unsubscribe(
+    await this.subscriber?.unsubscribe(
       this.dispatcherChannelName,
       ...this.#incomerChannelHandler.channels.keys(),
       ...this.#activeChannels.values()
@@ -403,7 +395,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   async takeLead(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
-    const incomers = opts.incomers ?? await this.#incomerStore.getIncomers();
+    const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
 
     try {
       await once(this, "ABORT_TAKING_LEAD", {
@@ -446,7 +438,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         await this.ping();
 
         for (const { providedUUID } of [...incomers.values()]) {
-          await this.#subscriber.subscribe(providedUUID);
+          await this.subscriber.subscribe(providedUUID);
         }
 
         this.#logger.info(`Dispatcher ${this.#selfProvidedUUID} took lead`);
@@ -459,12 +451,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async takeLeadBack(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
-    const incomers = opts.incomers ?? await this.#incomerStore.getIncomers();
+    const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
 
     const dispatcherInstances = [...incomers.values()]
       .filter((incomer) => incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID);
     const dispatcherToRemove = dispatcherInstances
-      .find((incomer) => incomer.isDispatcherActiveInstance && !this.#incomerStore.isActive(incomer));
+      .find((incomer) => incomer.isDispatcherActiveInstance && !this.incomerStore.isActive(incomer));
 
     if (!dispatcherToRemove && dispatcherInstances.length > 0) {
       return;
@@ -518,7 +510,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
 
       for (const { providedUUID } of [...incomers.values()]) {
-        await this.#subscriber.subscribe(providedUUID);
+        await this.subscriber.subscribe(providedUUID);
       }
 
       this.#logger.info(
@@ -537,7 +529,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
-    const inactiveIncomers = await this.#incomerStore.getNonActives();
+    const inactiveIncomers = await this.incomerStore.getNonActives();
 
     const toResolve: Promise<void>[] = [];
 
@@ -557,7 +549,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       if (recentPingTransactionKeys.length > 0) {
         toResolve.push(...[
-          this.#incomerStore.updateIncomerState(inactive.providedUUID),
+          this.incomerStore.updateIncomerState(inactive.providedUUID),
           transactionStore.deleteTransactions(recentPingTransactionKeys)
         ]);
 
@@ -573,7 +565,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async ping() {
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
     const pingToResolve: Promise<void>[] = [];
     const concernedIncomers: string[] = [];
     for (const incomer of incomers) {
@@ -584,7 +576,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const { providedUUID: uuid } = incomer;
 
       if (incomer.baseUUID === this.#selfProvidedUUID) {
-        await this.#incomerStore.updateIncomerState(uuid);
+        await this.incomerStore.updateIncomerState(uuid);
 
         continue;
       }
@@ -630,7 +622,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     for (const inactive of inactiveIncomers) {
       toHandle.push(...[
-        this.#incomerStore.deleteIncomer(inactive.providedUUID),
+        this.incomerStore.deleteIncomer(inactive.providedUUID),
         this.#transactionHandler.resolveInactiveIncomerTransactions(inactive)
       ]);
       this.#activeChannels.add(
@@ -649,7 +641,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
 
   private async setAsActiveDispatcher() {
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
 
     const relatedIncomer = [...incomers.values()].find((incomer) => incomer.baseUUID === this.#selfProvidedUUID);
 
@@ -659,7 +651,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
-    await this.#incomerStore.updateIncomer({
+    await this.incomerStore.updateIncomer({
       ...relatedIncomer,
       lastActivity: Date.now(),
       isDispatcherActiveInstance: true
@@ -667,7 +659,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async setAsInactiveDispatcher() {
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
 
     const relatedIncomer = [...incomers.values()].find((incomer) => incomer.baseUUID === this.#selfProvidedUUID);
 
@@ -677,7 +669,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
-    await this.#incomerStore.updateIncomer({
+    await this.incomerStore.updateIncomer({
       ...relatedIncomer,
       isDispatcherActiveInstance: false
     });
@@ -686,11 +678,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private async handleRetryEvent(retryEvent: RetryMessage) {
     const { data, redisMetadata } = retryEvent;
     const { dispatcherTransactionId, incomerTransactionId } = data;
-    const { origin, prefix } = redisMetadata;
+    const { origin } = redisMetadata;
 
     const concernedIncomerStore = new TransactionStore({
       adapter: this.#redis,
-      prefix: `${prefix ? `${prefix}-` : ""}${origin}`,
+      prefix: origin,
       instance: "incomer"
     });
 
@@ -699,7 +691,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"];
     const { redisMetadata: dispatcherTransactionMetadata, ...event } = relatedDispatcherTransaction;
 
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
 
     const concernedIncomer = [...incomers]
       .find(
@@ -750,7 +742,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async handleCustomEvents(channel: string, customEvent: EventMessage<T>) {
     const { redisMetadata, ...eventRest } = customEvent;
-    const { transactionId } = redisMetadata;
+    const { transactionId, origin } = redisMetadata;
 
     const logData = {
       channel,
@@ -759,7 +751,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const senderTransactionStore = new TransactionStore({
       adapter: this.#redis,
-      prefix: `${redisMetadata.prefix ? `${redisMetadata.prefix}-` : ""}${redisMetadata.origin}`,
+      prefix: origin,
       instance: "incomer"
     });
 
@@ -847,11 +839,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       } as Transaction<"incomer">)
     ]);
 
-    await this.#incomerStore.updateIncomerState(providedUUID);
+    await this.incomerStore.updateIncomerState(providedUUID);
   }
 
   private async getFilteredConcernedIncomers(eventName: string): Promise<RegisteredIncomer[]> {
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
 
     const concernedIncomers = [...incomers]
       .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === eventName));
@@ -908,11 +900,11 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async approveIncomer(message: IncomerRegistrationMessage) {
     const { data, redisMetadata } = message;
-    const { prefix, origin, transactionId } = redisMetadata;
+    const { origin, transactionId } = redisMetadata;
 
     const relatedTransactionStore = new TransactionStore<"incomer">({
       adapter: this.#redis,
-      prefix: `${prefix ? `${prefix}-` : ""}${origin}`,
+      prefix: origin,
       instance: "incomer"
     });
 
@@ -921,7 +913,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       throw new Error("No related transaction found next to register event");
     }
 
-    const incomers = await this.#incomerStore.getIncomers();
+    const incomers = await this.incomerStore.getIncomers();
     const now = Date.now();
 
     let providedUUID: string;
@@ -937,11 +929,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           isDispatcherActiveInstance: origin === this.#selfProvidedUUID,
           baseUUID: origin,
           lastActivity: now,
-          aliveSince: now,
-          prefix
+          aliveSince: now
         });
 
-        await this.#incomerStore.setIncomer(incomer, data.providedUUID);
+        await this.incomerStore.setIncomer(incomer, data.providedUUID);
       }
     }
     else {
@@ -958,17 +949,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         isDispatcherActiveInstance: origin === this.#selfProvidedUUID,
         baseUUID: origin,
         lastActivity: now,
-        aliveSince: now,
-        prefix
+        aliveSince: now
       });
 
-      providedUUID = await this.#incomerStore.setIncomer(incomer);
+      providedUUID = await this.incomerStore.setIncomer(incomer);
     }
 
     this.#incomerChannelHandler.set({ uuid: providedUUID });
 
-    if (!this.#activeChannels.has(`${prefix ? `${prefix}-` : ""}${providedUUID}`)) {
-      await this.#subscriber.subscribe(`${prefix ? `${prefix}-` : ""}${providedUUID}`);
+    if (!this.#activeChannels.has(providedUUID)) {
+      await this.subscriber.subscribe(providedUUID);
     }
 
     const event: Omit<DispatcherApprovementMessage, "redisMetadata"> & {
