@@ -23,9 +23,9 @@ const subscriber = new RedisAdapter({
 
 beforeAll(async() => {
   await redis.initialize();
-    await subscriber.initialize();
+  await subscriber.initialize();
 
-    await redis.flushall();
+  await redis.flushall();
 });
 
 afterAll(async() => {
