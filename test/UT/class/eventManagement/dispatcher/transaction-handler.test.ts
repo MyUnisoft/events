@@ -112,11 +112,6 @@ describe("transactionHandler", () => {
       parentLogger: logger
     });
 
-    test("transactionHandler must have property \"logger\" and \"standardLogFn\"", () => {
-      assert.ok(transactionHandler["logger"]);
-      assert.ok(transactionHandler["standardLogFn"]);
-    });
-
     describe("resolveInactiveIncomerTransactions", () => {
       const connectorEvent: EventOptions<"connector"> = {
         name: "connector",

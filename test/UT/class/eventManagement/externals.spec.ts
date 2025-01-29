@@ -41,7 +41,6 @@ describe("Init Incomer without Dispatcher alive & prefix as \"test\"", () => {
       redis,
       subscriber,
       name: "foo",
-      prefix: "test",
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
@@ -63,12 +62,11 @@ describe("Init Incomer without Dispatcher alive & prefix as \"test\"", () => {
     });
   });
 
-  describe("Prefix as \"test\"", () => {
+  describe("With externalsInitialized at false", () => {
     const incomer: Incomer = new Incomer({
       redis,
       subscriber,
       name: "foo",
-      prefix: "test",
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],

@@ -163,7 +163,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           eventsValidationFn,
           customValidationCbFn: validate
         },
-        eventCallback: mockedEventComeBackHandler
+        eventCallback: mockedEventComeBackHandler,
+        externalsInitialized: true
       });
 
       jest.spyOn(concernedIncomer as any, "customEvent")
@@ -187,7 +188,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
         name: "foo",
         eventsCast: ["accountingFolder"],
         eventsSubscribe: [{ name: "accountingFolder" }],
-        eventCallback: mockedEventComeBackHandler
+        eventCallback: mockedEventComeBackHandler,
+        externalsInitialized: true
       });
 
       await concernedIncomer.initialize();

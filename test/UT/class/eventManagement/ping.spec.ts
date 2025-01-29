@@ -65,7 +65,8 @@ describe("Ping", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
-      eventCallback: eventComeBackHandler
+      eventCallback: eventComeBackHandler,
+      externalsInitialized: true
     });
 
     await incomer.initialize();

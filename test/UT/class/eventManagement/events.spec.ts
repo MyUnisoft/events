@@ -174,7 +174,8 @@ describe("Publishing an event without concerned Incomer", () => {
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     unConcernedIncomer = new Incomer({
@@ -184,7 +185,8 @@ describe("Publishing an event without concerned Incomer", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     let index = 0;
@@ -313,7 +315,8 @@ describe("Event that doesn't scale", () => {
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     concernedIncomer = new Incomer({
@@ -323,7 +326,8 @@ describe("Event that doesn't scale", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [{ name: "accountingFolder" }],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     secondConcernedIncomer = new Incomer({
@@ -333,7 +337,8 @@ describe("Event that doesn't scale", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [{ name: "accountingFolder" }],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     diffConcernedIncomer = new Incomer({
@@ -343,7 +348,8 @@ describe("Event that doesn't scale", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [{ name: "accountingFolder" }],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     let index = 0;
@@ -522,7 +528,8 @@ describe("Event that scale", () => {
       logger: incomerLogger,
       eventsCast: ["accountingFolder"],
       eventsSubscribe: [],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     concernedIncomer = new Incomer({
@@ -532,7 +539,8 @@ describe("Event that scale", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     secondConcernedIncomer = new Incomer({
@@ -542,7 +550,8 @@ describe("Event that scale", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     diffConcernedIncomer = new Incomer({
@@ -552,7 +561,8 @@ describe("Event that scale", () => {
       logger: incomerLogger,
       eventsCast: [],
       eventsSubscribe: [{ name: "accountingFolder", horizontalScale: true }],
-      eventCallback: mockedEventComeBackHandler
+      eventCallback: mockedEventComeBackHandler,
+      externalsInitialized: true
     });
 
     let index = 0;

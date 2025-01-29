@@ -114,7 +114,8 @@ describe("Registration", () => {
         dispatcherInactivityOptions: {
           maxPingInterval: 2_000,
           publishInterval: 2_000
-        }
+        },
+        externalsInitialized: true
       });
 
       handlePingFn = incomer["handlePing"];
