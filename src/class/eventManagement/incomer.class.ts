@@ -6,8 +6,9 @@ import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
-  getRedis,
-  Channel
+  Channel,
+  RedisAdapter,
+  Types
 } from "@myunisoft/redis";
 import { pino, type Logger } from "pino";
 import { match } from "ts-pattern";
@@ -22,7 +23,6 @@ import {
   TransactionStore
 } from "../store/transaction.class.js";
 import type {
-  Prefix,
   EventSubscribe,
   IncomerChannelMessages,
   DispatcherApprovementMessage,
@@ -97,7 +97,8 @@ function isUnresolvedEvent(value: EventCallbackResponse): value is EventCallback
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
-  prefix?: Prefix;
+  redis: Types.DatabaseConnection<RedisAdapter>;
+  subscriber: Types.DatabaseConnection<RedisAdapter>;
   logger?: Logger;
   standardLog?: StandardLog<T>;
   eventsCast: string[];
@@ -121,33 +122,35 @@ export class Incomer <
   T extends GenericEvent = GenericEvent
 > extends EventEmitter {
   readonly name: string;
-  readonly prefix: Prefix | undefined;
   readonly eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
 
   public dispatcherConnectionState = false;
   public baseUUID = randomUUID();
 
-  private prefixedName: string;
-  private isDispatcherInstance: boolean;
-  private eventsCast: string[];
-  private eventsSubscribe: EventSubscribe[];
-  private dispatcherChannel: Channel<IncomerRegistrationMessage>;
-  private dispatcherChannelName: string;
   private providedUUID: string;
-  private logger: Logger;
+  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
   private incomerChannelName: string;
+  private subscriber: Types.DatabaseConnection<RedisAdapter>;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private newTransactionStore: TransactionStore<"incomer">;
-  private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
-  private publishInterval: number;
-  private maxPingInterval: number;
-  private standardLogFn: StandardLog<T>;
-  private checkRegistrationInterval: NodeJS.Timeout;
-  private checkTransactionsStateInterval: NodeJS.Timeout;
-  private checkDispatcherStateTimeout: NodeJS.Timeout;
-  private lastPingDate: number;
-  private eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
-  private customValidationCbFn: ((event: T) => void) | undefined;
+  private logger: Logger;
+  private dispatcherChannelName: string;
+
+  #redis: Types.DatabaseConnection<RedisAdapter>;
+
+  #isDispatcherInstance: boolean;
+  #eventsCast: string[];
+  #eventsSubscribe: EventSubscribe[];
+  #dispatcherChannel: Channel<IncomerRegistrationMessage>;
+  #publishInterval: number;
+  #maxPingInterval: number;
+  #standardLogFn: StandardLog<T>;
+  #checkRegistrationInterval: NodeJS.Timeout;
+  #checkTransactionsStateInterval: NodeJS.Timeout;
+  #checkDispatcherStateTimeout: NodeJS.Timeout;
+  #lastPingDate: number;
+  #eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
+  #customValidationCbFn: ((event: T) => void) | undefined;
 
   public externals: Externals<T> | undefined;
 
@@ -156,18 +159,22 @@ export class Incomer <
 
     Object.assign(this, {}, options);
 
-    this.prefixedName = `${this.prefix ? `${this.prefix}-` : ""}`;
-    this.dispatcherChannelName = this.prefixedName + DISPATCHER_CHANNEL_NAME;
-    this.standardLogFn = options.standardLog ?? defaultStandardLog;
-    this.publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
-    this.maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
-    if (this.isDispatcherInstance === undefined) {
-      this.isDispatcherInstance = kIsDispatcherInstance;
+    this.#redis = options.redis;
+    this.subscriber = options.subscriber;
+    this.#eventsCast = options.eventsCast;
+    this.#eventsSubscribe = options.eventsSubscribe;
+    this.logger = options.logger;
+    this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
+    this.#standardLogFn = options.standardLog ?? defaultStandardLog;
+    this.#publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
+    this.#maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
+    if (this.#isDispatcherInstance === undefined) {
+      this.#isDispatcherInstance = kIsDispatcherInstance;
     }
 
     if (options.eventsValidation) {
-      this.eventsValidationFn = options.eventsValidation.eventsValidationFn;
-      this.customValidationCbFn = options.eventsValidation.customValidationCbFn;
+      this.#eventsValidationFn = options.eventsValidation.eventsValidationFn;
+      this.#customValidationCbFn = options.eventsValidation.customValidationCbFn;
     }
 
     this.logger = options.logger ?? pino({
@@ -175,39 +182,32 @@ export class Incomer <
       transport: {
         target: "pino-pretty"
       }
-    }).child({ incomer: this.prefixedName + this.name });
+    }).child({ incomer: this.name });
 
-    this.dispatcherChannel = new Channel({
-      name: DISPATCHER_CHANNEL_NAME,
-      prefix: this.prefix
+    this.#dispatcherChannel = new Channel({
+      redis: this.#redis,
+      name: this.dispatcherChannelName
     });
 
     this.defaultIncomerTransactionStore = new TransactionStore({
-      prefix: this.prefixedName + this.baseUUID,
+      adapter: this.#redis,
+      prefix: this.baseUUID,
       instance: "incomer"
     });
 
     if (
-      (this.prefix === "test") && (kExternalInit === false && (
+      kExternalInit === false && (
         options.externalsInitialized === false || options.externalsInitialized === undefined
-      ))
+      )
     ) {
       this.externals = new Externals(options);
     }
   }
 
-  get redis() {
-    return getRedis();
-  }
-
-  get subscriber() {
-    return getRedis("subscriber");
-  }
-
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.lastPingDate) + Number(this.maxPingInterval)) < date && !this.isDispatcherInstance) {
+    if ((Number(this.#lastPingDate) + Number(this.#maxPingInterval)) < date && !this.#isDispatcherInstance) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -226,7 +226,7 @@ export class Incomer <
         if (
           transaction.redisMetadata.mainTransaction &&
           !transaction.redisMetadata.published &&
-          Number(transaction.aliveSince) + Number(this.maxPingInterval) < Date.now()
+          Number(transaction.aliveSince) + Number(this.#maxPingInterval) < Date.now()
         ) {
           return this.retryPublish(transaction);
         }
@@ -236,23 +236,22 @@ export class Incomer <
 
       await Promise.race([
         Promise.all(eventToPublish),
-        timers.setTimeout(this.maxPingInterval)
+        timers.setTimeout(this.#maxPingInterval)
       ]);
     }
   }
 
   private async retryPublish(transaction: any) {
-    await this.incomerChannel.publish({
+    await this.incomerChannel.pub({
       ...transaction,
       redisMetadata: {
         transactionId: transaction.redisMetadata.transactionId,
-        origin: transaction.redisMetadata.origin,
-        prefix: transaction.redisMetadata.prefix
+        origin: transaction.redisMetadata.origin
       }
     } as unknown as IncomerChannelMessages<T>["IncomerMessages"]);
 
     this.logger.info(
-      this.standardLogFn({
+      this.#standardLogFn({
         ...transaction,
         dispatcherConnectionState: this.dispatcherConnectionState
       })("Retried event publish")
@@ -266,13 +265,12 @@ export class Incomer <
       name: "REGISTER" as const,
       data: {
         name: this.name,
-        eventsCast: this.eventsCast,
-        eventsSubscribe: this.eventsSubscribe
+        eventsCast: this.#eventsCast,
+        eventsSubscribe: this.#eventsSubscribe
       },
       redisMetadata: {
         origin: this.baseUUID,
-        incomerName: this.name,
-        prefix: this.prefix
+        incomerName: this.name
       }
     };
 
@@ -295,35 +293,35 @@ export class Incomer <
       }
     };
 
-    await this.dispatcherChannel.publish(fullyFormattedEvent);
+    await this.#dispatcherChannel.pub(fullyFormattedEvent);
 
     try {
       await once(this, "registered", {
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.checkTransactionsStateInterval = setInterval(() => {
-        if (!this.lastPingDate) {
+      this.#checkTransactionsStateInterval = setInterval(() => {
+        if (!this.#lastPingDate) {
           return;
         }
 
         this.checkDispatcherState()
           .catch((error) => this.logger.error({ error: error.stack }, "failed while checking dispatcher state"));
-      }, this.maxPingInterval).unref();
+      }, this.#maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
-      this.checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
+      this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
         .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
-      this.publishInterval * 2).unref();
+      this.#publishInterval * 2).unref();
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
-    catch {
-      this.logger.error("Failed to register in time");
+    catch (error) {
+      this.logger.error({ error }, "Failed to register in time");
       this.dispatcherConnectionState = false;
 
-      this.checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
+      this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
         .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
-      this.publishInterval * 2).unref();
+      this.#publishInterval * 2).unref();
 
       return;
     }
@@ -339,13 +337,12 @@ export class Incomer <
       data: {
         name: this.name,
         providedUUID: this.providedUUID,
-        eventsCast: this.eventsCast,
-        eventsSubscribe: this.eventsSubscribe
+        eventsCast: this.#eventsCast,
+        eventsSubscribe: this.#eventsSubscribe
       },
       redisMetadata: {
         origin: this.baseUUID,
-        incomerName: this.name,
-        prefix: this.prefix
+        incomerName: this.name
       }
     };
 
@@ -368,21 +365,21 @@ export class Incomer <
       }
     };
 
-    await this.dispatcherChannel.publish(fullyFormattedEvent);
+    await this.#dispatcherChannel.pub(fullyFormattedEvent);
 
     try {
       await once(this, "registered", {
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.checkTransactionsStateInterval = setInterval(() => {
-        if (!this.lastPingDate) {
+      this.#checkTransactionsStateInterval = setInterval(() => {
+        if (!this.#lastPingDate) {
           return;
         }
 
         this.checkDispatcherState()
           .catch((error) => this.logger.error({ error: error.stack }, "failed while checking dispatcher state"));
-      }, this.maxPingInterval).unref();
+      }, this.#maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
 
@@ -427,17 +424,17 @@ export class Incomer <
 
   public async close() {
     try {
-      clearInterval(this.checkTransactionsStateInterval);
-      this.checkTransactionsStateInterval = undefined;
+      clearInterval(this.#checkTransactionsStateInterval);
+      this.#checkTransactionsStateInterval = undefined;
 
-      if (this.checkRegistrationInterval) {
-        clearInterval(this.checkRegistrationInterval);
-        this.checkRegistrationInterval = undefined;
+      if (this.#checkRegistrationInterval) {
+        clearInterval(this.#checkRegistrationInterval);
+        this.#checkRegistrationInterval = undefined;
       }
 
-      if (this.checkDispatcherStateTimeout) {
-        clearTimeout(this.checkDispatcherStateTimeout);
-        this.checkDispatcherStateTimeout = undefined;
+      if (this.#checkDispatcherStateTimeout) {
+        clearTimeout(this.#checkDispatcherStateTimeout);
+        this.#checkDispatcherStateTimeout = undefined;
       }
 
       await this.externals?.close();
@@ -458,12 +455,11 @@ export class Incomer <
 
   private async cleanupTransactions() {
     if (this.incomerChannel) {
-      await this.incomerChannel.publish({
+      await this.incomerChannel.pub({
         name: "CLOSE",
         redisMetadata: {
           origin: this.providedUUID,
-          incomerName: this.name,
-          prefix: this.prefix
+          incomerName: this.name
         }
       });
     }
@@ -490,21 +486,20 @@ export class Incomer <
       ...event,
       redisMetadata: {
         origin: this.providedUUID,
-        incomerName: this.name,
-        prefix: this.prefix
+        incomerName: this.name
       }
     } as unknown as Omit<EventMessage<T>, "redisMetadata"> & {
       redisMetadata: Omit<EventMessage<T>["redisMetadata"], "transactionId">
     };
 
-    if (this.eventsValidationFn) {
-      const eventValidationFn = this.eventsValidationFn.get(event.name);
+    if (this.#eventsValidationFn) {
+      const eventValidationFn = this.#eventsValidationFn.get(event.name);
 
       if (!eventValidationFn) {
         throw new Error(`Unknown Event ${event.name}`);
       }
 
-      this.customValidationCbFn(event);
+      this.#customValidationCbFn(event);
     }
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
@@ -529,7 +524,7 @@ export class Incomer <
     } as unknown as EventMessage<T>;
 
     if (!this.dispatcherConnectionState) {
-      this.logger.info(this.standardLogFn({
+      this.logger.info(this.#standardLogFn({
         ...finalEvent, redisMetadata: {
           ...finalEvent.redisMetadata,
           eventTransactionId: finalEvent.redisMetadata.transactionId
@@ -540,9 +535,9 @@ export class Incomer <
       return;
     }
 
-    await this.incomerChannel.publish(finalEvent);
+    await this.incomerChannel.pub(finalEvent);
 
-    this.logger.info(this.standardLogFn({
+    this.logger.info(this.#standardLogFn({
       ...finalEvent, redisMetadata: {
         ...finalEvent.redisMetadata,
         eventTransactionId: finalEvent.redisMetadata.transactionId
@@ -601,7 +596,7 @@ export class Incomer <
       match<DispatcherChannelEvents>({ name })
         .with({ name: "APPROVEMENT" }, async() => {
           this.logger.info(
-            this.standardLogFn({
+            this.#standardLogFn({
               ...logData,
               dispatcherConnectionState: this.dispatcherConnectionState
             } as any)("New approvement message on Dispatcher Channel")
@@ -638,7 +633,7 @@ export class Incomer <
   }
 
   private async handlePing(channel: string, message: DispatcherPingMessage) {
-    this.lastPingDate = Date.now();
+    this.#lastPingDate = Date.now();
     this.dispatcherConnectionState = true;
 
     const logData = {
@@ -661,7 +656,7 @@ export class Incomer <
     });
 
     this.logger.debug(
-      this.standardLogFn({ ...logData, dispatcherConnectionState: this.dispatcherConnectionState } as any)("Resolved Ping event")
+      this.#standardLogFn({ ...logData, dispatcherConnectionState: this.dispatcherConnectionState } as any)("Resolved Ping event")
     );
   }
 
@@ -678,14 +673,14 @@ export class Incomer <
       dispatcherConnectionState: this.dispatcherConnectionState
     };
 
-    if (this.eventsValidationFn) {
-      const eventValidationFn = this.eventsValidationFn.get(event.name);
+    if (this.#eventsValidationFn) {
+      const eventValidationFn = this.#eventsValidationFn.get(event.name);
 
       if (!eventValidationFn) {
         throw new Error(`Unknown Event ${event.name}`);
       }
 
-      this.customValidationCbFn(event as unknown as T);
+      this.#customValidationCbFn(event as unknown as T);
     }
 
     const transaction: PartialTransaction<"incomer"> = {
@@ -716,7 +711,7 @@ export class Incomer <
           }
         } as Transaction<"incomer">);
 
-        this.logger.info(this.standardLogFn({
+        this.logger.info(this.#standardLogFn({
           ...logData,
           dispatcherConnectionState: this.dispatcherConnectionState
         })("Resolved Custom event")
@@ -731,7 +726,7 @@ export class Incomer <
           const { maxIteration } = unresolvedCallbackResult.retryStrategy;
 
           if (iteration < maxIteration) {
-            await this.incomerChannel.publish({
+            await this.incomerChannel.pub({
               name: "RETRY",
               data: {
                 dispatcherTransactionId: redisMetadata.transactionId,
@@ -739,13 +734,12 @@ export class Incomer <
               },
               redisMetadata: {
                 origin: this.providedUUID,
-                incomerName: this.name,
-                prefix: this.prefix
+                incomerName: this.name
               }
             });
 
             this.logger.info(
-              this.standardLogFn({
+              this.#standardLogFn({
                 ...logData,
                 dispatcherConnectionState: this.dispatcherConnectionState
               } as any)(`Callback Resolved but retry for the given reason: ${unresolvedCallbackResult.reason}`)
@@ -763,7 +757,7 @@ export class Incomer <
           } as Transaction<"incomer">);
 
           this.logger.info(
-            this.standardLogFn({
+            this.#standardLogFn({
               ...logData,
               dispatcherConnectionState: this.dispatcherConnectionState
             })(`Callback Resolved but failed for the given reason: ${unresolvedCallbackResult.reason}`)
@@ -782,7 +776,7 @@ export class Incomer <
       }
     } as Transaction<"incomer">);
 
-    this.logger.info(this.standardLogFn({
+    this.logger.info(this.#standardLogFn({
       ...logData,
       dispatcherConnectionState: this.dispatcherConnectionState
     })(`Callback error reason: ${String(callbackResult.val)}`));
@@ -793,7 +787,7 @@ export class Incomer <
   ) {
     const { data } = message;
 
-    this.incomerChannelName = this.prefixedName + data.uuid;
+    this.incomerChannelName = data.uuid;
 
     if (!this.providedUUID) {
       await this.subscriber.subscribe(this.incomerChannelName);
@@ -802,14 +796,15 @@ export class Incomer <
     this.providedUUID = data.uuid;
 
     this.incomerChannel = new Channel({
-      name: this.providedUUID,
-      prefix: this.prefix
+      redis: this.#redis,
+      name: this.providedUUID
     });
 
     const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
 
     this.newTransactionStore = new TransactionStore({
-      prefix: this.prefixedName + this.providedUUID,
+      adapter: this.#redis,
+      prefix: this.providedUUID,
       instance: "incomer"
     });
 
@@ -847,7 +842,7 @@ export class Incomer <
 
     await Promise.all(transactionToUpdate);
 
-    this.lastPingDate = Date.now();
+    this.#lastPingDate = Date.now();
     this.emit("registered");
   }
 }

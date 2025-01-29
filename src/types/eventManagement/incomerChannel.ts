@@ -1,8 +1,7 @@
 // Import Internal Dependencies
 import type {
   TransactionMetadata,
-  GenericEvent,
-  Prefix
+  GenericEvent
 } from "./index.js";
 
 export type DispatcherPingMessage = {
@@ -28,7 +27,6 @@ export type CloseMessage = {
   redisMetadata: {
     origin: string;
     incomerName: string;
-    prefix?: Prefix;
     transactionId?: null;
   };
 };
@@ -42,7 +40,6 @@ export type RetryMessage = {
   redisMetadata: {
     origin: string;
     incomerName: string;
-    prefix?: Prefix;
   };
 };
 

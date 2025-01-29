@@ -6,9 +6,7 @@ import { setTimeout} from "node:timers/promises";
 
 // Import Third-Party Dependencies
 import {
-  closeAllRedis,
-  closeRedis,
-  initRedis,
+  RedisAdapter,
   Redis
 } from "@myunisoft/redis";
 import pino, { Logger } from "pino";
@@ -25,45 +23,43 @@ import { EventOptions, GenericEvent } from "../../../../../src/types";
 import { createResolvedTransactions, createUnresolvedTransactions } from "../../../../utils/transactions";
 
 // CONSTANTS
-const kPrefix = "test";
 const kDispatcher = "dispatcher";
 const kBackupTransactionStoreName = "backup";
 const kIdleTime = 60_000;
 
 describe("transactionHandler", () => {
-  let subscriber: Redis;
-  let redis: Redis;
+  const redis = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
+  const secondRedis = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
+  const subscriber = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
 
   before(async() => {
-    await initRedis({
-      port: Number(process.env.REDIS_PORT),
-      host: process.env.REDIS_HOST
-    });
-
-    subscriber = await initRedis({
-      port: Number(process.env.REDIS_PORT),
-      host: process.env.REDIS_HOST
-    }, "subscriber");
-
-    redis = await initRedis({
-      port: Number(process.env.REDIS_PORT),
-      host: process.env.REDIS_HOST
-    }, undefined, true);
+    await redis.initialize();
+    await secondRedis.initialize();
+    await subscriber.initialize();
 
     await redis.flushall();
   });
 
   after(async() => {
-    await closeAllRedis();
-    await closeRedis(undefined, redis);
+    await redis.close();
+    await secondRedis.close();
+    await subscriber.close();
   });
 
   describe("transactionHandler with default options", () => {
-    const formattedPrefix: string = `${kPrefix}-`;
     const privateUUID: string = randomUUID();
 
     const logger: Logger = pino({
-      name: formattedPrefix + kDispatcher,
+      name: kDispatcher,
       level: "debug",
       transport: {
         target: "pino-pretty"
@@ -71,26 +67,30 @@ describe("transactionHandler", () => {
     });
 
     const incomerStore: IncomerStore = new IncomerStore({
-      prefix: kPrefix,
+      adapter: redis,
       idleTime: kIdleTime
     });
 
     const dispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      prefix: kPrefix,
+      adapter: redis,
       instance: "dispatcher"
     });
 
     const backupDispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      prefix: formattedPrefix + kBackupTransactionStoreName,
+      adapter: redis,
+      prefix: kBackupTransactionStoreName,
       instance: "dispatcher"
     });
 
     const backupIncomerTransactionStore: TransactionStore<"incomer"> = new TransactionStore({
-      prefix: formattedPrefix + kBackupTransactionStoreName,
+      adapter: redis,
+      prefix: kBackupTransactionStoreName,
       instance: "incomer"
     });
 
     const incomerChannelHandler: IncomerChannelHandler = new IncomerChannelHandler({
+      redis,
+      subscriber,
       logger
     });
 
@@ -101,8 +101,8 @@ describe("transactionHandler", () => {
     })
 
     const transactionHandler: TransactionHandler = new TransactionHandler({
+      redis,
       privateUUID,
-      formattedPrefix,
       incomerStore,
       dispatcherTransactionStore,
       backupDispatcherTransactionStore,
@@ -110,11 +110,6 @@ describe("transactionHandler", () => {
       incomerChannelHandler,
       eventsHandler,
       parentLogger: logger
-    });
-
-    test("transactionHandler must have property \"logger\" and \"standardLogFn\"", () => {
-      assert.ok(transactionHandler["logger"]);
-      assert.ok(transactionHandler["standardLogFn"]);
     });
 
     describe("resolveInactiveIncomerTransactions", () => {
@@ -140,7 +135,6 @@ describe("transactionHandler", () => {
 
           const publisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -151,7 +145,6 @@ describe("transactionHandler", () => {
           };
           const dispatcher = {
             name: "dispatcher",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -162,7 +155,6 @@ describe("transactionHandler", () => {
           };
           const listener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -173,12 +165,14 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            adapter: redis,
+            prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${listener.providedUUID}`,
+            adapter: redis,
+            prefix: listener.providedUUID,
             instance: "incomer"
           });
 
@@ -225,7 +219,6 @@ describe("transactionHandler", () => {
 
           const publisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -236,7 +229,6 @@ describe("transactionHandler", () => {
           };
           const dispatcher = {
             name: "dispatcher",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -247,7 +239,6 @@ describe("transactionHandler", () => {
           };
           const listener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -258,7 +249,6 @@ describe("transactionHandler", () => {
           };
           const backupListener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -269,12 +259,14 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            adapter: redis,
+            prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${listener.providedUUID}`,
+            adapter: redis,
+            prefix: listener.providedUUID,
             instance: "incomer"
           });
 
@@ -324,7 +316,6 @@ describe("transactionHandler", () => {
 
           const publisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -335,7 +326,6 @@ describe("transactionHandler", () => {
           };
           const dispatcher = {
             name: "dispatcher",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -346,7 +336,6 @@ describe("transactionHandler", () => {
           };
           const listener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -357,12 +346,14 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            adapter: redis,
+            prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${listener.providedUUID}`,
+            adapter: redis,
+            prefix: listener.providedUUID,
             instance: "incomer"
           });
 
@@ -409,7 +400,6 @@ describe("transactionHandler", () => {
 
           const publisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -420,7 +410,6 @@ describe("transactionHandler", () => {
           };
           const dispatcher = {
             name: "dispatcher",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -431,7 +420,6 @@ describe("transactionHandler", () => {
           };
           const listener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -442,7 +430,6 @@ describe("transactionHandler", () => {
           };
           const backupListener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -453,12 +440,14 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            adapter: redis,
+            prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${listener.providedUUID}`,
+            adapter: redis,
+            prefix: listener.providedUUID,
             instance: "incomer"
           });
 
@@ -485,7 +474,7 @@ describe("transactionHandler", () => {
               }
             });
 
-            await subscriber.subscribe(`${kPrefix}-${backupListener.providedUUID}`);
+            await subscriber.subscribe(backupListener.providedUUID);
 
             subscriber.on("message", (__: string, message: string) => {
               backupEvent = message;
@@ -512,7 +501,6 @@ describe("transactionHandler", () => {
 
           const publisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -523,7 +511,6 @@ describe("transactionHandler", () => {
           };
           const backupPublisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -534,7 +521,6 @@ describe("transactionHandler", () => {
           };
           const dispatcher = {
             name: "dispatcher",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -545,7 +531,6 @@ describe("transactionHandler", () => {
           };
           const listener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -556,17 +541,20 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            adapter: redis,
+            prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const backupPublisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${backupPublisher.providedUUID}`,
+            adapter: redis,
+            prefix: backupPublisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${listener.providedUUID}`,
+            adapter: redis,
+            prefix: listener.providedUUID,
             instance: "incomer"
           });
 
@@ -614,7 +602,6 @@ describe("transactionHandler", () => {
 
           const publisher = {
             name: "publisher",
-            prefix: kPrefix,
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -625,7 +612,6 @@ describe("transactionHandler", () => {
           };
           const dispatcher = {
             name: "dispatcher",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
@@ -636,7 +622,6 @@ describe("transactionHandler", () => {
           };
           const listener = {
             name: "listener",
-            prefix: kPrefix,
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
@@ -647,12 +632,14 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${publisher.providedUUID}`,
+            adapter: redis,
+            prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            prefix: `${kPrefix}-${listener.providedUUID}`,
+            adapter: redis,
+            prefix: listener.providedUUID,
             instance: "incomer"
           });
 

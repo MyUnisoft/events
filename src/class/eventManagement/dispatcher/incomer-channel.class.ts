@@ -1,5 +1,9 @@
 // Import Third-party Dependencies
-import { Channel, getRedis } from "@myunisoft/redis";
+import {
+  Channel,
+  RedisAdapter,
+  Types
+} from "@myunisoft/redis";
 import type { Logger } from "pino";
 
 // Import Internal Dependencies
@@ -10,13 +14,14 @@ import type {
 } from "../../../types/index.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
+  redis: Types.DatabaseConnection<RedisAdapter>;
+  subscriber: Types.DatabaseConnection<RedisAdapter>;
   logger: Logger;
   channels?: Map<string, Channel<DistributedEventMessage<T>>>;
 }
 
 export interface SetChannelOptions {
   uuid: string;
-  prefix?: string;
   subscribe?: boolean;
 }
 
@@ -27,26 +32,28 @@ export type ChannelMessages<T extends GenericEvent> = Channel<
 export class IncomerChannelHandler<
   T extends GenericEvent = GenericEvent
 > {
+  #redis: Types.DatabaseConnection<RedisAdapter>;
+  #subscriber: Types.DatabaseConnection<RedisAdapter>;
+
   public channels: Map<string, ChannelMessages<T>> = new Map();
 
   constructor(
     options: IncomerChannelHandlerOptions<T>
   ) {
     Object.assign(this, options);
-  }
 
-  get subscriber() {
-    return getRedis("subscriber");
+    this.#redis = options.redis;
+    this.#subscriber = options.subscriber;
   }
 
   set(
     options: SetChannelOptions
   ) {
-    const { uuid, prefix } = options;
+    const { uuid } = options;
 
     const channel = new Channel({
-      name: uuid,
-      prefix
+      redis: this.#redis,
+      name: uuid
     });
 
     this.channels.set(uuid, channel);
@@ -67,7 +74,7 @@ export class IncomerChannelHandler<
       return;
     }
 
-    await this.subscriber?.unsubscribe(uuid);
+    await this.#subscriber?.unsubscribe(uuid);
     this.channels.delete(uuid);
   }
 }

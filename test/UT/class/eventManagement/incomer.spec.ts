@@ -3,9 +3,7 @@ import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import {
-  initRedis,
-  closeAllRedis,
-  getRedis
+  RedisAdapter
 } from "@myunisoft/redis";
 import { Ok } from "@openally/result";
 
@@ -24,6 +22,15 @@ const kIdleTime = 4_000;
 describe("Init Incomer without Dispatcher alive", () => {
   const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
 
+  const redis = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
+  const subscriber = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
+
   const pingInterval = 2_000;
 
   let incomer: Incomer;
@@ -31,19 +38,14 @@ describe("Init Incomer without Dispatcher alive", () => {
   let dispatcher: Dispatcher;
 
   beforeAll(async() => {
-    await initRedis({
-      port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
-    } as any);
+    await redis.initialize();
+    await subscriber.initialize();
 
-    await getRedis()!.flushall();
-
-    await initRedis({
-      port: process.env.REDIS_PORT,
-      host: process.env.REDIS_HOST
-    } as any, "subscriber");
+    await redis.flushall();
 
     incomer = new Incomer({
+      redis,
+      subscriber,
       name: "foo",
       eventsCast: [],
       eventsSubscribe: [],
@@ -56,6 +58,8 @@ describe("Init Incomer without Dispatcher alive", () => {
     });
 
     dispatcherIncomer = new Incomer({
+      redis,
+      subscriber,
       name: "node:Pulsar",
       eventsCast: [],
       eventsSubscribe: [],
@@ -69,6 +73,8 @@ describe("Init Incomer without Dispatcher alive", () => {
     });
 
     dispatcher = new Dispatcher({
+      redis,
+      subscriber,
       pingInterval: pingInterval,
       idleTime: kIdleTime,
       incomerUUID: dispatcherIncomer.baseUUID,
@@ -89,7 +95,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("It should register when a Dispatcher is alive", async() => {
     await dispatcher!.initialize();
 
-    await timers.setTimeout(5_000);
+    await timers.setTimeout(6_000);
 
     expect(incomer.dispatcherConnectionState).toBe(true);
     expect(dispatcherIncomer.dispatcherConnectionState).toBe(true);
@@ -97,12 +103,11 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   test("Incomer calling close, it should remove the given Incomer", async() => {
-    await incomer["incomerChannel"].publish({
+    await incomer["incomerChannel"].pub({
       name: "CLOSE",
       redisMetadata: {
         origin: incomer["providedUUID"],
-        incomerName: incomer["name"],
-        prefix: incomer["prefix"]
+        incomerName: incomer["name"]
       }
     });
 
@@ -117,6 +122,8 @@ describe("Init Incomer without Dispatcher alive", () => {
 
   afterAll(async() => {
     await dispatcherIncomer.close();
-    await closeAllRedis();
+    await dispatcher.close();
+    await redis.close();
+    await subscriber.close();
   });
 });

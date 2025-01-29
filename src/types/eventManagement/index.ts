@@ -1,5 +1,3 @@
-export type Prefix = "test" | "development" | "staging" | "production";
-
 export type EventSubscribe<T extends string = string> = {
   name: T;
   delay?: number;
@@ -14,7 +12,6 @@ export type TransactionMetadata<T extends Instance> = (
   origin: string;
   incomerName: string;
   transactionId: string;
-  prefix?: Prefix;
   eventTransactionId?: string;
 }
 
@@ -35,7 +32,6 @@ export interface RegisteredIncomer {
   aliveSince: number;
   eventsCast: string[];
   eventsSubscribe: EventSubscribe[];
-  prefix?: string;
 }
 
 export type Instance = "dispatcher" | "incomer";
