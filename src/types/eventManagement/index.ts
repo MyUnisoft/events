@@ -1,5 +1,3 @@
-export type Prefix = "test";
-
 export type EventSubscribe<T extends string = string> = {
   name: T;
   delay?: number;

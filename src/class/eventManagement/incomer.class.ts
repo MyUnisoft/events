@@ -23,7 +23,6 @@ import {
   TransactionStore
 } from "../store/transaction.class.js";
 import type {
-  Prefix,
   EventSubscribe,
   IncomerChannelMessages,
   DispatcherApprovementMessage,
@@ -100,7 +99,6 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   name: string;
   redis: Types.DatabaseConnection<RedisAdapter>;
   subscriber: Types.DatabaseConnection<RedisAdapter>;
-  prefix?: Prefix;
   logger?: Logger;
   standardLog?: StandardLog<T>;
   eventsCast: string[];
@@ -124,7 +122,6 @@ export class Incomer <
   T extends GenericEvent = GenericEvent
 > extends EventEmitter {
   readonly name: string;
-  readonly prefix: Prefix | undefined;
   readonly eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
 
   public dispatcherConnectionState = false;
@@ -199,9 +196,9 @@ export class Incomer <
     });
 
     if (
-      (this.prefix === "test") && (kExternalInit === false && (
+      kExternalInit === false && (
         options.externalsInitialized === false || options.externalsInitialized === undefined
-      ))
+      )
     ) {
       this.externals = new Externals(options);
     }
