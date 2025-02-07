@@ -14,7 +14,6 @@ import type { Logger } from "pino";
 // Import Internal Dependencies
 import {
   TransactionStore,
-  type IncomerHandlerTransaction,
   type Transaction,
   type Transactions
 } from "../../store/transaction.class.js";
@@ -45,7 +44,7 @@ interface DistributeMainTransactionOptions {
 
 interface BackupSpreadTransactionsOptions {
   concernedDispatcherTransactions: Transactions<"dispatcher">;
-  handlerIncomerTransactions: Transactions<"incomer">;
+  // handlerIncomerTransactions: Transactions<"incomer">;
   inactiveIncomerTransactionStore: TransactionStore<"incomer">;
   incomers: Set<RegisteredIncomer>;
 }

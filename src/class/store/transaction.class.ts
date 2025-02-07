@@ -54,20 +54,9 @@ export interface IncomerMainTransaction {
   };
 }
 
-export interface IncomerHandlerTransaction {
-  incomerDistributedEventTransaction: IncomerChannelMessages["IncomerMessages"] & {
-    redisMetadata: HandlerTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
-  };
-  incomerPongTransaction: DispatcherPingMessage & {
-    redisMetadata: HandlerTransaction & DispatcherPingMessage["redisMetadata"];
-  };
-}
-
 type IncomerTransaction =
   IncomerMainTransaction["incomerApprovementTransaction"] |
-  IncomerMainTransaction["incomerEventCastTransaction"] |
-  IncomerHandlerTransaction["incomerDistributedEventTransaction"] |
-  IncomerHandlerTransaction["incomerPongTransaction"];
+  IncomerMainTransaction["incomerEventCastTransaction"]
 
 type DispatcherTransaction =
   DispatcherSpreadTransaction["dispatcherApprovementTransaction"] |

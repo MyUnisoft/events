@@ -141,6 +141,7 @@ export class Incomer <
   #isDispatcherInstance: boolean;
   #eventsCast: string[];
   #eventsSubscribe: EventSubscribe[];
+  #dispatcherTransactionStore: TransactionStore<"dispatcher">;
   #dispatcherChannel: Channel<IncomerRegistrationMessage>;
   #publishInterval: number;
   #maxPingInterval: number;
@@ -193,6 +194,11 @@ export class Incomer <
       adapter: this.#redis,
       prefix: this.baseUUID,
       instance: "incomer"
+    });
+
+    this.#dispatcherTransactionStore = new TransactionStore({
+      adapter: this.#redis,
+      instance: "dispatcher"
     });
 
     if (
@@ -633,6 +639,9 @@ export class Incomer <
   }
 
   private async handlePing(channel: string, message: DispatcherPingMessage) {
+    const { redisMetadata } = message;
+    const { transactionId } = redisMetadata;
+
     this.#lastPingDate = Date.now();
     this.dispatcherConnectionState = true;
 
@@ -641,19 +650,19 @@ export class Incomer <
       ...message
     };
 
-    const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
+    const pingTransaction = await this.#dispatcherTransactionStore.getTransactionById(transactionId);
 
-    await store.setTransaction({
+    if (pingTransaction === null) {
+      throw new Error("Unable to find the ping transaction");
+    }
+
+    await this.#dispatcherTransactionStore.updateTransaction(transactionId, {
       ...message,
       redisMetadata: {
         ...message.redisMetadata,
-        origin: message.redisMetadata.to,
-        incomerName: this.name,
-        mainTransaction: false,
-        relatedTransaction: message.redisMetadata.transactionId,
         resolved: true
       }
-    });
+    } as Transaction<"dispatcher">);
 
     this.logger.debug(
       this.#standardLogFn({ ...logData, dispatcherConnectionState: this.dispatcherConnectionState } as any)("Resolved Ping event")
@@ -665,7 +674,7 @@ export class Incomer <
   ) {
     const { message, channel } = options;
     const { redisMetadata, ...event } = message;
-    const { eventTransactionId, iteration } = redisMetadata;
+    const { eventTransactionId, iteration, transactionId } = redisMetadata;
 
     const logData = {
       channel,
@@ -683,33 +692,24 @@ export class Incomer <
       this.#customValidationCbFn(event as unknown as T);
     }
 
-    const transaction: PartialTransaction<"incomer"> = {
-      ...message,
-      redisMetadata: {
-        ...redisMetadata,
-        incomerName: this.name,
-        mainTransaction: false,
-        relatedTransaction: redisMetadata.transactionId,
-        resolved: false
-      }
-    };
+    const spreadTransaction = await this.#dispatcherTransactionStore.getTransactionById(transactionId);
 
-    const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
-
-    const formattedTransaction = await store.setTransaction(transaction);
+    if (spreadTransaction === null) {
+      throw new Error(`Unable to find the given spread transaction ${transactionId}`);
+    }
 
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
     if (callbackResult && callbackResult.ok) {
       const resolvedCallbackResult = callbackResult.unwrap();
       if (Symbol.for(resolvedCallbackResult.status) === RESOLVED) {
-        await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-          ...formattedTransaction,
+        await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {
+          ...spreadTransaction,
           redisMetadata: {
-            ...formattedTransaction.redisMetadata,
+            ...spreadTransaction.redisMetadata,
             resolved: true
           }
-        } as Transaction<"incomer">);
+        } as Transaction<"dispatcher">);
 
         this.logger.info(this.#standardLogFn({
           ...logData,
@@ -729,8 +729,7 @@ export class Incomer <
             await this.incomerChannel.pub({
               name: "RETRY",
               data: {
-                dispatcherTransactionId: redisMetadata.transactionId,
-                incomerTransactionId: formattedTransaction.redisMetadata.transactionId
+                dispatcherTransactionId: redisMetadata.transactionId
               },
               redisMetadata: {
                 origin: this.providedUUID,
@@ -748,13 +747,13 @@ export class Incomer <
             return;
           }
 
-          await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-            ...formattedTransaction,
+          await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {
+            ...spreadTransaction,
             redisMetadata: {
-              ...formattedTransaction.redisMetadata,
+              ...spreadTransaction.redisMetadata,
               resolved: true
             }
-          } as Transaction<"incomer">);
+          } as Transaction<"dispatcher">);
 
           this.logger.info(
             this.#standardLogFn({
@@ -768,13 +767,13 @@ export class Incomer <
       }
     }
 
-    await store.updateTransaction(formattedTransaction.redisMetadata.transactionId, {
-      ...formattedTransaction,
+    await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {
+      ...spreadTransaction,
       redisMetadata: {
-        ...formattedTransaction.redisMetadata,
+        ...spreadTransaction.redisMetadata,
         resolved: true
       }
-    } as Transaction<"incomer">);
+    } as Transaction<"dispatcher">);
 
     this.logger.info(this.#standardLogFn({
       ...logData,
@@ -811,19 +810,7 @@ export class Incomer <
     const transactionToUpdate: Promise<any>[] = [];
     for (const [transactionId, transaction] of oldTransactions.entries()) {
       if (transaction.name === "REGISTER") {
-        transactionToUpdate.push(...[
-          this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
-          this.newTransactionStore.setTransaction({
-            ...transaction,
-            redisMetadata: {
-              ...transaction.redisMetadata,
-              origin: this.providedUUID,
-              relatedTransaction: message.redisMetadata.transactionId,
-              published: true,
-              resolved: true
-            }
-          } as Transaction<"incomer">, transactionId)
-        ]);
+        transactionToUpdate.push(this.defaultIncomerTransactionStore.deleteTransaction(transactionId));
 
         continue;
       }

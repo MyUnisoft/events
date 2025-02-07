@@ -677,14 +677,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async handleRetryEvent(retryEvent: RetryMessage) {
     const { data, redisMetadata } = retryEvent;
-    const { dispatcherTransactionId, incomerTransactionId } = data;
-    const { origin } = redisMetadata;
-
-    const concernedIncomerStore = new TransactionStore({
-      adapter: this.#redis,
-      prefix: origin,
-      instance: "incomer"
-    });
+    const { dispatcherTransactionId } = data;
 
     const relatedDispatcherTransaction = await this.#dispatcherTransactionStore
       .getTransactionById(dispatcherTransactionId) as unknown as
@@ -724,10 +717,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       event: formattedEvent as any
     });
 
-    await Promise.all([
-      concernedIncomerStore.deleteTransaction(incomerTransactionId),
-      this.#dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
-    ]);
+    await this.#dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
 
     this.#logger.info(this.#standardLogFn(
       Object.assign({}, { channel: concernedIncomerChannel.name, ...event }, {
