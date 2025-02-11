@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 
 // Import Third-party Dependencies
 import {
-  KVOptions,
-  KVPeer,
   RedisAdapter,
+  TimedKVPeer,
+  TimedKVPeerOptions,
   Types
 } from "@myunisoft/redis";
 
@@ -19,6 +19,10 @@ import type {
   DistributedEventMessage,
   Instance
 } from "../../types/index.js";
+
+// CONSTANTS
+const kDefaultTTL = 60_000 * 60 * 24;
+
 type BaseTransaction<
   IsMain extends boolean = true,
   RelatedTransaction = IsMain extends true ? null : string
@@ -97,15 +101,15 @@ export type Transactions<T extends Instance> = Map<string, Transaction<T>>;
 
 export type TransactionStoreOptions<
   T extends Instance
-> = (Partial<KVOptions<Transactions<T>>> &
+> = (Omit<TimedKVPeerOptions<Transactions<T>>, "prefix" | "adapter"> & (
   T extends "incomer" ? { prefix: string; } : { prefix?: string; }) & {
     adapter: Types.DatabaseConnection<RedisAdapter>;
     instance: T;
-};
+});
 
 export class TransactionStore<
   T extends Instance = Instance
-> extends KVPeer<
+> extends TimedKVPeer<
   Transaction<T>,
   null,
   RedisAdapter
@@ -117,9 +121,11 @@ export class TransactionStore<
   ) {
     super({
       ...options,
-      prefix: undefined,
-      type: "object"
+      ttl: options.ttl ?? kDefaultTTL,
+      mapValue: undefined,
+      prefix: undefined
     });
+
 
     this.#key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }
