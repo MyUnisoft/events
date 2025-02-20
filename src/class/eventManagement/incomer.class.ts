@@ -43,6 +43,7 @@ import {
 import { Externals } from "./externals.class.js";
 import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class.js";
 import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class.js";
+import { IncomerStore } from "../store/incomer.class.js";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
@@ -132,6 +133,7 @@ export class Incomer <
   private incomerChannelName: string;
   private subscriber: Types.DatabaseConnection<RedisAdapter>;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
+  private incomerStore: IncomerStore;
   private newTransactionStore: TransactionStore<"incomer">;
   private logger: Logger;
   private dispatcherChannelName: string;
@@ -194,6 +196,11 @@ export class Incomer <
       adapter: this.#redis,
       prefix: this.baseUUID,
       instance: "incomer"
+    });
+
+    this.incomerStore = new IncomerStore({
+      adapter: this.#redis,
+      idleTime: 60_000
     });
 
     this.#dispatcherTransactionStore = new TransactionStore({
@@ -316,20 +323,16 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.dispatcherConnectionState = true;
-      this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
-        .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
-      this.#publishInterval * 2).unref();
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
     catch (error) {
       this.logger.error({ error }, "Failed to register in time");
       this.dispatcherConnectionState = false;
-
+    }
+    finally {
       this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
         .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
       this.#publishInterval * 2).unref();
-
-      return;
     }
   }
 
@@ -418,6 +421,16 @@ export class Incomer <
         (channel: string, message: string) => this.handleMessages(channel, message)
           .catch((error) => this.logger.error({ error }, "Failed at resolving message"))
       );
+
+      await this.incomerStore.setIncomer({
+        baseUUID: this.baseUUID,
+        name: this.name,
+        isDispatcherActiveInstance: this.#isDispatcherInstance,
+        lastActivity: Date.now(),
+        aliveSince: Date.now(),
+        eventsCast: this.#eventsCast,
+        eventsSubscribe: this.#eventsSubscribe
+      }, this.baseUUID);
 
       await this.registrationAttempt();
     }
@@ -810,7 +823,10 @@ export class Incomer <
     const transactionToUpdate: Promise<any>[] = [];
     for (const [transactionId, transaction] of oldTransactions.entries()) {
       if (transaction.name === "REGISTER") {
-        transactionToUpdate.push(this.defaultIncomerTransactionStore.deleteTransaction(transactionId));
+        transactionToUpdate.push(
+          this.defaultIncomerTransactionStore.deleteTransaction(transactionId),
+          this.#dispatcherTransactionStore.deleteTransaction(message.redisMetadata.transactionId)
+        );
 
         continue;
       }

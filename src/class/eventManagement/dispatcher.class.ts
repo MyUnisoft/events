@@ -297,7 +297,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const incomers = await this.incomerStore.getIncomers();
 
-    const activeDispatcher = [...incomers.values()]
+    const activeDispatcher = [...incomers]
       .find((incomer) => (incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID &&
         incomer.isDispatcherActiveInstance));
 
@@ -309,7 +309,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
-    await this.takeLead({ incomers });
+    await this.takeLead({ incomers: [...incomers] });
   }
 
   public async close() {
@@ -394,7 +394,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
   }
 
-  async takeLead(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
+  async takeLead(opts: { incomers?: RegisteredIncomer[] } = {}) {
     const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
 
     try {
@@ -569,10 +569,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const pingToResolve: Promise<void>[] = [];
     const concernedIncomers: string[] = [];
     for (const incomer of incomers) {
-      if (incomer === null) {
-        continue;
-      }
-
       const { providedUUID: uuid } = incomer;
 
       if (incomer.baseUUID === this.#selfProvidedUUID) {
@@ -686,7 +682,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const incomers = await this.incomerStore.getIncomers();
 
-    const concernedIncomer = [...incomers]
+    const concernedIncomer = [...incomers.values()]
       .find(
         (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === event.name) &&
           incomer.name === dispatcherTransactionMetadata.incomerName
@@ -835,7 +831,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   private async getFilteredConcernedIncomers(eventName: string): Promise<RegisteredIncomer[]> {
     const incomers = await this.incomerStore.getIncomers();
 
-    const concernedIncomers = [...incomers]
+    const concernedIncomers = [...incomers.values()]
       .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === eventName));
 
     const filteredConcernedIncomers: RegisteredIncomer[] = [];
@@ -927,7 +923,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
     else {
       for (const incomer of incomers) {
-        if (incomer.baseUUID === origin) {
+        if (incomer.baseUUID === origin && incomer.baseUUID !== incomer.providedUUID) {
           await relatedTransactionStore.deleteTransaction(transactionId);
 
           throw new Error("Forbidden multiple registration for a same instance");
@@ -942,7 +938,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         aliveSince: now
       });
 
-      providedUUID = await this.incomerStore.setIncomer(incomer);
+      [, providedUUID] = await Promise.all([
+        this.incomerStore.deleteIncomer(incomer.baseUUID),
+        this.incomerStore.setIncomer(incomer)
+      ]);
     }
 
     this.#incomerChannelHandler.set({ uuid: providedUUID });
