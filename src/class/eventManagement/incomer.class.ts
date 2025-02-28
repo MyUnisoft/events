@@ -706,6 +706,12 @@ export class Incomer <
     }
 
     const spreadTransaction = await this.#dispatcherTransactionStore.getTransactionById(transactionId);
+    await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {
+      ...spreadTransaction,
+      redisMetadata: {
+        ...spreadTransaction.redisMetadata
+      }
+    } as Transaction<"dispatcher">);
 
     if (spreadTransaction === null) {
       throw new Error(`Unable to find the given spread transaction ${transactionId}`);

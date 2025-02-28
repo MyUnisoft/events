@@ -209,6 +209,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.#transactionHandler = new TransactionHandler({
       ...options,
       ...sharedOptions,
+      idleTime: this.#idleTime,
       eventsHandler: this.#eventsHandler
     });
 
@@ -824,8 +825,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         }
       } as Transaction<"incomer">)
     ]);
-
-    await this.incomerStore.updateIncomerState(providedUUID);
   }
 
   private async getFilteredConcernedIncomers(eventName: string): Promise<RegisteredIncomer[]> {

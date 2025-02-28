@@ -82,10 +82,10 @@ export interface DispatchEventOptions<T extends GenericEvent> {
   event: DispatchedEvent<T>;
   redisMetadata: {
     mainTransaction: boolean;
+    resolved: boolean;
     relatedTransaction?: null | string;
     eventTransactionId?: null | string;
     iteration?: number;
-    resolved: boolean;
   };
   store: TransactionStore<"incomer"> | TransactionStore<"dispatcher">;
   dispatcherTransactionUUID?: string;
