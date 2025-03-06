@@ -214,7 +214,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         )
     );
 
-    transactionsToResolve.push(this.dispatcherTransactionStore.deleteTransactions([...dispatcherPingTransactions.keys()]));
+    if ([...dispatcherPingTransactions.keys()].length > 0) {
+      transactionsToResolve.push(
+        this.dispatcherTransactionStore.deleteTransactions(
+          [...dispatcherPingTransactions.keys()]
+        )
+      );
+    }
 
     const dispatcherApprovementTransactions = new Map(
       [...concernedDispatcherTransactions]

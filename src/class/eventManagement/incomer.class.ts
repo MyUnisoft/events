@@ -394,8 +394,8 @@ export class Incomer <
 
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
     }
-    catch {
-      this.logger.error("Failed to register in time");
+    catch (error) {
+      this.logger.error({ error }, "Failed to register in time");
 
       this.dispatcherConnectionState = false;
 
@@ -706,12 +706,6 @@ export class Incomer <
     }
 
     const spreadTransaction = await this.#dispatcherTransactionStore.getTransactionById(transactionId);
-    await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {
-      ...spreadTransaction,
-      redisMetadata: {
-        ...spreadTransaction.redisMetadata
-      }
-    } as Transaction<"dispatcher">);
 
     if (spreadTransaction === null) {
       throw new Error(`Unable to find the given spread transaction ${transactionId}`);
@@ -733,8 +727,7 @@ export class Incomer <
         this.logger.info(this.#standardLogFn({
           ...logData,
           dispatcherConnectionState: this.dispatcherConnectionState
-        })("Resolved Custom event")
-        );
+        })("Resolved Custom event"));
 
         return;
       }

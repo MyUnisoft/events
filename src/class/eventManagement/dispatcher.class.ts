@@ -615,19 +615,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async removeNonActives(inactiveIncomers: RegisteredIncomer[]) {
-    const toHandle: Promise<void>[] = [];
-
     for (const inactive of inactiveIncomers) {
-      toHandle.push(...[
-        this.incomerStore.deleteIncomer(inactive.providedUUID),
-        this.#transactionHandler.resolveInactiveIncomerTransactions(inactive)
-      ]);
+      await this.#transactionHandler.resolveInactiveIncomerTransactions(inactive);
+      await this.incomerStore.deleteIncomer(inactive.providedUUID);
+
       this.#activeChannels.add(
         inactive.providedUUID
       );
     }
-
-    await Promise.all(toHandle);
 
     if (inactiveIncomers.length > 0) {
       this.#logger.info(`[${inactiveIncomers.map(
