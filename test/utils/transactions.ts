@@ -1,7 +1,6 @@
 // Import Internals Dependencies
 import {
   type DispatcherSpreadTransaction,
-  type IncomerHandlerTransaction,
   type IncomerMainTransaction,
   type PartialTransaction,
   TransactionStore
@@ -65,27 +64,9 @@ export async function createResolvedTransactions(options: GenericOptions) {
     spreadTransactionPayload as DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"]
   );
 
-  const handlerTransactionPayload: PartialTransaction<"incomer"> = {
-    ...event,
-    redisMetadata: {
-      origin: dispatcher.instance.providedUUID,
-      to: listener.instance.providedUUID,
-      incomerName: listener.instance.name,
-      mainTransaction: false,
-      resolved: true,
-      relatedTransaction: spreadTransaction.redisMetadata.transactionId,
-      eventTransactionId: mainTransaction.redisMetadata.transactionId!,
-    }
-  }
-
-  const handlerTransaction = await listener.transactionStore.setTransaction(
-    handlerTransactionPayload as IncomerHandlerTransaction["incomerDistributedEventTransaction"]
-  );
-
   return {
     mainTransaction,
-    spreadTransaction,
-    handlerTransaction
+    spreadTransaction
   };
 }
 
@@ -127,27 +108,9 @@ export async function createUnresolvedTransactions(options: GenericOptions) {
     spreadTransactionPayload as DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"]
   );
 
-  const handlerTransactionPayload: PartialTransaction<"incomer"> = {
-    ...event,
-    redisMetadata: {
-      origin: dispatcher.instance.providedUUID,
-      to: listener.instance.providedUUID,
-      incomerName: listener.instance.name,
-      mainTransaction: false,
-      resolved: false,
-      relatedTransaction: spreadTransaction.redisMetadata.transactionId,
-      eventTransactionId: mainTransaction.redisMetadata.transactionId!,
-    }
-  }
-
-  const handlerTransaction = await listener.transactionStore.setTransaction(
-    handlerTransactionPayload as IncomerHandlerTransaction["incomerDistributedEventTransaction"]
-  );
-
   return {
     mainTransaction,
-    spreadTransaction,
-    handlerTransaction
+    spreadTransaction
   };
 }
 
