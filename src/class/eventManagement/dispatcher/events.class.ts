@@ -7,7 +7,7 @@ import Ajv, { ValidateFunction } from "ajv";
 import type { Logger } from "pino";
 
 // Import Internal Dependencies
-import { TransactionStore } from "../../store/transaction.class.js";
+import { Transaction, TransactionStore } from "../../store/transaction.class.js";
 import type {
   DispatcherApprovementMessage,
   EventMessage,
@@ -135,7 +135,7 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
   public async dispatch(
     options: DispatchEventOptions<T>
-  ): Promise<void> {
+  ): Promise<Transaction<"dispatcher"> | Transaction<"incomer">> {
     const { channel, store, redisMetadata, event, dispatcherTransactionUUID } = options;
 
     const transaction = await store.setTransaction({
@@ -155,6 +155,8 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
         transactionId: transaction.redisMetadata.transactionId
       } as any
     });
+
+    return transaction;
   }
 
   public async handleEvents(

@@ -241,13 +241,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       Promise.all(
         [...incomerRegistrationTransactions]
           .map(([relatedApprovementTransactionId, incomerTransaction]) => {
-            if (!dispatcherApprovementTransactions.has(relatedApprovementTransactionId)) {
+            if (!dispatcherApprovementTransactions.has(relatedApprovementTransactionId as string)) {
               return inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId);
             }
 
             return Promise.all([
               inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId),
-              this.dispatcherTransactionStore.deleteTransaction(relatedApprovementTransactionId)
+              this.dispatcherTransactionStore.deleteTransaction(relatedApprovementTransactionId as string)
             ]);
           })
       )
@@ -315,7 +315,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
             channel: isoSubscriberChannel,
             store: this.dispatcherTransactionStore,
             redisMetadata: {
-              ...dispatcherTransaction.redisMetadata
+              ...dispatcherTransaction.redisMetadata,
+              relatedTransaction: dispatcherTransaction.redisMetadata.relatedTransaction as string
             },
             event: {
               ...dispatcherTransaction,
@@ -583,7 +584,8 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
               channel: isoSubscriberChannel,
               store: this.dispatcherTransactionStore,
               redisMetadata: {
-                ...dispatcherTransaction.redisMetadata
+                ...dispatcherTransaction.redisMetadata,
+                relatedTransaction: dispatcherTransaction.redisMetadata.relatedTransaction as string
               },
               event: {
                 ...dispatcherTransaction,

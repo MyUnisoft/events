@@ -21,7 +21,7 @@ import type {
 } from "../../types/index.js";
 type BaseTransaction<
   IsMain extends boolean = true,
-  RelatedTransaction = IsMain extends true ? null : string
+  RelatedTransaction = IsMain extends true ? (string[] | string) | null : string
 > = {
   published?: boolean;
   mainTransaction: IsMain;
