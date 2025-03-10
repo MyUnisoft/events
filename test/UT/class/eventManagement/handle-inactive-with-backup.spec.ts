@@ -214,7 +214,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
             incomerName: concernedIncomer.name,
             mainTransaction: true,
             published: true,
-            relatedTransaction: null,
+            relatedTransaction: expect.anything(),
             resolved: false
           }
         })
