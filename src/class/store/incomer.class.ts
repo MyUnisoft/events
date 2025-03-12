@@ -22,7 +22,7 @@ export class IncomerStore extends KVPeer<
   null,
   RedisAdapter
 > {
-  #key: string;
+  #key = "incomer";
   #idleTime: number;
 
   constructor(
@@ -34,7 +34,6 @@ export class IncomerStore extends KVPeer<
       type: "object"
     });
 
-    this.#key = `${options.prefix ? `${options.prefix}-` : ""}incomer`;
     this.#idleTime = options.idleTime;
   }
 

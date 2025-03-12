@@ -51,7 +51,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       pingInterval: 2_000,
       checkLastActivityInterval: 2_000,
       checkTransactionInterval: 2_000,
-      idleTime: 5_000,
+      idleTime: 20_000,
       eventsValidation: {
         eventsValidationFn,
         customValidationCbFn: validate
@@ -77,10 +77,8 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     let secondConcernedIncomer: Incomer;
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
     let secondIncomerTransactionStore: TransactionStore<"incomer">;
-    let handlerTransaction;
-    let mockedSetTransaction;
 
-    // Constants
+    // CONSTANTS
     const event: EventOptions<"accountingFolder"> = {
       name: "accountingFolder",
       operation: "CREATE",
@@ -145,8 +143,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(secondConcernedIncomer, "newTransactionStore", secondIncomerTransactionStore);
 
-          mockedSetTransaction = jest.spyOn(secondConcernedIncomer["newTransactionStore"], "setTransaction");
-
           secondConcernedIncomer["lastPingDate"] = Date.now();
           secondConcernedIncomer.emit("registered");
         }
@@ -169,17 +165,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       jest.spyOn(concernedIncomer as any, "customEvent")
         .mockImplementation(async(opts: any) => {
-          handlerTransaction = await concernedIncomer["newTransactionStore"].setTransaction({
-            ...event,
-            redisMetadata: {
-              ...opts.message.redisMetadata,
-              incomerName: concernedIncomer.name,
-              origin: opts.message.redisMetadata.to,
-              mainTransaction: false,
-              relatedTransaction: opts.message.redisMetadata.transactionId,
-              resolved: false
-            }
-          });
+          // Do nothing
         });
 
       secondConcernedIncomer = new Incomer({
@@ -196,45 +182,43 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
       await concernedIncomer.publish(event);
 
+      await timers.setTimeout(10_000);
+
       await secondConcernedIncomer.initialize();
 
-      await timers.setTimeout(4_000);
+      await timers.setTimeout(10_000);
+    });
+
+    afterAll(async() => {
+      await secondConcernedIncomer.close();
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      expect(handlerTransaction).toBeDefined();
-
-      await concernedIncomer.close();
-
       secondConcernedIncomer["subscriber"]!.subscribe(
         secondConcernedIncomer["dispatcherChannelName"], secondConcernedIncomer["incomerChannelName"]
       );
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
       secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
 
-      await timers.setTimeout(15_000);
+      await timers.setTimeout(2_000);
 
-      const mockCalls = mockedSetTransaction.mock.calls.flat();
+      const mainTransactions = await secondConcernedIncomer["newTransactionStore"].getTransactions();
 
-      expect(mockCalls).toEqual(expect.arrayContaining([
+      expect([...mainTransactions.values()]).toEqual(expect.arrayContaining([
         expect.objectContaining({
           ...event,
           redisMetadata: {
             origin: expect.anything(),
-            to: expect.anything(),
             eventTransactionId: expect.anything(),
             transactionId: expect.anything(),
             incomerName: concernedIncomer.name,
-            mainTransaction: false,
+            mainTransaction: true,
+            published: true,
             relatedTransaction: expect.anything(),
-            resolved: expect.anything(),
-            iteration: expect.any(Number)
-          },
-          aliveSince: expect.anything()
+            resolved: false
+          }
         })
       ]));
-
-      await secondConcernedIncomer.close();
     });
   });
 });

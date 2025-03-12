@@ -84,8 +84,6 @@ interface DispatchEventToIncomer<T extends GenericEvent = GenericEvent> {
   incomer: RegisteredIncomer;
   customEvent: EventMessage<T>;
   transactionId: string;
-  senderTransactionStore: TransactionStore<"incomer">;
-  relatedTransaction: Transaction<"incomer">;
 }
 
 export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmitter {
@@ -209,6 +207,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.#transactionHandler = new TransactionHandler({
       ...options,
       ...sharedOptions,
+      idleTime: this.#idleTime,
       eventsHandler: this.#eventsHandler
     });
 
@@ -297,7 +296,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const incomers = await this.incomerStore.getIncomers();
 
-    const activeDispatcher = [...incomers.values()]
+    const activeDispatcher = [...incomers]
       .find((incomer) => (incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID &&
         incomer.isDispatcherActiveInstance));
 
@@ -309,7 +308,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
-    await this.takeLead({ incomers });
+    await this.takeLead({ incomers: [...incomers] });
   }
 
   public async close() {
@@ -394,7 +393,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
   }
 
-  async takeLead(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
+  async takeLead(opts: { incomers?: RegisteredIncomer[] } = {}) {
     const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
 
     try {
@@ -566,13 +565,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async ping() {
     const incomers = await this.incomerStore.getIncomers();
-    const pingToResolve: Promise<void>[] = [];
+    const pingToResolve: Promise<any>[] = [];
     const concernedIncomers: string[] = [];
     for (const incomer of incomers) {
-      if (incomer === null) {
-        continue;
-      }
-
       const { providedUUID: uuid } = incomer;
 
       if (incomer.baseUUID === this.#selfProvidedUUID) {
@@ -618,19 +613,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   }
 
   private async removeNonActives(inactiveIncomers: RegisteredIncomer[]) {
-    const toHandle: Promise<void>[] = [];
-
     for (const inactive of inactiveIncomers) {
-      toHandle.push(...[
-        this.incomerStore.deleteIncomer(inactive.providedUUID),
-        this.#transactionHandler.resolveInactiveIncomerTransactions(inactive)
-      ]);
+      await this.#transactionHandler.resolveInactiveIncomerTransactions(inactive);
+      await this.incomerStore.deleteIncomer(inactive.providedUUID);
+
       this.#activeChannels.add(
         inactive.providedUUID
       );
     }
-
-    await Promise.all(toHandle);
 
     if (inactiveIncomers.length > 0) {
       this.#logger.info(`[${inactiveIncomers.map(
@@ -677,14 +667,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async handleRetryEvent(retryEvent: RetryMessage) {
     const { data, redisMetadata } = retryEvent;
-    const { dispatcherTransactionId, incomerTransactionId } = data;
-    const { origin } = redisMetadata;
-
-    const concernedIncomerStore = new TransactionStore({
-      adapter: this.#redis,
-      prefix: origin,
-      instance: "incomer"
-    });
+    const { dispatcherTransactionId } = data;
 
     const relatedDispatcherTransaction = await this.#dispatcherTransactionStore
       .getTransactionById(dispatcherTransactionId) as unknown as
@@ -693,7 +676,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const incomers = await this.incomerStore.getIncomers();
 
-    const concernedIncomer = [...incomers]
+    const concernedIncomer = [...incomers.values()]
       .find(
         (incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === event.name) &&
           incomer.name === dispatcherTransactionMetadata.incomerName
@@ -724,10 +707,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       event: formattedEvent as any
     });
 
-    await Promise.all([
-      concernedIncomerStore.deleteTransaction(incomerTransactionId),
-      this.#dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId)
-    ]);
+    await this.#dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
 
     this.#logger.info(this.#standardLogFn(
       Object.assign({}, { channel: concernedIncomerChannel.name, ...event }, {
@@ -765,25 +745,40 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
         await this.backupUndeliverableEvents(senderTransactionStore, relatedTransaction, eventRest);
 
-        this.#logger.warn(this.#standardLogFn(logData)("Backed-up event"));
+        this.#logger.info(this.#standardLogFn(logData)("Backed-up event"));
       }
 
       return;
     }
 
     if (!relatedTransaction || relatedTransaction === null) {
-      this.#logger.warn(this.#standardLogFn(logData)(`Couldn't find the related main transaction for: ${transactionId}`));
+      this.#logger.info(this.#standardLogFn(logData)(`Couldn't find the related main transaction for: ${transactionId}`));
 
       return;
     }
 
-    await Promise.all(filteredConcernedIncomers.map((incomer) => this.dispatchEventToIncomer({
-      incomer,
-      customEvent,
-      transactionId,
-      senderTransactionStore,
-      relatedTransaction
-    })));
+    const relatedDispatcherTransactions = [];
+    for (const incomer of filteredConcernedIncomers) {
+      const dispatcherTransaction = await this.dispatchEventToIncomer({
+        incomer,
+        customEvent,
+        transactionId
+      });
+
+      relatedDispatcherTransactions.push(dispatcherTransaction.redisMetadata.transactionId);
+    }
+
+    await senderTransactionStore.updateTransaction(transactionId, {
+      ...relatedTransaction,
+      redisMetadata: {
+        ...relatedTransaction.redisMetadata,
+        mainTransaction: true,
+        relatedTransaction: relatedDispatcherTransactions,
+        published: true
+      }
+    } as Transaction<"incomer">);
+
+    await this.incomerStore.updateIncomerState(origin);
 
     this.#logger.info(this.#standardLogFn(
       Object.assign({}, logData, {
@@ -796,8 +791,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     )("Custom event distributed"));
   }
 
-  private async dispatchEventToIncomer(options: DispatchEventToIncomer<T>) {
-    const { incomer, customEvent, transactionId, senderTransactionStore, relatedTransaction } = options;
+  private async dispatchEventToIncomer(options: DispatchEventToIncomer<T>): Promise<Transaction<"dispatcher">> {
+    const { incomer, customEvent, transactionId } = options;
 
     const { providedUUID } = incomer;
 
@@ -815,37 +810,26 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
     };
 
-    await Promise.all([
-      this.#eventsHandler.dispatch({
-        channel: concernedIncomerChannel,
-        store: this.#dispatcherTransactionStore,
-        redisMetadata: {
-          mainTransaction: false,
-          relatedTransaction: transactionId,
-          eventTransactionId: transactionId,
-          iteration: 0,
-          resolved: false
-        },
-        event
-      }),
-      senderTransactionStore.updateTransaction(transactionId, {
-        ...relatedTransaction,
-        redisMetadata: {
-          ...relatedTransaction.redisMetadata,
-          mainTransaction: true,
-          relatedTransaction: null,
-          published: true
-        }
-      } as Transaction<"incomer">)
-    ]);
+    const dispatcherTransaction = await this.#eventsHandler.dispatch({
+      channel: concernedIncomerChannel,
+      store: this.#dispatcherTransactionStore,
+      redisMetadata: {
+        mainTransaction: false,
+        relatedTransaction: transactionId,
+        eventTransactionId: transactionId,
+        iteration: 0,
+        resolved: false
+      },
+      event
+    });
 
-    await this.incomerStore.updateIncomerState(providedUUID);
+    return dispatcherTransaction as Transaction<"dispatcher">;
   }
 
   private async getFilteredConcernedIncomers(eventName: string): Promise<RegisteredIncomer[]> {
     const incomers = await this.incomerStore.getIncomers();
 
-    const concernedIncomers = [...incomers]
+    const concernedIncomers = [...incomers.values()]
       .filter((incomer) => incomer.eventsSubscribe.find((subscribedEvent) => subscribedEvent.name === eventName));
 
     const filteredConcernedIncomers: RegisteredIncomer[] = [];
@@ -937,7 +921,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     }
     else {
       for (const incomer of incomers) {
-        if (incomer.baseUUID === origin) {
+        if (incomer.baseUUID === origin && incomer.baseUUID !== incomer.providedUUID) {
           await relatedTransactionStore.deleteTransaction(transactionId);
 
           throw new Error("Forbidden multiple registration for a same instance");
@@ -952,7 +936,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         aliveSince: now
       });
 
-      providedUUID = await this.incomerStore.setIncomer(incomer);
+      [, providedUUID] = await Promise.all([
+        this.incomerStore.deleteIncomer(incomer.baseUUID),
+        this.incomerStore.setIncomer(incomer)
+      ]);
     }
 
     this.#incomerChannelHandler.set({ uuid: providedUUID });

@@ -18,7 +18,6 @@ import {
 } from "../../../../src/index.js";
 import * as EventsSchemas from "../../../fixtures/foo.js";
 import {
-  Transaction,
   TransactionStore
 } from "../../../../src/class/store/transaction.class.js";
 
@@ -263,7 +262,6 @@ describe("Dispatcher", () => {
     describe("Handling a ping event", () => {
       let incomerName = "foo";
       let uuid = randomUUID();
-      let pongTransaction: Transaction<"incomer">;
       let pingTransactionId: string;
       let incomerTransactionStore: TransactionStore<"incomer">;
       let dispatcherTransactionStore: TransactionStore<"dispatcher">
@@ -291,13 +289,10 @@ describe("Dispatcher", () => {
           }
           else if (formattedMessage.name === "PING" && index === 0) {
             pingTransactionId = formattedMessage.redisMetadata.transactionId;
-            pongTransaction = await incomerTransactionStore.setTransaction({
+            await dispatcherTransactionStore.updateTransaction(pingTransactionId, {
               ...formattedMessage,
               redisMetadata: {
                 ...formattedMessage.redisMetadata,
-                origin: formattedMessage.redisMetadata.to,
-                mainTransaction: false,
-                relatedTransaction: formattedMessage.redisMetadata.transactionId,
                 resolved: true
               },
             });
@@ -363,17 +358,20 @@ describe("Dispatcher", () => {
         await timers.setTimeout(2_000);
 
         expect(mockedPing).toHaveBeenCalled();
-        expect(pongTransaction).toBeDefined();
       });
 
       test("It should have update the update the incomer last activity", async () => {
         await timers.setTimeout(15_000);
 
-        const pongTransactionToRetrieve = await incomerTransactionStore.getTransactionById(pongTransaction.redisMetadata.transactionId!);
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
 
-        expect(pongTransactionToRetrieve).toBeNull();
-        expect(pingTransaction).toBeNull();
+        expect(pingTransaction).toEqual({
+          ...pingTransaction,
+          redisMetadata: {
+            ...pingTransaction?.redisMetadata,
+            resolved: true
+          }
+        });
         expect(mockedCheckLastActivity).toHaveBeenCalled();
       });
     });

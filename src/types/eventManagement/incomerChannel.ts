@@ -35,7 +35,6 @@ export type RetryMessage = {
   name: "RETRY";
   data: {
     dispatcherTransactionId: string;
-    incomerTransactionId: string;
   };
   redisMetadata: {
     origin: string;

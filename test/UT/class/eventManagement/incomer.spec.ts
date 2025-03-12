@@ -95,7 +95,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   test("It should register when a Dispatcher is alive", async() => {
     await dispatcher!.initialize();
 
-    await timers.setTimeout(6_000);
+    await timers.setTimeout(3_000);
 
     expect(incomer.dispatcherConnectionState).toBe(true);
     expect(dispatcherIncomer.dispatcherConnectionState).toBe(true);

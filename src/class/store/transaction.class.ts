@@ -25,7 +25,7 @@ const kDefaultTTL = 60_000 * 60 * 24;
 
 type BaseTransaction<
   IsMain extends boolean = true,
-  RelatedTransaction = IsMain extends true ? null : string
+  RelatedTransaction = IsMain extends true ? (string[] | string) | null : string
 > = {
   published?: boolean;
   mainTransaction: IsMain;
@@ -58,20 +58,9 @@ export interface IncomerMainTransaction {
   };
 }
 
-export interface IncomerHandlerTransaction {
-  incomerDistributedEventTransaction: IncomerChannelMessages["IncomerMessages"] & {
-    redisMetadata: HandlerTransaction & IncomerChannelMessages["IncomerMessages"]["redisMetadata"];
-  };
-  incomerPongTransaction: DispatcherPingMessage & {
-    redisMetadata: HandlerTransaction & DispatcherPingMessage["redisMetadata"];
-  };
-}
-
 type IncomerTransaction =
   IncomerMainTransaction["incomerApprovementTransaction"] |
-  IncomerMainTransaction["incomerEventCastTransaction"] |
-  IncomerHandlerTransaction["incomerDistributedEventTransaction"] |
-  IncomerHandlerTransaction["incomerPongTransaction"];
+  IncomerMainTransaction["incomerEventCastTransaction"]
 
 type DispatcherTransaction =
   DispatcherSpreadTransaction["dispatcherApprovementTransaction"] |
@@ -136,7 +125,7 @@ export class TransactionStore<
     return `${this.#key}-${transactionId}`;
   }
 
-  async* transactionLazyFetch(count = 5000) {
+  async* transactionLazyFetch(count = 10_000) {
     let cursor = 0;
 
     do {

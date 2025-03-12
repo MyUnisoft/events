@@ -6,8 +6,7 @@ import { setTimeout} from "node:timers/promises";
 
 // Import Third-Party Dependencies
 import {
-  RedisAdapter,
-  Redis
+  RedisAdapter
 } from "@myunisoft/redis";
 import pino, { Logger } from "pino";
 
@@ -109,7 +108,8 @@ describe("transactionHandler", () => {
       backupIncomerTransactionStore,
       incomerChannelHandler,
       eventsHandler,
-      parentLogger: logger
+      parentLogger: logger,
+      idleTime: kIdleTime
     });
 
     describe("resolveInactiveIncomerTransactions", () => {
@@ -176,13 +176,13 @@ describe("transactionHandler", () => {
             instance: "incomer"
           });
 
-          let spreadedEvent;
+          let resolvedEvent;
 
           before(async() => {
             await incomerStore.setIncomer(publisher, publisher.providedUUID);
             await incomerStore.setIncomer(listener, listener.providedUUID);
 
-            spreadedEvent = await createResolvedTransactions({
+            resolvedEvent = await createResolvedTransactions({
               publisher: {
                 transactionStore: publisherTransactionStore,
                 instance: publisher
@@ -203,14 +203,14 @@ describe("transactionHandler", () => {
             await redis.flushall();
           });
 
-          test("it should backup the handler transaction", async() => {
+          test("it should not backup the spread transaction", async() => {
+            assert.equal(true, true);
             await transactionHandler.resolveInactiveIncomerTransactions(listener);
 
-            const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
-              .get(spreadedEvent.handlerTransaction.redisMetadata.transactionId);
+            const resolvedBackupTransaction = (await backupDispatcherTransactionStore.getTransactions())
+              .get(resolvedEvent.spreadTransaction.redisMetadata.transactionId);
 
-            assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, spreadedEvent.spreadTransaction.redisMetadata.transactionId);
-            assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+            assert.equal(resolvedBackupTransaction, null);
           });
         });
 
@@ -298,14 +298,14 @@ describe("transactionHandler", () => {
             await redis.flushall();
           });
 
-          test("it should backup the handler transaction to the incomerBackupTransactionStore", async() => {
+          test("it should not backup the spread transaction", async() => {
+            assert.equal(true, true);
             await transactionHandler.resolveInactiveIncomerTransactions(listener);
 
-            const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
-              .get(resolvedEvent.handlerTransaction.redisMetadata.transactionId);
+            const resolvedBackupTransaction = (await backupDispatcherTransactionStore.getTransactions())
+              .get(resolvedEvent.spreadTransaction.redisMetadata.transactionId);
 
-            assert.equal(resolvedBackupTransaction!.redisMetadata.relatedTransaction, resolvedEvent.spreadTransaction.redisMetadata.transactionId);
-            assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+            assert.equal(resolvedBackupTransaction, null);
           });
         });
       });
@@ -357,13 +357,13 @@ describe("transactionHandler", () => {
             instance: "incomer"
           });
 
-          let resolvedEvent;
+          let unResolved;
 
           before(async() => {
             await incomerStore.setIncomer(publisher, publisher.providedUUID);
             await incomerStore.setIncomer(listener, listener.providedUUID);
 
-            resolvedEvent = await createUnresolvedTransactions({
+            unResolved = await createUnresolvedTransactions({
               publisher: {
                 transactionStore: publisherTransactionStore,
                 instance: publisher
@@ -384,14 +384,14 @@ describe("transactionHandler", () => {
             await redis.flushall();
           });
 
-          test("it should backup the handler transaction to the incomerBackupTransactionStore", async() => {
+          test("it should backup the spread transaction", async() => {
             await transactionHandler.resolveInactiveIncomerTransactions(listener);
 
-            const resolvedBackupTransaction = (await backupIncomerTransactionStore.getTransactions())
-              .get(resolvedEvent.spreadTransaction.redisMetadata.transactionId);
+            const unResolvedBackupTransaction = (await backupDispatcherTransactionStore.getTransactions())
+              .get(unResolved.spreadTransaction.redisMetadata.transactionId);
 
-            assert.equal((resolvedBackupTransaction!.redisMetadata as any).eventTransactionId, resolvedEvent.spreadTransaction.redisMetadata.eventTransactionId);
-            assert.equal(resolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
+            assert.equal((unResolvedBackupTransaction!.redisMetadata as any).eventTransactionId, unResolved.spreadTransaction.redisMetadata.eventTransactionId);
+            assert.equal(unResolvedBackupTransaction!.redisMetadata.incomerName, listener.name);
           });
         });
 
