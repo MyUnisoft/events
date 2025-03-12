@@ -119,7 +119,7 @@ export class TransactionStore<
     return `${this.#key}-${transactionId}`;
   }
 
-  async* transactionLazyFetch(count = 5000) {
+  async* transactionLazyFetch(count = 10_000) {
     let cursor = 0;
 
     do {
