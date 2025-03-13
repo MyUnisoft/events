@@ -365,13 +365,7 @@ describe("Dispatcher", () => {
 
         const pingTransaction = await dispatcherTransactionStore.getTransactionById(pingTransactionId);
 
-        expect(pingTransaction).toEqual({
-          ...pingTransaction,
-          redisMetadata: {
-            ...pingTransaction?.redisMetadata,
-            resolved: true
-          }
-        });
+        expect(pingTransaction).toEqual(null);
         expect(mockedCheckLastActivity).toHaveBeenCalled();
       });
     });

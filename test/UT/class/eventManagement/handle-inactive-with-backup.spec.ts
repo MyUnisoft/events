@@ -168,6 +168,11 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           // Do nothing
         });
 
+      jest.spyOn(concernedIncomer as any, "handlePing")
+        .mockImplementation(async(opts: any) => {
+          // Do nothing
+        });
+
       secondConcernedIncomer = new Incomer({
         redis,
         subscriber,
