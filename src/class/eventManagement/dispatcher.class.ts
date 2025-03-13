@@ -778,7 +778,12 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       }
     } as Transaction<"incomer">);
 
-    await this.incomerStore.updateIncomerState(origin);
+    try {
+      await this.incomerStore.updateIncomerState(origin);
+    }
+    catch {
+      // Do Nothing
+    }
 
     this.#logger.info(this.#standardLogFn(
       Object.assign({}, logData, {
