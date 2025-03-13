@@ -169,9 +169,11 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
       options = await this.handleBackupIncomerTransactions(options);
 
+      await this.resolvePingTransactions(options.dispatcherTransactions);
+
       await this.resolveMainTransactions({
         ...options,
-        dispatcherTransactions: new Map([...dispatcherTransactions, ...mappedBackupDispatcherTransactions])
+        dispatcherTransactions: new Map([...options.dispatcherTransactions, ...mappedBackupDispatcherTransactions])
       });
     }
     finally {
@@ -472,6 +474,21 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       }, backupTransactionId),
       this.backupIncomerTransactionStore.deleteTransaction(backupTransactionId)
     ]);
+  }
+
+  private async resolvePingTransactions(dispatcherTransactions: Transactions<"dispatcher">) {
+    for (const dispatcherTransaction of dispatcherTransactions.values()) {
+      if (dispatcherTransaction.name === "PING" && dispatcherTransaction.redisMetadata.resolved) {
+        try {
+          await this.incomerStore.updateIncomerState(dispatcherTransaction.redisMetadata.to);
+        }
+        catch {
+          // Do Nothing
+        }
+
+        await this.dispatcherTransactionStore.deleteTransaction(dispatcherTransaction.redisMetadata.transactionId);
+      }
+    }
   }
 
   private async resolveMainTransactions(options: ResolveTransactions) {
