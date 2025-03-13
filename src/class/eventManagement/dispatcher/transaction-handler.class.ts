@@ -43,7 +43,6 @@ interface DistributeMainTransactionOptions {
 interface ResolveTransactions {
   incomers: Set<RegisteredIncomer>;
   backupIncomerTransactions: Transactions<"incomer">;
-  dispatcherTransactions: Transactions<"dispatcher">;
 }
 
 interface FindISOIncomerOptions {
@@ -151,10 +150,9 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         this.backupDispatcherTransactionStore.getTransactions()
       ]);
 
-      let options = {
+      let sharedOptions = {
         incomers,
-        backupIncomerTransactions,
-        dispatcherTransactions
+        backupIncomerTransactions
       };
 
       const mappedBackupDispatcherTransactions = new Map([...backupDispatcherTransactions.entries()]
@@ -167,13 +165,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
           return [id, formatted];
         }));
 
-      options = await this.handleBackupIncomerTransactions(options);
+      sharedOptions = await this.handleBackupIncomerTransactions(sharedOptions);
 
-      await this.resolvePingTransactions(options.dispatcherTransactions);
+      await this.resolvePingTransactions(dispatcherTransactions);
 
       await this.resolveMainTransactions({
-        ...options,
-        dispatcherTransactions: new Map([...options.dispatcherTransactions, ...mappedBackupDispatcherTransactions])
+        ...sharedOptions,
+        dispatcherTransactions: new Map([...dispatcherTransactions, ...mappedBackupDispatcherTransactions])
       });
     }
     finally {
@@ -416,7 +414,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   }
 
   private async handleBackupIncomerTransactions(options: ResolveTransactions): Promise<ResolveTransactions> {
-    const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
+    const { incomers, backupIncomerTransactions } = options;
 
     const toResolve = [];
 
@@ -439,7 +437,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
     await Promise.all(toResolve);
 
-    return { incomers, backupIncomerTransactions, dispatcherTransactions };
+    return { incomers, backupIncomerTransactions };
   }
 
   private findISOIncomer(options: FindISOIncomerOptions) : RegisteredIncomer | undefined {
@@ -491,7 +489,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     }
   }
 
-  private async resolveMainTransactions(options: ResolveTransactions) {
+  private async resolveMainTransactions(options: ResolveTransactions & { dispatcherTransactions: Transactions<"dispatcher">}) {
     const { incomers, backupIncomerTransactions, dispatcherTransactions } = options;
 
     const toResolve = [];
