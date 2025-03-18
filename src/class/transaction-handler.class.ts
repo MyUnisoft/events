@@ -14,14 +14,14 @@ import {
   TransactionStore,
   type Transaction,
   type Transactions
-} from "../../store/transaction.class.js";
-import { IncomerStore } from "../../store/incomer.class.js";
+} from "./store/transaction.class.js";
+import { IncomerStore } from "./store/incomer.class.js";
 import { IncomerChannelHandler } from "./incomer-channel.class.js";
 import {
   type StandardLog,
   type StandardLogOpts,
   defaultStandardLog
-} from "../../../utils/index.js";
+} from "../utils/index.js";
 import { EventsHandler } from "./events.class.js";
 import type {
   DispatcherApprovementMessage,
@@ -30,7 +30,7 @@ import type {
   GenericEvent,
   IncomerChannelMessages,
   RegisteredIncomer
-} from "../../../types/index.js";
+} from "../types/index.js";
 
 
 interface DistributeMainTransactionOptions {

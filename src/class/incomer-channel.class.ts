@@ -11,7 +11,7 @@ import type {
   DistributedEventMessage,
   GenericEvent,
   IncomerChannelMessages
-} from "../../../types/index.js";
+} from "../types/index.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
   redis: Types.DatabaseConnection<RedisAdapter>;
