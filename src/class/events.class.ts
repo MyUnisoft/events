@@ -7,7 +7,7 @@ import Ajv, { ValidateFunction } from "ajv";
 import type { Logger } from "pino";
 
 // Import Internal Dependencies
-import { Transaction, TransactionStore } from "../../store/transaction.class.js";
+import { Transaction, TransactionStore } from "./store/transaction.class.js";
 import type {
   DispatcherApprovementMessage,
   EventMessage,
@@ -17,15 +17,15 @@ import type {
   CloseMessage,
   RetryMessage,
   TransactionMetadata
-} from "../../../types/index.js";
-import * as eventsSchema from "../../../schema/eventManagement/index.js";
+} from "../types/index.js";
+import * as eventsSchema from "../schema/eventManagement/index.js";
 import {
   NestedValidationFunctions,
   type StandardLog,
   type StandardLogOpts,
   concatErrors,
   defaultStandardLog
-} from "../../../utils/index.js";
+} from "../utils/index.js";
 
 // CONSTANTS
 const ajv = new Ajv();

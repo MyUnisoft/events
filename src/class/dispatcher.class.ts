@@ -17,7 +17,7 @@ import {
   type PartialTransaction,
   type Transaction,
   TransactionStore
-} from "../store/transaction.class.js";
+} from "./store/transaction.class.js";
 import type {
   IncomerChannelMessages,
   DispatcherApprovementMessage,
@@ -30,19 +30,19 @@ import type {
   DistributedEventMessage,
   TransactionMetadata,
   RegisteredIncomer
-} from "../../types/index.js";
+} from "../types/index.js";
 import {
   defaultStandardLog,
   handleLoggerMode, type StandardLog
-} from "../../utils/index.js";
-import { IncomerStore } from "../store/incomer.class.js";
-import { TransactionHandler } from "./dispatcher/transaction-handler.class.js";
-import { IncomerChannelHandler } from "./dispatcher/incomer-channel.class.js";
+} from "../utils/index.js";
+import { IncomerStore } from "./store/incomer.class.js";
+import { TransactionHandler } from "./transaction-handler.class.js";
+import { IncomerChannelHandler } from "./incomer-channel.class.js";
 import {
   EventsHandler,
   type customValidationCbFn,
   eventsValidationFn as EventsValidationFn
-} from "./dispatcher/events.class.js";
+} from "./events.class.js";
 
 // CONSTANTS
 const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :

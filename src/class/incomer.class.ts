@@ -21,7 +21,7 @@ import {
   type PartialTransaction,
   type Transaction,
   TransactionStore
-} from "../store/transaction.class.js";
+} from "./store/transaction.class.js";
 import type {
   EventSubscribe,
   IncomerChannelMessages,
@@ -34,17 +34,17 @@ import type {
   IncomerRegistrationMessage,
   RetryMessage,
   RegisteredIncomer
-} from "../../types/index.js";
+} from "../types/index.js";
 import {
   type NestedValidationFunctions,
   type StandardLog,
   defaultStandardLog,
   handleLoggerMode
-} from "../../utils/index.js";
+} from "../utils/index.js";
 import { Externals } from "./externals.class.js";
 import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class.js";
-import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class.js";
-import { IncomerStore } from "../store/incomer.class.js";
+import { customValidationCbFn, eventsValidationFn } from "./events.class.js";
+import { IncomerStore } from "./store/incomer.class.js";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
