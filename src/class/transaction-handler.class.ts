@@ -233,7 +233,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     const incomerRegistrationTransactions = new Map(
       [...incomerTransactions].flatMap(([, incomerTransaction]) => {
         if (incomerTransaction.name === "REGISTER") {
-          return [[incomerTransaction.redisMetadata.relatedTransaction, incomerTransaction]];
+          return [[incomerTransaction.redisMetadata.relatedTransaction[0], incomerTransaction]];
         }
 
         return [];
@@ -244,13 +244,13 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
       Promise.all(
         [...incomerRegistrationTransactions]
           .map(([relatedApprovementTransactionId, incomerTransaction]) => {
-            if (!dispatcherApprovementTransactions.has(relatedApprovementTransactionId as string)) {
+            if (!dispatcherApprovementTransactions.has(relatedApprovementTransactionId)) {
               return inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId);
             }
 
             return Promise.all([
               inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId),
-              this.dispatcherTransactionStore.deleteTransaction(relatedApprovementTransactionId as string)
+              this.dispatcherTransactionStore.deleteTransaction(relatedApprovementTransactionId)
             ]);
           })
       )

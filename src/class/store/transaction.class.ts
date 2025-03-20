@@ -24,7 +24,7 @@ const kDefaultTTL = 60_000 * 60 * 24;
 
 type BaseTransaction<
   IsMain extends boolean = true,
-  RelatedTransaction = IsMain extends true ? (string[] | string) | null : string
+  RelatedTransaction = IsMain extends true ? string[] | null : string
 > = {
   published?: boolean;
   mainTransaction: IsMain;
