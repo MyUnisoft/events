@@ -13,11 +13,11 @@ import pino, { Logger } from "pino";
 // Import Internal Dependencies
 import {
   TransactionHandler
-} from "../../../../../src/class/eventManagement/dispatcher/transaction-handler.class";
+} from "../../../../../src/class/transaction-handler.class";
 import { TransactionStore } from "../../../../../src/class/store/transaction.class";
-import { IncomerChannelHandler } from "../../../../../src/class/eventManagement/dispatcher/incomer-channel.class";
+import { IncomerChannelHandler } from "../../../../../src/class/incomer-channel.class";
 import { IncomerStore } from "../../../../../src/class/store/incomer.class";
-import { EventsHandler } from "../../../../../src/class/eventManagement/dispatcher/events.class";
+import { EventsHandler } from "../../../../../src/class/events.class";
 import { EventOptions, GenericEvent } from "../../../../../src/types";
 import { createResolvedTransactions, createUnresolvedTransactions } from "../../../../utils/transactions";
 
