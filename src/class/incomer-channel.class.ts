@@ -4,7 +4,6 @@ import {
   RedisAdapter,
   Types
 } from "@myunisoft/redis";
-import type { Logger } from "pino";
 
 // Import Internal Dependencies
 import type {
@@ -16,7 +15,6 @@ import type {
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
   redis: Types.DatabaseConnection<RedisAdapter>;
   subscriber: Types.DatabaseConnection<RedisAdapter>;
-  logger: Logger;
   channels?: Map<string, Channel<DistributedEventMessage<T>>>;
 }
 

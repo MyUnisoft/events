@@ -179,8 +179,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.#incomerChannelHandler = new IncomerChannelHandler({
       redis: this.#redis,
-      subscriber: this.subscriber,
-      logger: this.#logger
+      subscriber: this.subscriber
     });
 
     this.#dispatcherChannel = new Channel({
