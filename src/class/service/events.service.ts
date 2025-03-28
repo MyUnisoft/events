@@ -26,9 +26,9 @@ export type GetSentEventByIdResponse = Omit<Transaction<"incomer">, "redisMetada
   redisMetadata: {
     published: boolean;
     resolved: boolean;
-    relatedTransactions: string[];
-  }
-} | null;
+  },
+  relatedTransactions: Transaction<"dispatcher">[];
+};
 
 export type GetIncomerSendEventsResponse = GetSentEventByIdResponse[];
 
@@ -62,76 +62,29 @@ export class EventsService {
       instance: "incomer"
     });
 
-    let mainTransaction = await incomerTransactionStore.getTransactionById(eventId);
+    const mainTransaction = await incomerTransactionStore.getTransactionById(eventId) ??
+      await this.backupIncomerTransactionStore.getTransactionById(eventId);
 
     if (mainTransaction === null) {
-      mainTransaction = await this.backupIncomerTransactionStore.getTransactionById(eventId);
+      return null;
     }
 
-    return mainTransaction === null ? null : {
+    const spreadTransactions: Transaction<"dispatcher">[] = [];
+
+    for (const spreadTransactionId of mainTransaction.redisMetadata.relatedTransaction) {
+      const spreadTransaction = await this.dispatcherTransactionStore.getTransactionById(spreadTransactionId);
+
+      spreadTransactions.push(spreadTransaction);
+    }
+
+    return {
       ...mainTransaction,
       redisMetadata: {
         published: mainTransaction.redisMetadata.published,
-        resolved: mainTransaction.redisMetadata.resolved,
-        relatedTransactions: mainTransaction.redisMetadata.relatedTransaction
-      }
+        resolved: mainTransaction.redisMetadata.resolved
+      },
+      relatedTransactions: spreadTransactions
     };
-  }
-
-  async getIncomerSentEvents(opts: SharedOptions): Promise<GetIncomerSendEventsResponse> {
-    const { incomerId } = opts;
-
-    const incomerTransactionStore = new TransactionStore({
-      adapter: this.#redis,
-      prefix: incomerId,
-      instance: "incomer"
-    });
-
-    const mainTransactions = await incomerTransactionStore.getTransactions();
-
-    return [...mainTransactions.values()]
-      .map((mainTransaction) => {
-        if (mainTransaction) {
-          return {
-            ...mainTransaction,
-            redisMetadata: {
-              published: mainTransaction.redisMetadata.published,
-              resolved: mainTransaction.redisMetadata.resolved,
-              relatedTransactions: mainTransaction.redisMetadata.relatedTransaction
-            }
-          };
-        }
-
-        return null;
-      });
-  }
-
-  async getIncomerSentEventsByName(opts: GetEventsByName): Promise<GetIncomerSendEventsResponse> {
-    const { incomerId, name } = opts;
-
-    const incomerTransactionStore = new TransactionStore({
-      adapter: this.#redis,
-      prefix: incomerId,
-      instance: "incomer"
-    });
-
-    const mainTransactions = await incomerTransactionStore.getTransactions();
-
-    return [...mainTransactions.values()]
-      .flatMap((mainTransaction) => {
-        if (mainTransaction.name === name) {
-          return {
-            ...mainTransaction,
-            redisMetadata: {
-              published: mainTransaction.redisMetadata.published,
-              resolved: mainTransaction.redisMetadata.resolved,
-              relatedTransactions: mainTransaction.redisMetadata.relatedTransaction
-            }
-          };
-        }
-
-        return [];
-      });
   }
 
   async getIncomerReceivedEvents(opts: SharedOptions) {
