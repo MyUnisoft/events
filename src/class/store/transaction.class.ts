@@ -5,8 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   RedisAdapter,
   TimedKVPeer,
-  TimedKVPeerOptions,
-  Types
+  TimedKVPeerOptions
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
@@ -90,20 +89,20 @@ export type Transactions<T extends Instance> = Map<string, Transaction<T>>;
 
 export type TransactionStoreOptions<
   T extends Instance
-> = (Omit<TimedKVPeerOptions<Transactions<T>>, "prefix" | "adapter"> & (
+> = (Omit<TimedKVPeerOptions, "prefix" | "adapter"> & (
   T extends "incomer" ? { prefix: string; } : { prefix?: string; }) & {
-    adapter: Types.DatabaseConnection<RedisAdapter>;
+    adapter: RedisAdapter<Transaction<T>>;
     instance: T;
 });
 
 export class TransactionStore<
   T extends Instance = Instance
 > extends TimedKVPeer<
-  Transaction<T>,
-  null,
-  RedisAdapter
+  Transaction<T>
 > {
   #key: string;
+
+  declare adapter: RedisAdapter<Transaction<T>>;
 
   constructor(
     options: TransactionStoreOptions<T>
@@ -111,10 +110,10 @@ export class TransactionStore<
     super({
       ...options,
       ttl: options.ttl ?? kDefaultTTL,
-      mapValue: undefined,
       prefix: undefined
     });
 
+    this.adapter = options.adapter as RedisAdapter<Transaction<T>>;
 
     this.#key = `${options.prefix ? `${options.prefix}-` : ""}${options.instance}-transaction`;
   }

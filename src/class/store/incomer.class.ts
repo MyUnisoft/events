@@ -5,25 +5,24 @@ import { randomUUID } from "node:crypto";
 import {
   KVOptions,
   KVPeer,
-  RedisAdapter,
-  Types
+  RedisAdapter
 } from "@myunisoft/redis";
 
 // Import Internal Dependencies
 import type { RegisteredIncomer } from "../../types/index.js";
 
-export type IncomerStoreOptions = Partial<KVOptions<RegisteredIncomer>> & {
-  adapter: Types.DatabaseConnection<RedisAdapter>;
+export type IncomerStoreOptions = Partial<KVOptions> & {
+  adapter: RedisAdapter<RegisteredIncomer>;
   idleTime: number;
 }
 
 export class IncomerStore extends KVPeer<
-  RegisteredIncomer,
-  null,
-  RedisAdapter
+  RegisteredIncomer
 > {
   #key = "incomer";
   #idleTime: number;
+
+  declare adapter: RedisAdapter<RegisteredIncomer>;
 
   constructor(
     options: IncomerStoreOptions
@@ -33,6 +32,8 @@ export class IncomerStore extends KVPeer<
       prefix: undefined,
       type: "object"
     });
+
+    this.adapter = options.adapter;
 
     this.#idleTime = options.idleTime;
   }

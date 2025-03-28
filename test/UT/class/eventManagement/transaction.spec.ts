@@ -29,7 +29,7 @@ afterAll(async() => {
 describe("Transaction options", () => {
   beforeAll(async() => {
     transactionStore = new TransactionStore<"dispatcher">({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
   });

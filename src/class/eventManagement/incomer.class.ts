@@ -7,8 +7,7 @@ import timers from "node:timers/promises";
 // Import Third-party Dependencies
 import {
   Channel,
-  RedisAdapter,
-  Types
+  RedisAdapter
 } from "@myunisoft/redis";
 import { pino, type Logger } from "pino";
 import { match } from "ts-pattern";
@@ -32,7 +31,8 @@ import type {
   EventMessage,
   GenericEvent,
   IncomerRegistrationMessage,
-  RetryMessage
+  RetryMessage,
+  RegisteredIncomer
 } from "../../types/index.js";
 import {
   type NestedValidationFunctions,
@@ -98,8 +98,8 @@ function isUnresolvedEvent(value: EventCallbackResponse): value is EventCallback
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   /* Service name */
   name: string;
-  redis: Types.DatabaseConnection<RedisAdapter>;
-  subscriber: Types.DatabaseConnection<RedisAdapter>;
+  redis: RedisAdapter;
+  subscriber: RedisAdapter;
   logger?: Logger;
   standardLog?: StandardLog<T>;
   eventsCast: string[];
@@ -131,14 +131,14 @@ export class Incomer <
   private providedUUID: string;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
   private incomerChannelName: string;
-  private subscriber: Types.DatabaseConnection<RedisAdapter>;
+  private subscriber: RedisAdapter;
   private defaultIncomerTransactionStore: TransactionStore<"incomer">;
   private incomerStore: IncomerStore;
   private newTransactionStore: TransactionStore<"incomer">;
   private logger: Logger;
   private dispatcherChannelName: string;
 
-  #redis: Types.DatabaseConnection<RedisAdapter>;
+  #redis: RedisAdapter;
 
   #isDispatcherInstance: boolean;
   #eventsCast: string[];
@@ -193,18 +193,18 @@ export class Incomer <
     });
 
     this.defaultIncomerTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: this.baseUUID,
       instance: "incomer"
     });
 
     this.incomerStore = new IncomerStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<RegisteredIncomer>,
       idleTime: 60_000
     });
 
     this.#dispatcherTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       instance: "dispatcher"
     });
 
@@ -814,7 +814,7 @@ export class Incomer <
     const oldTransactions = await this.defaultIncomerTransactionStore.getTransactions();
 
     this.newTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: this.providedUUID,
       instance: "incomer"
     });

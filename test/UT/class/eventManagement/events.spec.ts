@@ -99,7 +99,7 @@ async function handleRegistration(redis: RedisAdapter, instance: Incomer, messag
   );
 
   const instanceTransactionStore = new TransactionStore({
-    adapter: redis,
+    adapter: redis as RedisAdapter<Transaction<"incomer">>,
     prefix: data.uuid,
     instance: "incomer"
   });
@@ -161,7 +161,7 @@ describe("event", () => {
     };
 
     const dispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
 
@@ -214,7 +214,7 @@ describe("event", () => {
             }));
 
             publisherTransactionStore = new TransactionStore({
-              adapter: redis,
+              adapter: redis as RedisAdapter<Transaction<"incomer">>,
               prefix: data.uuid,
               instance: "incomer"
             });
@@ -235,7 +235,7 @@ describe("event", () => {
             }));
 
             unConcernedTransactionStore = new TransactionStore({
-              adapter: redis,
+              adapter: redis as RedisAdapter<Transaction<"incomer">>,
               prefix: data.uuid,
               instance: "incomer"
             });
@@ -295,7 +295,7 @@ describe("event", () => {
     };
 
     const dispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
 
@@ -461,7 +461,7 @@ describe("event", () => {
     }
 
     const dispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
 
