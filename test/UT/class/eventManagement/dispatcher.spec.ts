@@ -18,6 +18,7 @@ import {
 } from "../../../../src/index.js";
 import * as EventsSchemas from "../../../fixtures/foo.js";
 import {
+  Transaction,
   TransactionStore
 } from "../../../../src/class/store/transaction.class.js";
 
@@ -182,7 +183,7 @@ describe("Dispatcher", () => {
           });
 
           incomerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: uuid,
             instance: "incomer"
           });
@@ -282,7 +283,7 @@ describe("Dispatcher", () => {
             await subscriber.subscribe(providedUUID);
 
             incomerTransactionStore = new TransactionStore({
-              adapter: redis,
+              adapter: redis as RedisAdapter<Transaction<"incomer">>,
               prefix: providedUUID,
               instance: "incomer"
             });
@@ -307,7 +308,7 @@ describe("Dispatcher", () => {
         });
 
         dispatcherTransactionStore = new TransactionStore({
-          adapter: redis,
+          adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
           instance: "dispatcher"
         });
 
@@ -324,7 +325,7 @@ describe("Dispatcher", () => {
         };
 
         incomerTransactionStore = new TransactionStore({
-          adapter: redis,
+          adapter: redis as RedisAdapter<Transaction<"incomer">>,
           prefix: uuid,
           instance: "incomer"
         });
@@ -553,7 +554,7 @@ describe("Dispatcher", () => {
           }
 
           const incomerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: uuid,
             instance: "incomer"
           });
@@ -678,7 +679,7 @@ describe("Dispatcher", () => {
                   firstIncomerProvidedUUID = uuid;
 
                   firstIncomerTransactionStore = new TransactionStore({
-                    adapter: redis,
+                    adapter: redis as RedisAdapter<Transaction<"incomer">>,
                     prefix: uuid,
                     instance: "incomer"
                   });
@@ -721,7 +722,7 @@ describe("Dispatcher", () => {
                 else {
                   secondIncomerProvidedUUID = uuid;
                   secondIncomerTransactionStore = new TransactionStore({
-                    adapter: redis,
+                    adapter: redis as RedisAdapter<Transaction<"incomer">>,
                     prefix: secondIncomerProvidedUUID,
                     instance: "incomer"
                   });
@@ -779,13 +780,13 @@ describe("Dispatcher", () => {
           };
 
           firstIncomerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: firstUuid,
             instance: "incomer"
           });
 
           secondIncomerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: secondUuid,
             instance: "incomer"
           });
