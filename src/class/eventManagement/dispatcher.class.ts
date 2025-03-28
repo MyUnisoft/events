@@ -7,8 +7,7 @@ import timers from "node:timers/promises";
 // Import Third-party Dependencies
 import {
   Channel,
-  RedisAdapter,
-  Types
+  RedisAdapter
 } from "@myunisoft/redis";
 import { pino, type Logger } from "pino";
 
@@ -64,8 +63,8 @@ export const PING_INTERVAL = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHE
   Number(process.env.MYUNISOFT_DISPATCHER_PING_INTERVAL);
 
 export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
-  redis: Types.DatabaseConnection<RedisAdapter>;
-  subscriber: Types.DatabaseConnection<RedisAdapter>;
+  redis: RedisAdapter;
+  subscriber: RedisAdapter;
   eventsValidation?: {
     eventsValidationFn?: EventsValidationFn<T>;
     customValidationCbFn?: customValidationCbFn<T>;
@@ -92,9 +91,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   readonly privateUUID = randomUUID();
 
   private incomerStore: IncomerStore;
-  private subscriber: Types.DatabaseConnection<RedisAdapter>;
+  private subscriber: RedisAdapter;
 
-  #redis: Types.DatabaseConnection<RedisAdapter>;
+  #redis: RedisAdapter;
 
   #selfProvidedUUID: string;
   #instanceName: string | undefined;
@@ -155,7 +154,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.incomerStore = new IncomerStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<RegisteredIncomer>,
       idleTime: this.#idleTime
     });
 
@@ -167,13 +166,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.#backupDispatcherTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: kBackupTransactionStoreName,
       instance: "dispatcher"
     });
 
     this.#dispatcherTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
 
@@ -189,7 +188,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.#backupIncomerTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: kBackupTransactionStoreName,
       instance: "incomer"
     });
@@ -535,7 +534,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     let index = 0;
     for (const inactive of inactiveIncomers) {
       const transactionStore = new TransactionStore({
-        adapter: this.#redis,
+        adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
         prefix: inactive.providedUUID,
         instance: "incomer"
       });
@@ -730,7 +729,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     };
 
     const senderTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: origin,
       instance: "incomer"
     });
@@ -892,7 +891,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const { origin, transactionId } = redisMetadata;
 
     const relatedTransactionStore = new TransactionStore<"incomer">({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: origin,
       instance: "incomer"
     });

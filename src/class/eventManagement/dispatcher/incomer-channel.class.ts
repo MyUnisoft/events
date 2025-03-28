@@ -1,8 +1,7 @@
 // Import Third-party Dependencies
 import {
   Channel,
-  RedisAdapter,
-  Types
+  RedisAdapter
 } from "@myunisoft/redis";
 import type { Logger } from "pino";
 
@@ -14,8 +13,8 @@ import type {
 } from "../../../types/index.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
-  redis: Types.DatabaseConnection<RedisAdapter>;
-  subscriber: Types.DatabaseConnection<RedisAdapter>;
+  redis: RedisAdapter;
+  subscriber: RedisAdapter;
   logger: Logger;
   channels?: Map<string, Channel<DistributedEventMessage<T>>>;
 }
@@ -32,8 +31,8 @@ export type ChannelMessages<T extends GenericEvent> = Channel<
 export class IncomerChannelHandler<
   T extends GenericEvent = GenericEvent
 > {
-  #redis: Types.DatabaseConnection<RedisAdapter>;
-  #subscriber: Types.DatabaseConnection<RedisAdapter>;
+  #redis: RedisAdapter;
+  #subscriber: RedisAdapter;
 
   public channels: Map<string, ChannelMessages<T>> = new Map();
 

@@ -3,8 +3,7 @@
 
 // Import Third-party Dependencies
 import { Channel,
-  RedisAdapter,
-  Types
+  RedisAdapter
 } from "@myunisoft/redis";
 import { Mutex } from "@openally/mutex";
 import type { Logger } from "pino";
@@ -70,7 +69,7 @@ export interface DispatchEventOptions<T extends GenericEvent> {
 }
 
 export type TransactionHandlerOptions<T extends GenericEvent = GenericEvent> = {
-  redis: Types.DatabaseConnection<RedisAdapter>;
+  redis: RedisAdapter;
   eventsHandler: EventsHandler<T>;
   dispatcherTransactionStore: TransactionStore<"dispatcher">;
   backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -117,7 +116,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
   public backupIncomerTransactionStore: TransactionStore<"incomer">;
 
   #idleTime: number;
-  #redis: Types.DatabaseConnection<RedisAdapter>;
+  #redis: RedisAdapter;
 
   #incomerChannelHandler: IncomerChannelHandler<T>;
   #eventsHandler: EventsHandler<T>;
@@ -183,7 +182,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     inactiveIncomer: RegisteredIncomer
   ) {
     const inactiveIncomerTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: inactiveIncomer.providedUUID,
       instance: "incomer"
     });
@@ -392,7 +391,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     const { providedUUID } = isoPublisherIncomer;
 
     const concernedIncomerStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: providedUUID,
       instance: "incomer"
     });
@@ -457,7 +456,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     backupTransactionId: string
   ): Promise<void> {
     const concernedIncomerStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: isoPublisher.providedUUID,
       instance: "incomer"
     });
@@ -497,7 +496,7 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
 
     for (const incomer of incomers) {
       const incomerStore = new TransactionStore({
-        adapter: this.#redis,
+        adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
         prefix: incomer.providedUUID,
         instance: "incomer"
       });
