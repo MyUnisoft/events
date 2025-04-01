@@ -43,6 +43,7 @@ import {
   type customValidationCbFn,
   eventsValidationFn as EventsValidationFn
 } from "./events.class.js";
+import { EventsService } from "./service/events.service.js";
 
 // CONSTANTS
 const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
@@ -89,6 +90,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   readonly type = "dispatcher";
   readonly dispatcherChannelName: string;
   readonly privateUUID = randomUUID();
+
+  eventsService: EventsService;
 
   private incomerStore: IncomerStore;
   private subscriber: RedisAdapter;
@@ -207,6 +210,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       ...sharedOptions,
       idleTime: this.#idleTime,
       eventsHandler: this.#eventsHandler
+    });
+
+    this.eventsService = new EventsService({
+      redis: this.#redis,
+      incomerStore: this.incomerStore,
+      dispatcherTransactionStore: this.#dispatcherTransactionStore,
+      backupDispatcherTransactionStore: this.#backupDispatcherTransactionStore,
+      backupIncomerTransactionStore: this.#backupIncomerTransactionStore
     });
 
     this.#eventsHandler
