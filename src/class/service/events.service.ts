@@ -1,5 +1,5 @@
 // Import Third-party Dependencies
-import { RedisAdapter, type Types } from "@myunisoft/redis";
+import { RedisAdapter } from "@myunisoft/redis";
 
 // Import Internal Dependencies
 import { IncomerStore } from "../store/incomer.class.js";
@@ -7,7 +7,7 @@ import { Transaction, TransactionStore } from "../store/transaction.class.js";
 import type { Events } from "../../types/index.js";
 
 export interface EventsServiceOptions {
-  redis: Types.DatabaseConnection<RedisAdapter>;
+  redis: RedisAdapter;
   incomerStore: IncomerStore;
   dispatcherTransactionStore: TransactionStore<"dispatcher">;
   backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -37,7 +37,7 @@ export type GetEventsByName = SharedOptions & {
 };
 
 export class EventsService {
-  #redis: Types.DatabaseConnection<RedisAdapter>;
+  #redis: RedisAdapter;
   private incomerStore: IncomerStore;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
   private backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -57,7 +57,7 @@ export class EventsService {
     const { incomerId, eventId } = opts;
 
     const incomerTransactionStore = new TransactionStore({
-      adapter: this.#redis,
+      adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: incomerId,
       instance: "incomer"
     });
