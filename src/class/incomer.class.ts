@@ -157,7 +157,7 @@ export class Incomer <
 
   #checkDispatcherStateLock = new Mutex({ concurrency: 1 });
 
-  #lastPingDate: number;
+  #lastActivity: number;
   #eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
   #customValidationCbFn: ((event: T) => void) | undefined;
 
@@ -226,7 +226,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.#lastPingDate) + Number(this.#maxPingInterval)) < date && !this.#isDispatcherInstance) {
+    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date && !this.#isDispatcherInstance) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -332,8 +332,8 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.#checkDispatcherStateInterval = setInterval(() => {
-        if (!this.#lastPingDate) {
+      this.#checkTransactionsStateInterval = setInterval(() => {
+        if (!this.#lastActivity) {
           return;
         }
 
@@ -405,8 +405,8 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.#checkDispatcherStateInterval = setInterval(() => {
-        if (!this.#lastPingDate) {
+      this.#checkTransactionsStateInterval = setInterval(() => {
+        if (!this.#lastActivity) {
           return;
         }
 
@@ -616,6 +616,9 @@ export class Incomer <
       return;
     }
 
+    this.#lastActivity = Date.now();
+    this.dispatcherConnectionState = true;
+
     try {
       if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
         await this.handleDispatcherMessages(channel, formattedMessage);
@@ -687,9 +690,6 @@ export class Incomer <
   private async handlePing(channel: string, message: DispatcherPingMessage) {
     const { redisMetadata } = message;
     const { transactionId } = redisMetadata;
-
-    this.#lastPingDate = Date.now();
-    this.dispatcherConnectionState = true;
 
     const logData = {
       channel,
@@ -877,7 +877,6 @@ export class Incomer <
 
     await Promise.all(transactionToUpdate);
 
-    this.#lastPingDate = Date.now();
     this.emit("registered");
   }
 }
