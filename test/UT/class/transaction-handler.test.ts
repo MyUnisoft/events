@@ -13,13 +13,13 @@ import pino, { Logger } from "pino";
 // Import Internal Dependencies
 import {
   TransactionHandler
-} from "../../../../../src/class/transaction-handler.class";
-import { TransactionStore } from "../../../../../src/class/store/transaction.class";
-import { IncomerChannelHandler } from "../../../../../src/class/incomer-channel.class";
-import { IncomerStore } from "../../../../../src/class/store/incomer.class";
-import { EventsHandler } from "../../../../../src/class/events.class";
-import { EventOptions, GenericEvent } from "../../../../../src/types";
-import { createResolvedTransactions, createUnresolvedTransactions } from "../../../../utils/transactions";
+} from "../../../src/class/transaction-handler.class";
+import { Transaction, TransactionStore } from "../../../src/class/store/transaction.class";
+import { IncomerChannelHandler } from "../../../src/class/incomer-channel.class";
+import { IncomerStore } from "../../../src/class/store/incomer.class";
+import { EventsHandler } from "../../../src/class/events.class";
+import { EventOptions, GenericEvent, RegisteredIncomer } from "../../../src/types";
+import { createResolvedTransactions, createUnresolvedTransactions } from "../../utils/transactions";
 
 // CONSTANTS
 const kDispatcher = "dispatcher";
@@ -66,31 +66,30 @@ describe("transactionHandler", () => {
     });
 
     const incomerStore: IncomerStore = new IncomerStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<RegisteredIncomer>,
       idleTime: kIdleTime
     });
 
     const dispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
 
     const backupDispatcherTransactionStore: TransactionStore<"dispatcher"> = new TransactionStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"dispatcher">>,
       prefix: kBackupTransactionStoreName,
       instance: "dispatcher"
     });
 
     const backupIncomerTransactionStore: TransactionStore<"incomer"> = new TransactionStore({
-      adapter: redis,
+      adapter: redis as RedisAdapter<Transaction<"incomer">>,
       prefix: kBackupTransactionStoreName,
       instance: "incomer"
     });
 
     const incomerChannelHandler: IncomerChannelHandler = new IncomerChannelHandler({
-      redis,
-      subscriber,
-      logger
+      redis: redis as RedisAdapter<Transaction<"incomer">>,
+      subscriber
     });
 
     const eventsHandler: EventsHandler<GenericEvent> = new EventsHandler({
@@ -165,13 +164,13 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: listener.providedUUID,
             instance: "incomer"
           });
@@ -259,13 +258,13 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: listener.providedUUID,
             instance: "incomer"
           });
@@ -346,13 +345,13 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: listener.providedUUID,
             instance: "incomer"
           });
@@ -440,13 +439,13 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: listener.providedUUID,
             instance: "incomer"
           });
@@ -541,19 +540,19 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const backupPublisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: backupPublisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: listener.providedUUID,
             instance: "incomer"
           });
@@ -632,13 +631,13 @@ describe("transactionHandler", () => {
           };
 
           const publisherTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: publisher.providedUUID,
             instance: "incomer"
           });
 
           const listenerTransactionStore = new TransactionStore({
-            adapter: redis,
+            adapter: redis as RedisAdapter<Transaction<"incomer">>,
             prefix: listener.providedUUID,
             instance: "incomer"
           });

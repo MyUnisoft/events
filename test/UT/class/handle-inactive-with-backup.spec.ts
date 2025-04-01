@@ -17,8 +17,8 @@ import {
   type EventOptions,
   type Events,
   validate
-} from "../../../../src/index.js";
-import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class.js";
+} from "../../../src/index.js";
+import { Transaction, TransactionStore } from "../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
 const dispatcherLogger = pino({

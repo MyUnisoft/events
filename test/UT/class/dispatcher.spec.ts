@@ -15,12 +15,12 @@ import {
   Dispatcher,
   type EventOptions,
   type Events
-} from "../../../../src/index.js";
-import * as EventsSchemas from "../../../fixtures/foo.js";
+} from "../../../src/index.js";
+import * as EventsSchemas from "../../fixtures/foo.js";
 import {
   Transaction,
   TransactionStore
-} from "../../../../src/class/store/transaction.class.js";
+} from "../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
 const logger = pino({

@@ -13,7 +13,7 @@ import {
   Dispatcher,
   Incomer,
   type EventOptions
-} from "../../../../src/index.js";
+} from "../../../src/index.js";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");

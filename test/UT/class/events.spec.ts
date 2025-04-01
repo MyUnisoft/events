@@ -18,11 +18,11 @@ import {
   type EventOptions,
   type Events,
   DocumentKind
-} from "../../../../src/index.js";
+} from "../../../src/index.js";
 import {
   Transaction,
   TransactionStore
-} from "../../../../src/class/store/transaction.class.js";
+} from "../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
 const incomerLogger = pino({
