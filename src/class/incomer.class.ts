@@ -49,6 +49,8 @@ import { IncomerStore } from "./store/incomer.class.js";
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
 // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
+const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
+  Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME);
 const kDefaultStartTime = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT)) ? 3_500 :
   Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT);
 const kExternalInit = (process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL ?? "false") === "true";
@@ -97,7 +99,6 @@ function isUnresolvedEvent(value: EventCallbackResponse): value is EventCallback
 }
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
-  /* Service name */
   name: string;
   redis: RedisAdapter;
   subscriber: RedisAdapter;
@@ -111,10 +112,12 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   };
   eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
   dispatcherInactivityOptions?: {
-    /* max interval between received ping before considering dispatcher off */
+    /* interval between two pings */
     maxPingInterval?: number;
-    /* max interval between a new event (based on ping interval) */
+    /* max interval between a new event */
     publishInterval?: number;
+    /* Allowed max time of idle time */
+    idleTime?: number;
   };
   isDispatcherInstance?: boolean;
   externalsInitialized?: boolean;
@@ -158,6 +161,7 @@ export class Incomer <
   #checkDispatcherStateLock = new Mutex({ concurrency: 1 });
 
   #lastActivity: number;
+  #idleTime: number;
   #eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
   #customValidationCbFn: ((event: T) => void) | undefined;
 
@@ -168,6 +172,7 @@ export class Incomer <
 
     Object.assign(this, {}, options);
 
+
     this.#redis = options.redis;
     this.subscriber = options.subscriber;
     this.#eventsCast = options.eventsCast;
@@ -175,6 +180,7 @@ export class Incomer <
     this.logger = options.logger;
     this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
+    this.#idleTime = options.dispatcherInactivityOptions?.idleTime ?? kIdleTime;
     this.#publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
     this.#maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
     if (this.#isDispatcherInstance === undefined) {
@@ -235,7 +241,7 @@ export class Incomer <
     this.dispatcherConnectionState = true;
   }
 
-  private async checkTransactionsState() {
+  private async lazyRetryPublish() {
     if (!this.dispatcherConnectionState) {
       return;
     }
@@ -332,7 +338,7 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.#checkTransactionsStateInterval = setInterval(() => {
+      this.#checkDispatcherStateInterval = setInterval(() => {
         if (!this.#lastActivity) {
           return;
         }
@@ -342,8 +348,12 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.#checkTransactionsStateInterval = setInterval(() => {
-        this.checkTransactionsState()
-          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking transactions state"));
+        if (!this.#lastActivity) {
+          return;
+        }
+
+        this.lazyRetryPublish()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while retry publishing"));
       }, this.#publishInterval).unref();
 
       this.dispatcherConnectionState = true;
@@ -356,7 +366,7 @@ export class Incomer <
     finally {
       this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
         .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
-      this.#publishInterval * 2).unref();
+      this.#idleTime).unref();
     }
   }
 
@@ -405,7 +415,7 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.#checkTransactionsStateInterval = setInterval(() => {
+      this.#checkDispatcherStateInterval = setInterval(() => {
         if (!this.#lastActivity) {
           return;
         }
@@ -415,8 +425,12 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.#checkTransactionsStateInterval = setInterval(() => {
-        this.checkTransactionsState()
-          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking transactions state"));
+        if (!this.#lastActivity) {
+          return;
+        }
+
+        this.lazyRetryPublish()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while retry publishing"));
       }, this.#publishInterval).unref();
 
       this.dispatcherConnectionState = true;
