@@ -20,7 +20,7 @@ const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any,
 const kIdleTime = 4_000;
 
 describe("Init Incomer without Dispatcher alive", () => {
-  const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
+  const eventCallBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
 
   const redis = new RedisAdapter({
     port: Number(process.env.REDIS_PORT),
@@ -47,7 +47,7 @@ describe("Init Incomer without Dispatcher alive", () => {
       name: "foo",
       eventsCast: [],
       eventsSubscribe: [],
-      eventCallback: eventComeBackHandler,
+      eventCallback: eventCallBackHandler,
       dispatcherInactivityOptions: {
         publishInterval: pingInterval,
         maxPingInterval: pingInterval
