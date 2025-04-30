@@ -4,7 +4,11 @@ import { RedisAdapter } from "@myunisoft/redis";
 // Import Internal Dependencies
 import { IncomerStore } from "../store/incomer.class.js";
 import { Transaction, TransactionStore } from "../store/transaction.class.js";
-import type { Events } from "../../types/index.js";
+import type { Events, RegisteredIncomer } from "../../types/index.js";
+import { EventEmitter } from "node:stream";
+
+// CONSTANTS
+export const TAKE_LEAD_BACK_SYM = Symbol("TAKE_LEAD_BACK");
 
 export interface EventsServiceOptions {
   redis: RedisAdapter;
@@ -12,13 +16,14 @@ export interface EventsServiceOptions {
   dispatcherTransactionStore: TransactionStore<"dispatcher">;
   backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
   backupIncomerTransactionStore: TransactionStore<"incomer">;
+  idleTime: number;
 }
 
-interface SharedOptions {
+interface GetEventSharedOptions {
   incomerId: string;
 }
 
-export type GetEventById = SharedOptions & {
+export type GetEventById = GetEventSharedOptions & {
   eventId: string;
 };
 
@@ -32,11 +37,13 @@ export type GetSentEventByIdResponse = Omit<Transaction<"incomer">, "redisMetada
 
 export type GetIncomerSendEventsResponse = GetSentEventByIdResponse[];
 
-export type GetEventsByName = SharedOptions & {
+export type GetEventsByName = GetEventSharedOptions & {
   name: keyof Events;
 };
 
-export class EventsService {
+export class EventsService extends EventEmitter {
+  public idleTime: number;
+
   #redis: RedisAdapter;
   private incomerStore: IncomerStore;
   private dispatcherTransactionStore: TransactionStore<"dispatcher">;
@@ -44,13 +51,28 @@ export class EventsService {
   private backupIncomerTransactionStore: TransactionStore<"incomer">;
 
   constructor(opts: EventsServiceOptions) {
+    super();
+
     Object.assign(this, opts);
 
     this.#redis = opts.redis;
   }
 
   async getIncomers() {
-    return await this.incomerStore.getIncomers();
+    const now = Date.now();
+
+    const incomers = await this.incomerStore.getIncomers();
+
+    return [...incomers.values()].map((incomer) => {
+      return {
+        ...incomer,
+        isAlive: incomer.lastActivity + Number(this.idleTime) >= now
+      };
+    });
+  }
+
+  forceDispatcherTakeLead(incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) {
+    this.emit(TAKE_LEAD_BACK_SYM, incomers, dispatcherToRemove);
   }
 
   async getEventById(opts: GetEventById): Promise<GetSentEventByIdResponse> {
@@ -87,7 +109,7 @@ export class EventsService {
     };
   }
 
-  async getIncomerReceivedEvents(opts: SharedOptions) {
+  async getIncomerReceivedEvents(opts: GetEventSharedOptions) {
     const { incomerId } = opts;
 
     const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();

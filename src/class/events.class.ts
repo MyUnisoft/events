@@ -31,6 +31,11 @@ import {
 const ajv = new Ajv();
 const kDispatcherChannelEvents = ["REGISTER"] as const;
 
+export const APPROVEMENT_SYM = Symbol("APPROVEMENT");
+export const CLOSE_SYM = Symbol("CLOSE");
+export const RETRY_SYM = Symbol("RETRY");
+export const CUSTOM_EVENT_SYM = Symbol("CUSTOM_EVENT");
+
 type AnyIncomerChannelMessage<T extends GenericEvent> = (
   IncomerChannelMessages<T>["DispatcherMessages"] | (IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage)
 );
@@ -183,19 +188,19 @@ export class EventsHandler<T extends GenericEvent> extends EventEmitter {
 
       this.#logger.info(this.#standardLogFn(event as any)("Registration asked"));
 
-      this.emit("APPROVEMENT", event);
+      this.emit(APPROVEMENT_SYM, event);
     }
     else if (isIncomerChannelMessage(event)) {
       this.incomerChannelMessagesSchemaValidation(event);
 
       if (isCloseMessage(event)) {
-        this.emit("CLOSE", channel, event);
+        this.emit(CLOSE_SYM, channel, event);
       }
       else if (isRetryMessage(event)) {
-        this.emit("RETRY", channel, event);
+        this.emit(RETRY_SYM, channel, event);
       }
       else {
-        this.emit("CUSTOM_EVENT", channel, event);
+        this.emit(CUSTOM_EVENT_SYM, channel, event);
       }
     }
     else {

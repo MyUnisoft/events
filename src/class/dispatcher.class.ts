@@ -41,9 +41,13 @@ import { IncomerChannelHandler } from "./incomer-channel.class.js";
 import {
   EventsHandler,
   type customValidationCbFn,
-  eventsValidationFn as EventsValidationFn
+  eventsValidationFn as EventsValidationFn,
+  APPROVEMENT_SYM,
+  CLOSE_SYM,
+  RETRY_SYM,
+  CUSTOM_EVENT_SYM
 } from "./events.class.js";
-import { EventsService } from "./service/events.service.js";
+import { EventsService, TAKE_LEAD_BACK_SYM } from "./service/events.service.js";
 
 // CONSTANTS
 const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
@@ -90,10 +94,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   readonly type = "dispatcher";
   readonly dispatcherChannelName: string;
   readonly privateUUID = randomUUID();
+  readonly idleTime: number;
+  readonly incomerStore: IncomerStore;
+  readonly dispatcherTransactionStore: TransactionStore<"dispatcher">;
+  readonly backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
+  readonly backupIncomerTransactionStore: TransactionStore<"incomer">;
 
   eventsService: EventsService;
 
-  private incomerStore: IncomerStore;
   private subscriber: RedisAdapter;
 
   #redis: RedisAdapter;
@@ -107,10 +115,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     { name: "ABORT_TAKING_LEAD_BACK", redisMetadata: { origin: string } }
   >;
   #eventsHandler: EventsHandler<T>;
-  #dispatcherTransactionStore: TransactionStore<"dispatcher">;
-  #backupDispatcherTransactionStore: TransactionStore<"dispatcher">;
-  #backupIncomerTransactionStore: TransactionStore<"incomer">;
-
   #transactionHandler: TransactionHandler<T>;
 
   #logger: Logger;
@@ -125,7 +129,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   #checkDispatcherStateInterval: NodeJS.Timeout | undefined;
   #resetCheckLastActivityTimeout: NodeJS.Timeout | undefined;
   #resolveTransactionsInterval: NodeJS.Timeout | undefined;
-  #idleTime: number;
   #minTimeout = 0;
   // Arbitrary value according to fastify default pluginTimeout
   // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
@@ -143,7 +146,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.#selfProvidedUUID = options.incomerUUID ?? randomUUID();
     this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
-    this.#idleTime = options.idleTime ?? kIdleTime;
+    this.idleTime = options.idleTime ?? kIdleTime;
     this.#pingInterval = options.pingInterval ?? PING_INTERVAL;
     this.#resolveTransactionInterval = options.checkTransactionInterval ?? RESOLVE_TRANSACTION_INTERVAL;
     this.#checkLastActivityInterval = options.checkLastActivityInterval ?? kCheckLastActivityInterval;
@@ -158,7 +161,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.incomerStore = new IncomerStore({
       adapter: this.#redis as RedisAdapter<RegisteredIncomer>,
-      idleTime: this.#idleTime
+      idleTime: this.idleTime
     });
 
     this.#eventsHandler = new EventsHandler({
@@ -168,13 +171,13 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       standardLog: this.#standardLogFn
     });
 
-    this.#backupDispatcherTransactionStore = new TransactionStore({
+    this.backupDispatcherTransactionStore = new TransactionStore({
       adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: kBackupTransactionStoreName,
       instance: "dispatcher"
     });
 
-    this.#dispatcherTransactionStore = new TransactionStore({
+    this.dispatcherTransactionStore = new TransactionStore({
       adapter: this.#redis as RedisAdapter<Transaction<"dispatcher">>,
       instance: "dispatcher"
     });
@@ -189,7 +192,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       name: this.dispatcherChannelName
     });
 
-    this.#backupIncomerTransactionStore = new TransactionStore({
+    this.backupIncomerTransactionStore = new TransactionStore({
       adapter: this.#redis as RedisAdapter<Transaction<"incomer">>,
       prefix: kBackupTransactionStoreName,
       instance: "incomer"
@@ -200,28 +203,38 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       parentLogger: this.#logger,
       incomerStore: this.incomerStore,
       incomerChannelHandler: this.#incomerChannelHandler,
-      dispatcherTransactionStore: this.#dispatcherTransactionStore,
-      backupDispatcherTransactionStore: this.#backupDispatcherTransactionStore,
-      backupIncomerTransactionStore: this.#backupIncomerTransactionStore
+      dispatcherTransactionStore: this.dispatcherTransactionStore,
+      backupDispatcherTransactionStore: this.backupDispatcherTransactionStore,
+      backupIncomerTransactionStore: this.backupIncomerTransactionStore
     };
 
     this.#transactionHandler = new TransactionHandler({
       ...options,
       ...sharedOptions,
-      idleTime: this.#idleTime,
+      idleTime: this.idleTime,
       eventsHandler: this.#eventsHandler
     });
 
     this.eventsService = new EventsService({
       redis: this.#redis,
       incomerStore: this.incomerStore,
-      dispatcherTransactionStore: this.#dispatcherTransactionStore,
-      backupDispatcherTransactionStore: this.#backupDispatcherTransactionStore,
-      backupIncomerTransactionStore: this.#backupIncomerTransactionStore
+      dispatcherTransactionStore: this.dispatcherTransactionStore,
+      backupDispatcherTransactionStore: this.backupDispatcherTransactionStore,
+      backupIncomerTransactionStore: this.backupIncomerTransactionStore,
+      idleTime: this.idleTime
+    });
+
+    this.eventsService.on(TAKE_LEAD_BACK_SYM, (incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) => {
+      this.takeLeadBack(incomers, dispatcherToRemove)
+        .catch((error) => {
+          this.#logger.error({
+            error: error.stack
+          });
+        });
     });
 
     this.#eventsHandler
-      .on("APPROVEMENT", (registrationEvent: IncomerRegistrationMessage) => {
+      .on(APPROVEMENT_SYM, (registrationEvent: IncomerRegistrationMessage) => {
         this.approveIncomer(registrationEvent)
           .catch((error) => {
             this.#logger.error({
@@ -231,7 +244,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             });
           });
       })
-      .on("CLOSE", (channel: string, closeEvent: CloseMessage) => {
+      .on(CLOSE_SYM, (channel: string, closeEvent: CloseMessage) => {
         const { redisMetadata } = closeEvent;
 
         this.incomerStore.getIncomer(redisMetadata.origin)
@@ -251,7 +264,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             });
           });
       })
-      .on("RETRY", (channel: string, retryEvent: RetryMessage) => {
+      .on(RETRY_SYM, (channel: string, retryEvent: RetryMessage) => {
         this.handleRetryEvent(retryEvent)
           .catch((error) => {
             this.#logger.error({
@@ -261,7 +274,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
             });
           });
       })
-      .on("CUSTOM_EVENT", (channel: string, customEvent: EventMessage<T>) => {
+      .on(CUSTOM_EVENT_SYM, (channel: string, customEvent: EventMessage<T>) => {
         this.handleCustomEvents(channel, customEvent)
           .catch((error) => this.#logger.error({
             channel: "dispatcher",
@@ -310,7 +323,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
         incomer.isDispatcherActiveInstance));
 
     if (activeDispatcher && this.incomerStore.isActive(activeDispatcher)) {
-      this.#checkDispatcherStateInterval = setInterval(() => this.takeLeadBack()
+      this.#checkDispatcherStateInterval = setInterval(() => this.checkLeadState()
         .catch((error) => this.#logger.error({ error: error.stack }, "failed while taking lead back")),
       this.#pingInterval).unref();
 
@@ -419,7 +432,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       this.#logger.warn("Dispatcher Timed out on taking lead");
 
-      this.#checkDispatcherStateInterval = setInterval(() => this.takeLeadBack()
+      this.#checkDispatcherStateInterval = setInterval(() => this.checkLeadState()
         .catch((error) => this.#logger.error({ error: error.stack }, "Fail while taking lead back")),
       this.#pingInterval).unref();
     }
@@ -460,8 +473,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     this.#isWorking = state;
   }
 
-  private async takeLeadBack(opts: { incomers?: Set<RegisteredIncomer> } = {}) {
-    const incomers = opts.incomers ?? await this.incomerStore.getIncomers();
+  private async checkLeadState() {
+    const incomers = await this.incomerStore.getIncomers();
 
     const dispatcherInstances = [...incomers.values()]
       .filter((incomer) => incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID);
@@ -472,6 +485,10 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       return;
     }
 
+    await this.takeLeadBack(incomers, dispatcherToRemove);
+  }
+
+  private async takeLeadBack(incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) {
     try {
       await once(this, "ABORT_TAKING_LEAD_BACK", {
         signal: AbortSignal.timeout(this.randomIntFromTimeoutRange())
@@ -554,7 +571,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       const transactions = await transactionStore.getTransactions();
       const recentPingTransactionKeys = [...(Object.entries(transactions) as [string, Transaction<"incomer">][])
         .filter(([, transaction]) => transaction.name === "PING" &&
-          Date.now() < (Number(transaction.aliveSince) + Number(this.#idleTime)))]
+          Date.now() < (Number(transaction.aliveSince) + Number(this.idleTime)))]
         .map(([transactionId]) => transactionId);
 
       if (recentPingTransactionKeys.length > 0) {
@@ -606,7 +623,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       pingToResolve.push(this.#eventsHandler.dispatch({
         channel: incomerChannel,
-        store: this.#dispatcherTransactionStore,
+        store: this.dispatcherTransactionStore,
         redisMetadata: {
           mainTransaction: true,
           eventTransactionId: null,
@@ -680,7 +697,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const { data, redisMetadata } = retryEvent;
     const { dispatcherTransactionId } = data;
 
-    const relatedDispatcherTransaction = await this.#dispatcherTransactionStore
+    const relatedDispatcherTransaction = await this.dispatcherTransactionStore
       .getTransactionById(dispatcherTransactionId) as unknown as
         DispatcherSpreadTransaction["dispatcherDistributedEventTransaction"];
     const { redisMetadata: dispatcherTransactionMetadata, ...event } = relatedDispatcherTransaction;
@@ -707,7 +724,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.#eventsHandler.dispatch({
       channel: concernedIncomerChannel,
-      store: this.#dispatcherTransactionStore,
+      store: this.dispatcherTransactionStore,
       redisMetadata: {
         mainTransaction: false,
         relatedTransaction: dispatcherTransactionMetadata.relatedTransaction,
@@ -718,7 +735,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       event: formattedEvent as any
     });
 
-    await this.#dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
+    await this.dispatcherTransactionStore.deleteTransaction(dispatcherTransactionId);
 
     this.#logger.info(this.#standardLogFn(
       Object.assign({}, { channel: concernedIncomerChannel.name, ...event }, {
@@ -828,7 +845,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const dispatcherTransaction = await this.#eventsHandler.dispatch({
       channel: concernedIncomerChannel,
-      store: this.#dispatcherTransactionStore,
+      store: this.dispatcherTransactionStore,
       redisMetadata: {
         mainTransaction: false,
         relatedTransaction: transactionId,
@@ -885,7 +902,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
           published: true
         }
       } as Transaction<"incomer">),
-      this.#backupDispatcherTransactionStore.setTransaction({
+      this.backupDispatcherTransactionStore.setTransaction({
         ...eventRest as Omit<EventMessage, "redisMetadata">,
         redisMetadata: {
           origin: this.privateUUID,
@@ -980,7 +997,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await this.#eventsHandler.dispatch({
       channel: this.#dispatcherChannel as Channel<DispatcherApprovementMessage>,
-      store: this.#dispatcherTransactionStore,
+      store: this.dispatcherTransactionStore,
       redisMetadata: {
         mainTransaction: false,
         relatedTransaction: transactionId,
