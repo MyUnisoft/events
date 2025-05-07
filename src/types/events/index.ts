@@ -27,7 +27,7 @@ export interface RegisteredIncomer {
   providedUUID: string;
   baseUUID: string;
   name: string;
-  isDispatcherActiveInstance: boolean;
+  isDispatcherActiveInstance: string;
   lastActivity: number;
   aliveSince: number;
   eventsCast: string[];

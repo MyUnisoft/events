@@ -49,7 +49,7 @@ export interface DispatcherSpreadTransaction {
 }
 
 export interface IncomerMainTransaction {
-  incomerApprovementTransaction: IncomerRegistrationMessage & {
+  incomerRegistrationTransaction: IncomerRegistrationMessage & {
     redisMetadata: BaseTransaction<true> & IncomerRegistrationMessage["redisMetadata"];
   };
   incomerEventCastTransaction: IncomerChannelMessages["IncomerMessages"] & {
@@ -58,7 +58,7 @@ export interface IncomerMainTransaction {
 }
 
 type IncomerTransaction =
-  IncomerMainTransaction["incomerApprovementTransaction"] |
+  IncomerMainTransaction["incomerRegistrationTransaction"] |
   IncomerMainTransaction["incomerEventCastTransaction"]
 
 type DispatcherTransaction =

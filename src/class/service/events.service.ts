@@ -63,12 +63,12 @@ export class EventsService extends EventEmitter {
 
     const incomers = await this.incomerStore.getIncomers();
 
-    return [...incomers.values()].map((incomer) => {
+    return new Set([...incomers.values()].map((incomer) => {
       return {
         ...incomer,
         isAlive: incomer.lastActivity + Number(this.idleTime) >= now
       };
-    });
+    }));
   }
 
   forceDispatcherTakeLead(incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) {

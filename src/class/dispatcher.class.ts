@@ -143,6 +143,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.#redis = options.redis;
     this.subscriber = options.subscriber;
+    this.#instanceName = options.instanceName;
     this.#selfProvidedUUID = options.incomerUUID ?? randomUUID();
     this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
@@ -318,9 +319,9 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const incomers = await this.incomerStore.getIncomers();
 
-    const activeDispatcher = [...incomers]
+    const activeDispatcher = [...incomers.values()]
       .find((incomer) => (incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID &&
-        incomer.isDispatcherActiveInstance));
+        incomer.isDispatcherActiveInstance === "true"));
 
     if (activeDispatcher && this.incomerStore.isActive(activeDispatcher)) {
       this.#checkDispatcherStateInterval = setInterval(() => this.checkLeadState()
@@ -479,7 +480,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const dispatcherInstances = [...incomers.values()]
       .filter((incomer) => incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID);
     const dispatcherToRemove = dispatcherInstances
-      .find((incomer) => incomer.isDispatcherActiveInstance && !this.incomerStore.isActive(incomer));
+      .find((incomer) => incomer.isDispatcherActiveInstance === "true" && !this.incomerStore.isActive(incomer));
 
     if (!dispatcherToRemove && dispatcherInstances.length > 0) {
       return;
@@ -598,7 +599,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     for (const incomer of incomers) {
       const { providedUUID: uuid } = incomer;
 
-      if (incomer.baseUUID === this.#selfProvidedUUID) {
+      if (incomer.baseUUID === this.#selfProvidedUUID || incomer.baseUUID === incomer.providedUUID) {
         await this.incomerStore.updateIncomerState(uuid);
 
         continue;
@@ -672,7 +673,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     await this.incomerStore.updateIncomer({
       ...relatedIncomer,
       lastActivity: Date.now(),
-      isDispatcherActiveInstance: true
+      isDispatcherActiveInstance: "true"
     });
   }
 
@@ -689,7 +690,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     await this.incomerStore.updateIncomer({
       ...relatedIncomer,
-      isDispatcherActiveInstance: false
+      isDispatcherActiveInstance: "false"
     });
   }
 
@@ -943,7 +944,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       if (!relatedIncomer) {
         const incomer = Object.assign({}, {
           ...data,
-          isDispatcherActiveInstance: origin === this.#selfProvidedUUID,
+          isDispatcherActiveInstance: String(origin === this.#selfProvidedUUID),
           baseUUID: origin,
           lastActivity: now,
           aliveSince: now
@@ -963,7 +964,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       const incomer = Object.assign({}, {
         ...data,
-        isDispatcherActiveInstance: origin === this.#selfProvidedUUID,
+        isDispatcherActiveInstance: String(origin === this.#selfProvidedUUID),
         baseUUID: origin,
         lastActivity: now,
         aliveSince: now

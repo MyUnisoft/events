@@ -59,7 +59,7 @@ const kMaxPingInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_MAX_P
   Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL);
 const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL)) ? 60_000 :
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
-const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
+const kIsDispatcherInstance = process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false";
 
 export const RESOLVED: unique symbol = Symbol.for("RESOLVED");
 export const UNRESOLVED: unique symbol = Symbol.for("UNRESOLVED");
@@ -144,7 +144,7 @@ export class Incomer <
 
   #redis: RedisAdapter;
 
-  #isDispatcherInstance: boolean;
+  #isDispatcherInstance: string;
   #eventsCast: string[];
   #eventsSubscribe: EventSubscribe[];
   #publishInterval: number;
@@ -232,7 +232,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date && !this.#isDispatcherInstance) {
+    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -320,7 +320,7 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    }) as IncomerMainTransaction["incomerApprovementTransaction"];
+    }) as IncomerMainTransaction["incomerRegistrationTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
@@ -371,6 +371,7 @@ export class Incomer <
   }
 
   private async registrationIntervalCb() {
+    console.log("HERER", this.dispatcherConnectionState, process.uptime());
     if (this.dispatcherConnectionState) {
       return;
     }
@@ -397,7 +398,7 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    }) as IncomerMainTransaction["incomerApprovementTransaction"];
+    }) as IncomerMainTransaction["incomerRegistrationTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
@@ -844,7 +845,6 @@ export class Incomer <
     message: DispatcherApprovementMessage
   ) {
     const { data } = message;
-
     this.incomerChannelName = data.uuid;
 
     if (!this.providedUUID) {

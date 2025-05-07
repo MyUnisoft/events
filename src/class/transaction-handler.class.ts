@@ -230,29 +230,26 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         .filter(([, dispatcherTransaction]) => dispatcherTransaction.name === "APPROVEMENT")
     );
 
-    const incomerRegistrationTransactions = new Map(
-      [...incomerTransactions].flatMap(([, incomerTransaction]) => {
-        if (incomerTransaction.name === "REGISTER") {
-          return [[incomerTransaction.redisMetadata.relatedTransaction[0], incomerTransaction]];
-        }
-
-        return [];
-      })
+    const incomerRegistrationTransactions = new Set(
+      [...incomerTransactions.values()].filter((incomerTransaction) => incomerTransaction.name === "REGISTER")
     );
 
     transactionsToResolve.push(
       Promise.all(
-        [...incomerRegistrationTransactions]
-          .map(([relatedApprovementTransactionId, incomerTransaction]) => {
-            if (!dispatcherApprovementTransactions.has(relatedApprovementTransactionId)) {
-              return inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId);
+        [...incomerRegistrationTransactions].map((registrationTransaction) => {
+          if (registrationTransaction.redisMetadata.relatedTransaction !== null) {
+            if (!dispatcherApprovementTransactions.has(registrationTransaction.redisMetadata.relatedTransaction[0])) {
+              return inactiveIncomerTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.transactionId);
             }
 
             return Promise.all([
-              inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId),
-              this.dispatcherTransactionStore.deleteTransaction(relatedApprovementTransactionId)
+              inactiveIncomerTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.transactionId),
+              this.dispatcherTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.relatedTransaction[0])
             ]);
-          })
+          }
+
+          return inactiveIncomerTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.transactionId);
+        })
       )
     );
 
