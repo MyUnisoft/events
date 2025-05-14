@@ -1,6 +1,7 @@
 // Import Node.js Dependencies
 import assert from "node:assert";
 import { describe, after, before, test } from "node:test";
+import timers from "node:timers/promises";
 
 // Import Third-party Dependencies
 import { RedisAdapter } from "@myunisoft/redis";
@@ -16,7 +17,7 @@ const logger = pino({
 });
 
 // CONSTANTS
-const kPingInterval = 1_600;
+const kPingInterval = 500;
 const resolved = "RESOLVED" as const;
 
 describe("EventsService", () => {
@@ -48,6 +49,7 @@ describe("EventsService", () => {
 
   const dispatcher = new Dispatcher({
     redis,
+    name: "foo",
     subscriber,
     logger,
     pingInterval: kPingInterval,
@@ -56,7 +58,6 @@ describe("EventsService", () => {
     idleTime: 5_000,
     incomerUUID: incomer.baseUUID
   });
-
 
   before(async() => {
     await redis.initialize();
@@ -76,11 +77,101 @@ describe("EventsService", () => {
   });
 
   describe("getIncomers", () => {
-    it("should return an array of Registered Incomers including the relative dispatcher instance", async() => {
+    test("should return an array of Registered Incomers including the relative dispatcher instance", async() => {
       const incomers = await dispatcher.eventsService.getIncomers();
 
-      assert.equal(incomers.length, 1);
-      assert.equal(incomers[0].isDispatcherActiveInstance, "true");
+      assert.equal([...incomers.values()].length, 1);
+      assert.equal([...incomers.values()][0].isDispatcherActiveInstance, "true");
+    });
+  });
+
+  describe("forceDispatcherTakeLead", () => {
+    test("Calling forceDispatcherTakeLead as the only dispatcher, it should stay alive", async() => {
+      let incomers = await dispatcher.eventsService.getIncomers();
+
+      dispatcher.eventsService.forceDispatcherTakeLead(incomers, incomers[0]);
+
+      await timers.setTimeout(2_000);
+
+      incomers = await dispatcher.eventsService.getIncomers();
+
+      assert.equal([...incomers.values()][0].isDispatcherActiveInstance, "true");
+    });
+
+    describe("Working with a second dispatcher", () => {
+      const secondIncomer = new Incomer({
+        redis,
+        subscriber,
+        name: "foo",
+        eventsCast: [],
+        eventsSubscribe: [],
+        eventCallback: eventCallBackHandler,
+        dispatcherInactivityOptions: {
+          publishInterval: kPingInterval,
+          maxPingInterval: kPingInterval
+        },
+        externalsInitialized: true
+      });
+
+      const secondDispatcher = new Dispatcher({
+        redis,
+        name: "foo",
+        subscriber,
+        logger,
+        pingInterval: kPingInterval,
+        checkLastActivityInterval: 5_000,
+        checkTransactionInterval: 2_400,
+        idleTime: 5_000,
+        incomerUUID: secondIncomer.baseUUID
+      });
+
+      before(async() => {
+        await secondDispatcher.initialize();
+        await secondIncomer.initialize();
+      });
+
+      after(async() => {
+        await secondIncomer.close();
+        await secondDispatcher.close();
+      });
+
+      test("Calling forceDispatcherTakeLead with another dispatcher alive, he should take the lead", async() => {
+        let incomers = await secondDispatcher.eventsService.getIncomers();
+
+        const isLead = [...incomers.values()].find((incomer) => incomer.isDispatcherActiveInstance === "true");
+
+        secondDispatcher.eventsService.forceDispatcherTakeLead(incomers, isLead!);
+
+        await timers.setTimeout(5_000);
+
+        incomers = await secondDispatcher.eventsService.getIncomers();
+
+        console.log("FOOOOOO", incomers, secondIncomer.baseUUID);
+        for (const incomer of incomers.values()) {
+          if (incomer.baseUUID === secondIncomer.baseUUID) {
+            assert.equal(incomer.isDispatcherActiveInstance, "true");
+
+            continue;
+          }
+
+          assert.equal(incomer.isDispatcherActiveInstance, "false");
+        }
+      });
+    })
+  });
+
+  describe("GetEventById", () => {
+    test("foo", async() => {
+      let incomers = await dispatcher.eventsService.getIncomers();
+
+      const isLead = [...incomers.values()].find((incomer) => incomer.isDispatcherActiveInstance === "true");
+
+      dispatcher.eventsService.forceDispatcherTakeLead(incomers, isLead!);
+
+      await timers.setTimeout(2_000);
+
+      incomers = await dispatcher.eventsService.getIncomers();
+      console.log("incomers :", incomers);
     });
   });
 });

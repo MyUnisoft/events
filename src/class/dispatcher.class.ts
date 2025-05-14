@@ -75,7 +75,7 @@ export type DispatcherOptions<T extends GenericEvent = GenericEvent> = {
     customValidationCbFn?: customValidationCbFn<T>;
   };
   incomerUUID?: string;
-  instanceName?: string;
+  name: string;
   checkLastActivityInterval?: number;
   checkTransactionInterval?: number;
   logger?: Logger;
@@ -107,7 +107,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
   #redis: RedisAdapter;
 
   #selfProvidedUUID: string;
-  #instanceName: string | undefined;
+  #name: string;
   #isWorking = false;
   #dispatcherChannel: Channel<
     DispatcherApprovementMessage |
@@ -143,7 +143,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     this.#redis = options.redis;
     this.subscriber = options.subscriber;
-    this.#instanceName = options.instanceName;
+    this.#name = options.name;
     this.#selfProvidedUUID = options.incomerUUID ?? randomUUID();
     this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
@@ -226,6 +226,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.eventsService.on(TAKE_LEAD_BACK_SYM, (incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) => {
+      console.log("EVENT SYM", dispatcherToRemove);
       this.takeLeadBack(incomers, dispatcherToRemove)
         .catch((error) => {
           this.#logger.error({
@@ -320,7 +321,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const incomers = await this.incomerStore.getIncomers();
 
     const activeDispatcher = [...incomers.values()]
-      .find((incomer) => (incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID &&
+      .find((incomer) => (incomer.name === this.#name && incomer.baseUUID !== this.#selfProvidedUUID &&
         incomer.isDispatcherActiveInstance === "true"));
 
     if (activeDispatcher && this.incomerStore.isActive(activeDispatcher)) {
@@ -478,7 +479,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     const incomers = await this.incomerStore.getIncomers();
 
     const dispatcherInstances = [...incomers.values()]
-      .filter((incomer) => incomer.name === this.#instanceName && incomer.baseUUID !== this.#selfProvidedUUID);
+      .filter((incomer) => incomer.name === this.#name && incomer.baseUUID !== this.#selfProvidedUUID);
     const dispatcherToRemove = dispatcherInstances
       .find((incomer) => incomer.isDispatcherActiveInstance === "true" && !this.incomerStore.isActive(incomer));
 
@@ -491,6 +492,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async takeLeadBack(incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) {
     try {
+      console.log("OKAY", this.#selfProvidedUUID);
       await once(this, "ABORT_TAKING_LEAD_BACK", {
         signal: AbortSignal.timeout(this.randomIntFromTimeoutRange())
       });
@@ -509,6 +511,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       clearInterval(this.#checkLastActivityIntervalTimer);
       this.updateState(true);
 
+      console.log("HERE HERE HERE", this.#selfProvidedUUID);
       try {
         await Promise.all([
           this.ping(),

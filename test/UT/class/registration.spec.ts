@@ -76,6 +76,7 @@ describe("Registration", () => {
 
     dispatcher = new Dispatcher({
       redis,
+      name: "foo",
       subscriber,
       logger: dispatcherLogger,
       pingInterval: kPingInterval,
