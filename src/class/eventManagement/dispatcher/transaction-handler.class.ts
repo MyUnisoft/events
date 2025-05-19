@@ -138,6 +138,10 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
     this.#standardLogFn = opts.standardLog ?? defaultStandardLog;
   }
 
+  public close() {
+    this.#resolveTransactionsLock.reset();
+  }
+
   public async resolveTransactions() {
     const free = await this.#resolveTransactionsLock.acquire();
 

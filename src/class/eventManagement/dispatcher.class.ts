@@ -330,6 +330,8 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       this.#checkDispatcherStateInterval = undefined;
     }
 
+    this.#transactionHandler.close();
+
     this.#eventsHandler.removeAllListeners();
     this.removeAllListeners();
 

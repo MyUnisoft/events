@@ -13,6 +13,7 @@ import { pino, type Logger } from "pino";
 import { match } from "ts-pattern";
 import type { ValidateFunction } from "ajv";
 import type { Result } from "@openally/result";
+import { Mutex } from "@openally/mutex";
 
 // Import Internal Dependencies
 import {
@@ -143,14 +144,19 @@ export class Incomer <
   #isDispatcherInstance: boolean;
   #eventsCast: string[];
   #eventsSubscribe: EventSubscribe[];
-  #dispatcherTransactionStore: TransactionStore<"dispatcher">;
-  #dispatcherChannel: Channel<IncomerRegistrationMessage>;
   #publishInterval: number;
   #maxPingInterval: number;
+
   #standardLogFn: StandardLog<T>;
+  #dispatcherChannel: Channel<IncomerRegistrationMessage>;
+  #dispatcherTransactionStore: TransactionStore<"dispatcher">;
+
   #checkRegistrationInterval: NodeJS.Timeout;
+  #checkDispatcherStateInterval: NodeJS.Timeout;
   #checkTransactionsStateInterval: NodeJS.Timeout;
-  #checkDispatcherStateTimeout: NodeJS.Timeout;
+
+  #checkDispatcherStateLock = new Mutex({ concurrency: 1 });
+
   #lastPingDate: number;
   #eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
   #customValidationCbFn: ((event: T) => void) | undefined;
@@ -227,30 +233,43 @@ export class Incomer <
     }
 
     this.dispatcherConnectionState = true;
+  }
+
+  private async checkTransactionsState() {
+    if (!this.dispatcherConnectionState) {
+      return;
+    }
+
+    const free = await this.#checkDispatcherStateLock.acquire();
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
 
-    for await (const transactionKeys of store.transactionLazyFetch()) {
-      const transactions = await Promise.all(transactionKeys.map(
-        (transactionKey) => store.getValue(transactionKey)
-      ));
+    try {
+      for await (const transactionKeys of store.transactionLazyFetch()) {
+        const transactions = await Promise.all(transactionKeys.map(
+          (transactionKey) => store.getValue(transactionKey)
+        ));
 
-      const eventToPublish = transactions.map((transaction) => {
-        if (
-          transaction.redisMetadata.mainTransaction &&
-          !transaction.redisMetadata.published &&
-          Number(transaction.aliveSince) + Number(this.#maxPingInterval) < Date.now()
-        ) {
-          return this.retryPublish(transaction);
-        }
+        const eventToPublish = transactions.map((transaction) => {
+          if (
+            transaction.redisMetadata.mainTransaction &&
+            !transaction.redisMetadata.published &&
+            Number(transaction.aliveSince) + Number(this.#maxPingInterval) < Date.now()
+          ) {
+            return this.retryPublish(transaction);
+          }
 
-        return void 0;
-      });
+          return void 0;
+        });
 
-      await Promise.race([
-        Promise.all(eventToPublish),
-        timers.setTimeout(this.#maxPingInterval)
-      ]);
+        await Promise.race([
+          Promise.all(eventToPublish),
+          timers.setTimeout(this.#maxPingInterval)
+        ]);
+      }
+    }
+    finally {
+      free();
     }
   }
 
@@ -313,7 +332,7 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.#checkTransactionsStateInterval = setInterval(() => {
+      this.#checkDispatcherStateInterval = setInterval(() => {
         if (!this.#lastPingDate) {
           return;
         }
@@ -321,6 +340,11 @@ export class Incomer <
         this.checkDispatcherState()
           .catch((error) => this.logger.error({ error: error.stack }, "failed while checking dispatcher state"));
       }, this.#maxPingInterval).unref();
+
+      this.#checkTransactionsStateInterval = setInterval(() => {
+        this.checkTransactionsState()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking transactions state"));
+      }, this.#publishInterval).unref();
 
       this.dispatcherConnectionState = true;
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
@@ -381,7 +405,7 @@ export class Incomer <
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
 
-      this.#checkTransactionsStateInterval = setInterval(() => {
+      this.#checkDispatcherStateInterval = setInterval(() => {
         if (!this.#lastPingDate) {
           return;
         }
@@ -389,6 +413,11 @@ export class Incomer <
         this.checkDispatcherState()
           .catch((error) => this.logger.error({ error: error.stack }, "failed while checking dispatcher state"));
       }, this.#maxPingInterval).unref();
+
+      this.#checkTransactionsStateInterval = setInterval(() => {
+        this.checkTransactionsState()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking transactions state"));
+      }, this.#publishInterval).unref();
 
       this.dispatcherConnectionState = true;
 
@@ -443,18 +472,22 @@ export class Incomer <
 
   public async close() {
     try {
-      clearInterval(this.#checkTransactionsStateInterval);
-      this.#checkTransactionsStateInterval = undefined;
+      if (this.#checkDispatcherStateInterval) {
+        clearInterval(this.#checkDispatcherStateInterval);
+        this.#checkDispatcherStateInterval = undefined;
+      }
 
       if (this.#checkRegistrationInterval) {
         clearInterval(this.#checkRegistrationInterval);
         this.#checkRegistrationInterval = undefined;
       }
 
-      if (this.#checkDispatcherStateTimeout) {
-        clearTimeout(this.#checkDispatcherStateTimeout);
-        this.#checkDispatcherStateTimeout = undefined;
+      if (this.#checkTransactionsStateInterval) {
+        clearInterval(this.#checkTransactionsStateInterval);
+        this.#checkTransactionsStateInterval = undefined;
       }
+
+      this.#checkDispatcherStateLock.reset();
 
       await this.externals?.close();
 
