@@ -35,6 +35,8 @@ export type GetSentEventByIdResponse = Omit<Transaction<"incomer">, "redisMetada
   relatedTransactions: Transaction<"dispatcher">[];
 };
 
+export type GetIncomerReceivedEventsOptions = GetEventSharedOptions;
+
 export type GetIncomerReceivedEventsResponse = Omit<Transaction<"incomer">, "redisMetadata"> & {
   redisMetadata: {
     eventTransactionId: string;
@@ -59,7 +61,7 @@ export class EventsService extends EventEmitter {
     this.#redis = opts.redis;
   }
 
-  async getIncomers() {
+  async getIncomers(): Promise<Set<RegisteredIncomer>> {
     const now = Date.now();
 
     const incomers = await this.incomerStore.getIncomers();
@@ -110,7 +112,7 @@ export class EventsService extends EventEmitter {
     };
   }
 
-  async getIncomerReceivedEvents(opts: GetEventSharedOptions): Promise<GetIncomerReceivedEventsResponse[]> {
+  async getIncomerReceivedEvents(opts: GetIncomerReceivedEventsOptions): Promise<GetIncomerReceivedEventsResponse[]> {
     const { incomerId } = opts;
 
     const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
