@@ -158,7 +158,7 @@ export class Incomer <
   #checkDispatcherStateInterval: NodeJS.Timeout;
   #checkTransactionsStateInterval: NodeJS.Timeout;
 
-  #checkDispatcherStateLock = new Mutex({ concurrency: 1 });
+  #retryPublishLock = new Mutex({ concurrency: 1 });
 
   #lastActivity: number;
   #idleTime: number;
@@ -245,7 +245,7 @@ export class Incomer <
       return;
     }
 
-    const free = await this.#checkDispatcherStateLock.acquire();
+    const free = await this.#retryPublishLock.acquire();
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
 
@@ -500,7 +500,7 @@ export class Incomer <
         this.#checkTransactionsStateInterval = undefined;
       }
 
-      this.#checkDispatcherStateLock.reset();
+      this.#retryPublishLock.reset();
 
       await this.externals?.close();
 
