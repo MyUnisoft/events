@@ -172,7 +172,6 @@ export class Incomer <
 
     Object.assign(this, {}, options);
 
-
     this.#redis = options.redis;
     this.subscriber = options.subscriber;
     this.#eventsCast = options.eventsCast;
@@ -371,7 +370,6 @@ export class Incomer <
   }
 
   private async registrationIntervalCb() {
-    console.log("HERER", this.dispatcherConnectionState, process.uptime());
     if (this.dispatcherConnectionState) {
       return;
     }
@@ -599,7 +597,7 @@ export class Incomer <
         dispatcherConnectionState: this.dispatcherConnectionState
       })("Event Stored but not published"));
 
-      return;
+      return finalEvent.redisMetadata.transactionId;
     }
 
     await this.incomerChannel.pub(finalEvent);
@@ -611,6 +609,8 @@ export class Incomer <
       },
       dispatcherConnectionState: this.dispatcherConnectionState
     })("Published event"));
+
+    return finalEvent.redisMetadata.transactionId;
   }
 
   private async handleMessages(
@@ -761,6 +761,7 @@ export class Incomer <
 
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
+    let reason = callbackResult.val;
     if (callbackResult && callbackResult.ok) {
       const resolvedCallbackResult = callbackResult.unwrap();
       if (Symbol.for(resolvedCallbackResult.status) === RESOLVED) {
@@ -824,6 +825,8 @@ export class Incomer <
 
           return;
         }
+
+        reason = unresolvedCallbackResult.reason;
       }
     }
 
@@ -838,7 +841,7 @@ export class Incomer <
     this.logger.info(this.#standardLogFn({
       ...logData,
       dispatcherConnectionState: this.dispatcherConnectionState
-    })(`Callback error reason: ${String(callbackResult.val)}`));
+    })(`Callback error reason: ${String(reason)}`));
   }
 
   private async handleApprovement(
