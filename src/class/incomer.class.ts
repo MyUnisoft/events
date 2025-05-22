@@ -131,8 +131,8 @@ export class Incomer <
 
   public dispatcherConnectionState = false;
   public baseUUID = randomUUID();
+  public providedUUID: string;
 
-  private providedUUID: string;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
   private incomerChannelName: string;
   private subscriber: RedisAdapter;

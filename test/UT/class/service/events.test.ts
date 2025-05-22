@@ -307,7 +307,7 @@ describe("EventsService", () => {
       await timers.setTimeout(500);
 
       const eventData = await secondDispatcher.eventsService.getEventById({
-        incomerId: secondIncomer["providedUUID"],
+        incomerId: secondIncomer.providedUUID,
         eventId
       });
 
@@ -418,11 +418,11 @@ describe("EventsService", () => {
 
       await timers.setTimeout(500);
 
-      const eventData = await secondDispatcher.eventsService.getIncomerReceivedEvents({
+      const eventsData = await secondDispatcher.eventsService.getIncomerReceivedEvents({
         incomerId: secondIncomer["providedUUID"]
       });
 
-      for (const event of eventData) {
+      for (const event of eventsData) {
         assert.equal(event.redisMetadata.eventTransactionId, eventId);
       }
     });
