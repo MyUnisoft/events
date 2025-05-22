@@ -4,7 +4,7 @@ import { RedisAdapter } from "@myunisoft/redis";
 // Import Internal Dependencies
 import { IncomerStore } from "../store/incomer.class.js";
 import { Transaction, TransactionStore } from "../store/transaction.class.js";
-import type { Events, RegisteredIncomer } from "../../types/index.js";
+import type { RegisteredIncomer } from "../../types/index.js";
 import { EventEmitter } from "node:stream";
 
 // CONSTANTS
@@ -23,7 +23,7 @@ interface GetEventSharedOptions {
   incomerId: string;
 }
 
-export type GetEventById = GetEventSharedOptions & {
+export type GetEventByIdOptions = GetEventSharedOptions & {
   eventId: string;
 };
 
@@ -35,10 +35,11 @@ export type GetSentEventByIdResponse = Omit<Transaction<"incomer">, "redisMetada
   relatedTransactions: Transaction<"dispatcher">[];
 };
 
-export type GetIncomerSendEventsResponse = GetSentEventByIdResponse[];
-
-export type GetEventsByName = GetEventSharedOptions & {
-  name: keyof Events;
+export type GetIncomerReceivedEventsResponse = Omit<Transaction<"incomer">, "redisMetadata"> & {
+  redisMetadata: {
+    eventTransactionId: string;
+    resolved: boolean;
+  };
 };
 
 export class EventsService extends EventEmitter {
@@ -75,7 +76,7 @@ export class EventsService extends EventEmitter {
     this.emit(TAKE_LEAD_BACK_SYM, incomers, dispatcherToRemove);
   }
 
-  async getEventById(opts: GetEventById): Promise<GetSentEventByIdResponse> {
+  async getEventById(opts: GetEventByIdOptions): Promise<GetSentEventByIdResponse> {
     const { incomerId, eventId } = opts;
 
     const incomerTransactionStore = new TransactionStore({
@@ -109,7 +110,7 @@ export class EventsService extends EventEmitter {
     };
   }
 
-  async getIncomerReceivedEvents(opts: GetEventSharedOptions) {
+  async getIncomerReceivedEvents(opts: GetEventSharedOptions): Promise<GetIncomerReceivedEventsResponse[]> {
     const { incomerId } = opts;
 
     const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
@@ -122,9 +123,9 @@ export class EventsService extends EventEmitter {
       };
     });
 
-    const receivedEvents = [];
+    const receivedEvents: GetIncomerReceivedEventsResponse[] = [];
     for (const dispatcherTransaction of [...dispatcherTransactions.values(), ...mappedBackupDispatcherTransactions]) {
-      if (dispatcherTransaction.redisMetadata.to === incomerId) {
+      if (dispatcherTransaction.redisMetadata.to === incomerId && dispatcherTransaction.name !== "PING") {
         receivedEvents.push({
           ...dispatcherTransaction,
           redisMetadata: {
