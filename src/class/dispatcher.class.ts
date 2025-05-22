@@ -226,13 +226,14 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     });
 
     this.eventsService.on(TAKE_LEAD_BACK_SYM, (incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) => {
-      console.log("EVENT SYM", dispatcherToRemove);
-      this.takeLeadBack(incomers, dispatcherToRemove)
-        .catch((error) => {
-          this.#logger.error({
-            error: error.stack
+      this.#dispatcherChannel.pub({ name: "ABORT_TAKING_LEAD_BACK", redisMetadata: { origin: this.privateUUID } }).then(() => {
+        this.takeLeadBack(incomers, dispatcherToRemove)
+          .catch((error) => {
+            this.#logger.error({
+              error: error.stack
+            });
           });
-        });
+      });
     });
 
     this.#eventsHandler
@@ -492,7 +493,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
   private async takeLeadBack(incomers: Set<RegisteredIncomer>, dispatcherToRemove: RegisteredIncomer) {
     try {
-      console.log("OKAY", this.#selfProvidedUUID);
       await once(this, "ABORT_TAKING_LEAD_BACK", {
         signal: AbortSignal.timeout(this.randomIntFromTimeoutRange())
       });
@@ -511,7 +511,6 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
       clearInterval(this.#checkLastActivityIntervalTimer);
       this.updateState(true);
 
-      console.log("HERE HERE HERE", this.#selfProvidedUUID);
       try {
         await Promise.all([
           this.ping(),
