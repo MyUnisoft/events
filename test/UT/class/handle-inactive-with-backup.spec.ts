@@ -46,6 +46,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
     dispatcher = new Dispatcher({
       redis,
+      name: "foo",
       subscriber,
       logger: dispatcherLogger,
       pingInterval: 2_000,
