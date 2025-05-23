@@ -762,7 +762,7 @@ export class Incomer <
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
     let reason = callbackResult.val;
-    if (callbackResult && callbackResult.ok) {
+    if (callbackResult.ok) {
       const resolvedCallbackResult = callbackResult.unwrap();
       if (Symbol.for(resolvedCallbackResult.status) === RESOLVED) {
         await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {

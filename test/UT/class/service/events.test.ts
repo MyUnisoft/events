@@ -9,7 +9,13 @@ import { Ok } from "@openally/result";
 import pino from "pino";
 
 // Import Internal Dependencies
-import { AVAILABLE_EVENTS, Dispatcher, eventsValidationFn, Incomer, validate } from "../../../../src";
+import {
+  AVAILABLE_EVENTS,
+  Dispatcher,
+  eventsValidationFn,
+  Incomer,
+  validate
+} from "../../../../src";
 
 // Internal Dependencies Mocks
 const logger = pino({
