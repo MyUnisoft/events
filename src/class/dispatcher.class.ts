@@ -293,7 +293,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
       this.#transactionHandler.resolveTransactions()
         .catch((error) => this.#logger.error({ error: error.stack }, "failed at resolving transactions"));
-    }, options.checkTransactionInterval ?? RESOLVE_TRANSACTION_INTERVAL).unref();
+    }, this.#resolveTransactionInterval).unref();
 
     this.#pingIntervalTimer = setInterval(() => {
       if (!this.#isWorking) {
