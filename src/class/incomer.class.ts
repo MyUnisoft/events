@@ -21,7 +21,7 @@ import {
   type PartialTransaction,
   type Transaction,
   TransactionStore
-} from "../store/transaction.class.js";
+} from "./store/transaction.class.js";
 import type {
   EventSubscribe,
   IncomerChannelMessages,
@@ -34,21 +34,23 @@ import type {
   IncomerRegistrationMessage,
   RetryMessage,
   RegisteredIncomer
-} from "../../types/index.js";
+} from "../types/index.js";
 import {
   type NestedValidationFunctions,
   type StandardLog,
   defaultStandardLog,
   handleLoggerMode
-} from "../../utils/index.js";
+} from "../utils/index.js";
 import { Externals } from "./externals.class.js";
 import { DISPATCHER_CHANNEL_NAME } from "./dispatcher.class.js";
-import { customValidationCbFn, eventsValidationFn } from "./dispatcher/events.class.js";
-import { IncomerStore } from "../store/incomer.class.js";
+import { customValidationCbFn, eventsValidationFn } from "./events.class.js";
+import { IncomerStore } from "./store/incomer.class.js";
 
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
 // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
+const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
+  Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME);
 const kDefaultStartTime = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT)) ? 3_500 :
   Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT);
 const kExternalInit = (process.env.MYUNISOFT_EVENTS_INIT_EXTERNAL ?? "false") === "true";
@@ -57,7 +59,7 @@ const kMaxPingInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_MAX_P
   Number(process.env.MYUNISOFT_INCOMER_MAX_PING_INTERVAL);
 const kPublishInterval = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL)) ? 60_000 :
   Number(process.env.MYUNISOFT_INCOMER_PUBLISH_INTERVAL);
-const kIsDispatcherInstance = (process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false") === "true";
+const kIsDispatcherInstance = process.env.MYUNISOFT_INCOMER_IS_DISPATCHER ?? "false";
 
 export const RESOLVED: unique symbol = Symbol.for("RESOLVED");
 export const UNRESOLVED: unique symbol = Symbol.for("UNRESOLVED");
@@ -97,7 +99,6 @@ function isUnresolvedEvent(value: EventCallbackResponse): value is EventCallback
 }
 
 export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
-  /* Service name */
   name: string;
   redis: RedisAdapter;
   subscriber: RedisAdapter;
@@ -111,10 +112,12 @@ export type IncomerOptions<T extends GenericEvent = GenericEvent> = {
   };
   eventCallback: (message: CallBackEventMessage<T>) => Promise<EventCallbackResponse>;
   dispatcherInactivityOptions?: {
-    /* max interval between received ping before considering dispatcher off */
+    /* interval between two pings */
     maxPingInterval?: number;
-    /* max interval between a new event (based on ping interval) */
+    /* max interval between a new event */
     publishInterval?: number;
+    /* Allowed max time of idle time */
+    idleTime?: number;
   };
   isDispatcherInstance?: boolean;
   externalsInitialized?: boolean;
@@ -128,8 +131,8 @@ export class Incomer <
 
   public dispatcherConnectionState = false;
   public baseUUID = randomUUID();
+  public providedUUID: string;
 
-  private providedUUID: string;
   private incomerChannel: Channel<IncomerChannelMessages<T>["IncomerMessages"] | RetryMessage>;
   private incomerChannelName: string;
   private subscriber: RedisAdapter;
@@ -141,7 +144,7 @@ export class Incomer <
 
   #redis: RedisAdapter;
 
-  #isDispatcherInstance: boolean;
+  #isDispatcherInstance: string;
   #eventsCast: string[];
   #eventsSubscribe: EventSubscribe[];
   #publishInterval: number;
@@ -155,9 +158,10 @@ export class Incomer <
   #checkDispatcherStateInterval: NodeJS.Timeout;
   #checkTransactionsStateInterval: NodeJS.Timeout;
 
-  #checkDispatcherStateLock = new Mutex({ concurrency: 1 });
+  #retryPublishLock = new Mutex({ concurrency: 1 });
 
-  #lastPingDate: number;
+  #lastActivity: number;
+  #idleTime: number;
   #eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
   #customValidationCbFn: ((event: T) => void) | undefined;
 
@@ -175,6 +179,7 @@ export class Incomer <
     this.logger = options.logger;
     this.dispatcherChannelName = DISPATCHER_CHANNEL_NAME;
     this.#standardLogFn = options.standardLog ?? defaultStandardLog;
+    this.#idleTime = options.dispatcherInactivityOptions?.idleTime ?? kIdleTime;
     this.#publishInterval = options.dispatcherInactivityOptions?.publishInterval ?? kPublishInterval;
     this.#maxPingInterval = options.dispatcherInactivityOptions?.maxPingInterval ?? kMaxPingInterval;
     if (this.#isDispatcherInstance === undefined) {
@@ -226,7 +231,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.#lastPingDate) + Number(this.#maxPingInterval)) < date && !this.#isDispatcherInstance) {
+    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -235,12 +240,12 @@ export class Incomer <
     this.dispatcherConnectionState = true;
   }
 
-  private async checkTransactionsState() {
+  private async lazyRetryPublish() {
     if (!this.dispatcherConnectionState) {
       return;
     }
 
-    const free = await this.#checkDispatcherStateLock.acquire();
+    const free = await this.#retryPublishLock.acquire();
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
 
@@ -314,7 +319,7 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    }) as IncomerMainTransaction["incomerApprovementTransaction"];
+    }) as IncomerMainTransaction["incomerRegistrationTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
@@ -333,7 +338,7 @@ export class Incomer <
       });
 
       this.#checkDispatcherStateInterval = setInterval(() => {
-        if (!this.#lastPingDate) {
+        if (!this.#lastActivity) {
           return;
         }
 
@@ -342,8 +347,12 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.#checkTransactionsStateInterval = setInterval(() => {
-        this.checkTransactionsState()
-          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking transactions state"));
+        if (!this.#lastActivity) {
+          return;
+        }
+
+        this.lazyRetryPublish()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while retry publishing"));
       }, this.#publishInterval).unref();
 
       this.dispatcherConnectionState = true;
@@ -356,7 +365,7 @@ export class Incomer <
     finally {
       this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
         .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
-      this.#publishInterval * 2).unref();
+      this.#idleTime).unref();
     }
   }
 
@@ -387,7 +396,7 @@ export class Incomer <
         relatedTransaction: null,
         resolved: false
       }
-    }) as IncomerMainTransaction["incomerApprovementTransaction"];
+    }) as IncomerMainTransaction["incomerRegistrationTransaction"];
 
     const fullyFormattedEvent: IncomerRegistrationMessage = {
       ...event,
@@ -406,7 +415,7 @@ export class Incomer <
       });
 
       this.#checkDispatcherStateInterval = setInterval(() => {
-        if (!this.#lastPingDate) {
+        if (!this.#lastActivity) {
           return;
         }
 
@@ -415,8 +424,12 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.#checkTransactionsStateInterval = setInterval(() => {
-        this.checkTransactionsState()
-          .catch((error) => this.logger.error({ error: error.stack }, "failed while checking transactions state"));
+        if (!this.#lastActivity) {
+          return;
+        }
+
+        this.lazyRetryPublish()
+          .catch((error) => this.logger.error({ error: error.stack }, "failed while retry publishing"));
       }, this.#publishInterval).unref();
 
       this.dispatcherConnectionState = true;
@@ -487,7 +500,7 @@ export class Incomer <
         this.#checkTransactionsStateInterval = undefined;
       }
 
-      this.#checkDispatcherStateLock.reset();
+      this.#retryPublishLock.reset();
 
       await this.externals?.close();
 
@@ -584,7 +597,7 @@ export class Incomer <
         dispatcherConnectionState: this.dispatcherConnectionState
       })("Event Stored but not published"));
 
-      return;
+      return finalEvent.redisMetadata.transactionId;
     }
 
     await this.incomerChannel.pub(finalEvent);
@@ -596,6 +609,8 @@ export class Incomer <
       },
       dispatcherConnectionState: this.dispatcherConnectionState
     })("Published event"));
+
+    return finalEvent.redisMetadata.transactionId;
   }
 
   private async handleMessages(
@@ -615,6 +630,9 @@ export class Incomer <
     ) {
       return;
     }
+
+    this.#lastActivity = Date.now();
+    this.dispatcherConnectionState = true;
 
     try {
       if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
@@ -688,9 +706,6 @@ export class Incomer <
     const { redisMetadata } = message;
     const { transactionId } = redisMetadata;
 
-    this.#lastPingDate = Date.now();
-    this.dispatcherConnectionState = true;
-
     const logData = {
       channel,
       ...message
@@ -746,7 +761,8 @@ export class Incomer <
 
     const callbackResult = await this.eventCallback({ ...event, eventTransactionId } as unknown as CallBackEventMessage<T>);
 
-    if (callbackResult && callbackResult.ok) {
+    let reason = callbackResult.val;
+    if (callbackResult.ok) {
       const resolvedCallbackResult = callbackResult.unwrap();
       if (Symbol.for(resolvedCallbackResult.status) === RESOLVED) {
         await this.#dispatcherTransactionStore.updateTransaction(spreadTransaction.redisMetadata.transactionId, {
@@ -809,6 +825,8 @@ export class Incomer <
 
           return;
         }
+
+        reason = unresolvedCallbackResult.reason;
       }
     }
 
@@ -823,14 +841,13 @@ export class Incomer <
     this.logger.info(this.#standardLogFn({
       ...logData,
       dispatcherConnectionState: this.dispatcherConnectionState
-    })(`Callback error reason: ${String(callbackResult.val)}`));
+    })(`Callback error reason: ${String(reason)}`));
   }
 
   private async handleApprovement(
     message: DispatcherApprovementMessage
   ) {
     const { data } = message;
-
     this.incomerChannelName = data.uuid;
 
     if (!this.providedUUID) {
@@ -877,7 +894,6 @@ export class Incomer <
 
     await Promise.all(transactionToUpdate);
 
-    this.#lastPingDate = Date.now();
     this.emit("registered");
   }
 }

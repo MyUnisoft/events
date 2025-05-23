@@ -85,5 +85,5 @@ export const AVAILABLE_EVENTS = Object.freeze<Record<keyof Events, EventSubscrib
 export { eventsValidationFn } from "./utils/index";
 export * as EventSchemas from "./schema/events/index";
 export * from "./types/index";
-export * from "./class/eventManagement/dispatcher.class";
-export * from "./class/eventManagement/incomer.class";
+export * from "./class/dispatcher.class";
+export * from "./class/incomer.class";

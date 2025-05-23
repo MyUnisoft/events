@@ -11,7 +11,7 @@ import { Ok } from "@openally/result";
 import {
   Dispatcher,
   Incomer
-} from "../../../../src/index.js";
+} from "../../../src/index.js";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
@@ -20,6 +20,57 @@ const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any,
 const kIdleTime = 4_000;
 
 describe("Init Incomer without Dispatcher alive", () => {
+  const eventCallBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
+
+  const redis = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
+  const subscriber = new RedisAdapter({
+    port: Number(process.env.REDIS_PORT),
+    host: process.env.REDIS_HOST
+  });
+
+  const pingInterval = 2_000;
+
+  let incomer: Incomer;
+
+  beforeAll(async() => {
+    await redis.initialize();
+    await subscriber.initialize();
+
+    await redis.flushall();
+
+    incomer = new Incomer({
+      redis,
+      subscriber,
+      name: "foo",
+      eventsCast: [],
+      eventsSubscribe: [],
+      eventCallback: eventCallBackHandler,
+      dispatcherInactivityOptions: {
+        publishInterval: pingInterval,
+        maxPingInterval: pingInterval
+      },
+      externalsInitialized: true
+    });
+  });
+
+  test("Incomer should init without a Dispatcher alive", async() => {
+    await incomer.initialize();
+
+    await timers.setTimeout(3_000);
+
+    expect(incomer.dispatcherConnectionState).toBe(false);
+  });
+
+  afterAll(async() => {
+    await redis.close();
+    await subscriber.close();
+  });
+});
+
+describe("Init Incomer with Dispatcher alive", () => {
   const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));;
 
   const redis = new RedisAdapter({
@@ -80,22 +131,15 @@ describe("Init Incomer without Dispatcher alive", () => {
       incomerUUID: dispatcherIncomer.baseUUID,
       instanceName: "node:Pulsar"
     });
-  });
 
-  test("Incomer should init without a Dispatcher alive", async() => {
-    await incomer.initialize();
-    await dispatcherIncomer.initialize();
+    await dispatcher.initialize();
 
-    await timers.setTimeout(3_000);
-
-    expect(incomer.dispatcherConnectionState).toBe(false);
-    expect(dispatcherIncomer.dispatcherConnectionState).toBe(false);
+    await timers.setTimeout(2_000);
   });
 
   test("It should register when a Dispatcher is alive", async() => {
-    await dispatcher!.initialize();
-
-    await timers.setTimeout(3_000);
+    await incomer.initialize();
+    await dispatcherIncomer.initialize();
 
     expect(incomer.dispatcherConnectionState).toBe(true);
     expect(dispatcherIncomer.dispatcherConnectionState).toBe(true);
@@ -121,6 +165,7 @@ describe("Init Incomer without Dispatcher alive", () => {
   });
 
   afterAll(async() => {
+    await incomer.close();
     await dispatcherIncomer.close();
     await dispatcher.close();
     await redis.close();

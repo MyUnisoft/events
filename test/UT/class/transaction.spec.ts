@@ -8,13 +8,14 @@ import {
   type PartialTransaction,
   type Transaction,
   TransactionStore
-} from "../../../../src/class/store/transaction.class.js";
+} from "../../../src/class/store/transaction.class.js";
 
-let transactionStore: TransactionStore<"dispatcher">;
 const redis = new RedisAdapter({
   port: Number(process.env.REDIS_PORT),
   host: process.env.REDIS_HOST
 });
+
+let transactionStore: TransactionStore<"dispatcher">;
 
 beforeAll(async() => {
   await redis.initialize();

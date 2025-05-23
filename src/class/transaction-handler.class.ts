@@ -13,14 +13,14 @@ import {
   TransactionStore,
   type Transaction,
   type Transactions
-} from "../../store/transaction.class.js";
-import { IncomerStore } from "../../store/incomer.class.js";
+} from "./store/transaction.class.js";
+import { IncomerStore } from "./store/incomer.class.js";
 import { IncomerChannelHandler } from "./incomer-channel.class.js";
 import {
   type StandardLog,
   type StandardLogOpts,
   defaultStandardLog
-} from "../../../utils/index.js";
+} from "../utils/index.js";
 import { EventsHandler } from "./events.class.js";
 import type {
   DispatcherApprovementMessage,
@@ -29,7 +29,7 @@ import type {
   GenericEvent,
   IncomerChannelMessages,
   RegisteredIncomer
-} from "../../../types/index.js";
+} from "../types/index.js";
 
 
 interface DistributeMainTransactionOptions {
@@ -230,29 +230,26 @@ export class TransactionHandler<T extends GenericEvent = GenericEvent> {
         .filter(([, dispatcherTransaction]) => dispatcherTransaction.name === "APPROVEMENT")
     );
 
-    const incomerRegistrationTransactions = new Map(
-      [...incomerTransactions].flatMap(([, incomerTransaction]) => {
-        if (incomerTransaction.name === "REGISTER") {
-          return [[incomerTransaction.redisMetadata.relatedTransaction, incomerTransaction]];
-        }
-
-        return [];
-      })
+    const incomerRegistrationTransactions = new Set(
+      [...incomerTransactions.values()].filter((incomerTransaction) => incomerTransaction.name === "REGISTER")
     );
 
     transactionsToResolve.push(
       Promise.all(
-        [...incomerRegistrationTransactions]
-          .map(([relatedApprovementTransactionId, incomerTransaction]) => {
-            if (!dispatcherApprovementTransactions.has(relatedApprovementTransactionId as string)) {
-              return inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId);
+        [...incomerRegistrationTransactions].map((registrationTransaction) => {
+          if (registrationTransaction.redisMetadata.relatedTransaction !== null) {
+            if (!dispatcherApprovementTransactions.has(registrationTransaction.redisMetadata.relatedTransaction[0])) {
+              return inactiveIncomerTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.transactionId);
             }
 
             return Promise.all([
-              inactiveIncomerTransactionStore.deleteTransaction(incomerTransaction.redisMetadata.transactionId),
-              this.dispatcherTransactionStore.deleteTransaction(relatedApprovementTransactionId as string)
+              inactiveIncomerTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.transactionId),
+              this.dispatcherTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.relatedTransaction[0])
             ]);
-          })
+          }
+
+          return inactiveIncomerTransactionStore.deleteTransaction(registrationTransaction.redisMetadata.transactionId);
+        })
       )
     );
 

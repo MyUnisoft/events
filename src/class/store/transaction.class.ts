@@ -24,7 +24,7 @@ const kDefaultTTL = 60_000 * 60 * 24;
 
 type BaseTransaction<
   IsMain extends boolean = true,
-  RelatedTransaction = IsMain extends true ? (string[] | string) | null : string
+  RelatedTransaction = IsMain extends true ? string[] | null : string
 > = {
   published?: boolean;
   mainTransaction: IsMain;
@@ -49,7 +49,7 @@ export interface DispatcherSpreadTransaction {
 }
 
 export interface IncomerMainTransaction {
-  incomerApprovementTransaction: IncomerRegistrationMessage & {
+  incomerRegistrationTransaction: IncomerRegistrationMessage & {
     redisMetadata: BaseTransaction<true> & IncomerRegistrationMessage["redisMetadata"];
   };
   incomerEventCastTransaction: IncomerChannelMessages["IncomerMessages"] & {
@@ -58,7 +58,7 @@ export interface IncomerMainTransaction {
 }
 
 type IncomerTransaction =
-  IncomerMainTransaction["incomerApprovementTransaction"] |
+  IncomerMainTransaction["incomerRegistrationTransaction"] |
   IncomerMainTransaction["incomerEventCastTransaction"]
 
 type DispatcherTransaction =

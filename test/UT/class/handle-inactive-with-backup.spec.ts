@@ -17,8 +17,8 @@ import {
   type EventOptions,
   type Events,
   validate
-} from "../../../../src/index.js";
-import { Transaction, TransactionStore } from "../../../../src/class/store/transaction.class.js";
+} from "../../../src/index.js";
+import { Transaction, TransactionStore } from "../../../src/class/store/transaction.class.js";
 
 // Internal Dependencies Mocks
 const dispatcherLogger = pino({
@@ -46,19 +46,18 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
     dispatcher = new Dispatcher({
       redis,
+      name: "foo",
       subscriber,
       logger: dispatcherLogger,
       pingInterval: 2_000,
       checkLastActivityInterval: 2_000,
       checkTransactionInterval: 2_000,
-      idleTime: 5_000,
+      idleTime: 20_000,
       eventsValidation: {
         eventsValidationFn,
         customValidationCbFn: validate
       }
      });
-
-    Reflect.set(dispatcher, "logger", dispatcherLogger);
 
     await dispatcher.initialize();
   });
@@ -66,7 +65,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
   afterAll(async() => {
     await dispatcher.close();
     await redis.close();
-    await subscriber.close()
+    await subscriber.close();
   });
 
   afterEach(async() => {
@@ -74,7 +73,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     await redis.flushdb();
   });
 
-  describe("Inactive incomer without back-up available", () => {
+  describe("Inactive incomer with back-up available", () => {
     let concernedIncomer: Incomer;
     let secondConcernedIncomer: Incomer;
     let firstIncomerTransactionStore: TransactionStore<"incomer">;
@@ -170,6 +169,11 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           // Do nothing
         });
 
+      jest.spyOn(concernedIncomer as any, "handlePing")
+        .mockImplementation(async(opts: any) => {
+          // Do nothing
+        });
+
       secondConcernedIncomer = new Incomer({
         redis,
         subscriber,
@@ -181,28 +185,28 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       });
 
       await concernedIncomer.initialize();
+
+      await concernedIncomer.publish(event);
+
+      await timers.setTimeout(10_000);
+
+      await secondConcernedIncomer.initialize();
+
+      await timers.setTimeout(10_000);
+    });
+
+    afterAll(async() => {
+      await secondConcernedIncomer.close();
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      await concernedIncomer.publish(event);
-
-      await timers.setTimeout(1_000);
-
-      await secondConcernedIncomer.initialize();
-      await concernedIncomer.close();
-
-      jest.spyOn(dispatcher as any, "checkLastActivity").mockImplementation(async(opts: any) => {
-        // do nothing
-      });
+      secondConcernedIncomer["subscriber"]!.subscribe(
+        secondConcernedIncomer["dispatcherChannelName"], secondConcernedIncomer["incomerChannelName"]
+      );
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
       secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
 
-      await timers.setTimeout(1_000);
-
-      const incomer = [...(await dispatcher["incomerStore"].getIncomers()).values()].find((incomer) => incomer.baseUUID === concernedIncomer.baseUUID);
-      await dispatcher["removeNonActives"]([incomer!]);
-
-      await timers.setTimeout(500);
+      await timers.setTimeout(2_000);
 
       const mainTransactions = await secondConcernedIncomer["newTransactionStore"].getTransactions();
 
@@ -221,9 +225,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           }
         })
       ]));
-
-      await secondConcernedIncomer.close();
     });
   });
 });
-

@@ -10,6 +10,10 @@
 
 ## 📚 Usage
 
+> [!TIP]
+> If you want to monitor your events,  
+> you can follow the [Events Service documentation](./events.service.md)
+
 ```ts
 await initRedis();
 await initRedis({}, "subscriber");
@@ -182,10 +186,10 @@ function validate<T extends keyof Events = keyof Events>(options: EventOptions<T
 > The interval use to check on `transactions` state. <br/>
 > When a transaction related to an event is resolved, his state is update. According to this state, we can define if an event has been dealed through all related instances of `incomer`.
 
-### idleTime
+### checkDispatcherStateInterval
 
-> The interval use to determine how many time an instance of an `incomer` can be inactive. <br/>
-> ⚠️ Must strictly be greater than the pingInterval options.
+> Interval based on the pingInterval that is use to check on others Dispatcher state <br/>
+> If the Dispatcher that's lead is idle, dispatchers check to take the lead back on the idle instance.
 
 </details>
 

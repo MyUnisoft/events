@@ -54,7 +54,7 @@ export class IncomerStore extends KVPeer<
   async getNonActives(): Promise<RegisteredIncomer[]> {
     const incomers = await this.getIncomers();
 
-    return [...incomers].filter((incomer) => !this.isActive(incomer));
+    return [...incomers].filter((incomer) => !this.isActive(incomer) && incomer.baseUUID !== incomer.providedUUID);
   }
 
   async setIncomer(

@@ -13,14 +13,14 @@ import {
   Dispatcher,
   Incomer,
   type EventOptions
-} from "../../../../src/index.js";
+} from "../../../src/index.js";
 
 // Internal Dependencies Mocks
 const mockedIncomerHandleDispatcherMessage = jest.spyOn(Incomer.prototype as any, "handleDispatcherMessages");
-const mockedIncomerRegistrationIntervalCb = jest.spyOn(Incomer.prototype as any, "registrationIntervalCb");
 const mockedDispatcherRemoveNonActives = jest.spyOn(Dispatcher.prototype as any, "removeNonActives");
 const mockedIncomerHandleApprovement = jest.spyOn(Incomer.prototype as any, "handleApprovement");
 
+// CONSTANTS
 const dispatcherLogger = pino({
   level: "debug"
 });
@@ -28,6 +28,10 @@ const incomerLogger = pino({
   level: "debug"
 });
 const mockedIncomerLoggerInfo = jest.spyOn(incomerLogger, "info");
+const kPingInterval = 1_000;
+const kCheckLastActivityInterval = 1_000;
+const kCheckTransactionInterval = 1_500;
+const kIdleTime = 2_000;
 
 describe("Registration", () => {
   const redis = new RedisAdapter({
@@ -72,12 +76,13 @@ describe("Registration", () => {
 
     dispatcher = new Dispatcher({
       redis,
+      name: "foo",
       subscriber,
       logger: dispatcherLogger,
-      pingInterval: 1_000,
-      checkLastActivityInterval: 1_000,
-      checkTransactionInterval: 1_500,
-      idleTime: 2_000
+      pingInterval: kPingInterval,
+      checkLastActivityInterval: kCheckLastActivityInterval,
+      checkTransactionInterval: kCheckTransactionInterval,
+      idleTime: kIdleTime
      });
 
     await dispatcher.initialize();
@@ -112,8 +117,9 @@ describe("Registration", () => {
         eventsSubscribe: [],
         eventCallback: eventComeBackHandler,
         dispatcherInactivityOptions: {
-          maxPingInterval: 2_000,
-          publishInterval: 2_000
+          maxPingInterval: kPingInterval,
+          publishInterval: kCheckTransactionInterval,
+          idleTime: 10_000
         },
         externalsInitialized: true
       });
@@ -132,19 +138,22 @@ describe("Registration", () => {
       expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
       expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
       expect(mockedIncomerHandleApprovement).toHaveBeenCalledTimes(1);
-      expect(mockedIncomerRegistrationIntervalCb).toHaveBeenCalledTimes(0);
       expect(incomer["providedUUID"]).toBeDefined();
 
       incomerProvidedUUID = incomer["providedUUID"];
     });
 
     it("Should have removed the incomer", async() => {
-      await timers.setTimeout(4_000);
+      await timers.setTimeout(kIdleTime + 1_000);
 
       expect(mockedDispatcherRemoveNonActives).toHaveBeenCalled();
 
       Reflect.set(incomer, "handlePing", handlePingFn);
+
+      await timers.setTimeout(kPingInterval);
+
       expect(incomer.dispatcherConnectionState).toBe(false);
+
       await incomer.publish(event);
 
       const incomerTransactions = await incomer["newTransactionStore"].getTransactions();
@@ -155,10 +164,11 @@ describe("Registration", () => {
     });
 
     it("Should have register again & handle the unpublished event", async() => {
-      await timers.setTimeout(2_000);
-      expect(mockedIncomerRegistrationIntervalCb).toHaveBeenCalled();
+      await timers.setTimeout(5_000);
+
       expect(incomer.dispatcherConnectionState).toBe(true);
-      await timers.setTimeout(2_000);
+
+      await timers.setTimeout(kCheckTransactionInterval + 1_000);
 
       expect(mockedIncomerHandleApprovement).toHaveBeenCalledTimes(2);
       expect(incomer["providedUUID"]).toBe(incomerProvidedUUID);

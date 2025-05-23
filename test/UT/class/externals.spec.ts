@@ -6,7 +6,7 @@ import { pino } from "pino";
 import { Ok } from "@openally/result";
 
 // Import Internal Dependencies
-import { Incomer } from "../../../../src/index.js";
+import { Incomer } from "../../../src/index.js";
 
 const incomerLogger = pino({
   level: "debug"

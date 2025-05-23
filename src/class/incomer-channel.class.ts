@@ -3,19 +3,17 @@ import {
   Channel,
   RedisAdapter
 } from "@myunisoft/redis";
-import type { Logger } from "pino";
 
 // Import Internal Dependencies
 import type {
   DistributedEventMessage,
   GenericEvent,
   IncomerChannelMessages
-} from "../../../types/index.js";
+} from "../types/index.js";
 
 export interface IncomerChannelHandlerOptions<T extends GenericEvent> {
   redis: RedisAdapter;
   subscriber: RedisAdapter;
-  logger: Logger;
   channels?: Map<string, Channel<DistributedEventMessage<T>>>;
 }
 

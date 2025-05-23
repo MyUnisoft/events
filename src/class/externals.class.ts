@@ -3,7 +3,7 @@ import { Incomer, type IncomerOptions } from "./incomer.class.js";
 import { Dispatcher } from "./dispatcher.class.js";
 import type {
   GenericEvent
-} from "../../types/index.js";
+} from "../types/index.js";
 
 export class Externals<T extends GenericEvent = GenericEvent> {
   public incomer: Incomer<T>;
