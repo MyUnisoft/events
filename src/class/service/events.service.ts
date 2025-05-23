@@ -1,3 +1,6 @@
+// Import Nodejs Dependencies
+import { EventEmitter } from "node:stream";
+
 // Import Third-party Dependencies
 import { RedisAdapter } from "@myunisoft/redis";
 
@@ -5,7 +8,6 @@ import { RedisAdapter } from "@myunisoft/redis";
 import { IncomerStore } from "../store/incomer.class.js";
 import { Transaction, TransactionStore } from "../store/transaction.class.js";
 import type { RegisteredIncomer } from "../../types/index.js";
-import { EventEmitter } from "node:stream";
 
 // CONSTANTS
 export const TAKE_LEAD_BACK_SYM = Symbol("TAKE_LEAD_BACK");
