@@ -51,7 +51,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       logger: dispatcherLogger,
       pingInterval: 2_000,
       checkLastActivityInterval: 2_000,
-      checkTransactionInterval: 2_000,
+      checkTransactionInterval: 60_000,
       idleTime: 5_000,
       eventsValidation: {
         eventsValidationFn,
@@ -185,7 +185,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     });
 
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
-      await concernedIncomer.publish(event);
+      const eventId = await concernedIncomer.publish(event);
 
       await timers.setTimeout(500);
 
@@ -210,7 +210,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
           ...event,
           redisMetadata: {
             origin: expect.anything(),
-            eventTransactionId: expect.anything(),
+            eventTransactionId: eventId,
             transactionId: expect.anything(),
             incomerName: concernedIncomer.name,
             mainTransaction: true,
