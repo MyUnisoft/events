@@ -145,7 +145,7 @@ const eventData = await dispatcher.eventsService.getEventById({ incomerId: incom
 
 ### getIncomerReceivedEvents(opts: GetIncomerReceivedEventsOptions): Promise < GetIncomerReceivedEventsResponse[] >
 
-> This method data about the received events and their origin.
+> This method returns data about the received events and their origin.
 
 ```ts
 const incomer = new Incomer({
