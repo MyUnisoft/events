@@ -187,7 +187,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
     test("expect the second incomer to have handle the event by retaking the main Transaction", async() => {
       await concernedIncomer.publish(event);
 
-      await timers.setTimeout(1_000);
+      await timers.setTimeout(500);
 
       await secondConcernedIncomer.initialize();
       await concernedIncomer.close();
@@ -197,8 +197,6 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
       });
       dispatcher["subscriber"]!.on("message", (channel, message) => dispatcher["handleMessages"](channel, message));
       secondConcernedIncomer["subscriber"]!.on("message", (channel, message) => secondConcernedIncomer["handleMessages"](channel, message));
-
-      await timers.setTimeout(1_000);
 
       const incomer = [...(await dispatcher["incomerStore"].getIncomers()).values()].find((incomer) => incomer.baseUUID === concernedIncomer.baseUUID);
       await dispatcher["removeNonActives"]([incomer!]);
