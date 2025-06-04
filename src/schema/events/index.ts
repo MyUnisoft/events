@@ -8,3 +8,4 @@ export { thirdParty } from "./thirdParty.json";
 export { accountingEntryLettering } from "./accountingEntryLettering.json";
 export { cloudDocument } from "./cloudDocument.json";
 export { exercice } from "./exercice.json";
+export { visitedPage } from "./visitedPage.json";

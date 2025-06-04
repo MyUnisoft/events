@@ -133,6 +133,15 @@ export interface Exercice {
   }
 }
 
+export interface VisitedPage {
+  name: "visitedPage";
+  scope: Scope & Required<Pick<Scope, "accountingFolderId" | "persPhysiqueId">>;
+  operation: "VOID";
+  data: {
+    path: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -143,4 +152,6 @@ export interface Events {
   thirdParty: ThirdParty;
   accountingEntryLettering: AccountingEntryLettering;
   cloudDocument: CloudDocument;
+  exercice: Exercice;
+  visitedPage: VisitedPage;
 }
