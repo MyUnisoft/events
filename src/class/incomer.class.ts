@@ -231,7 +231,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
+    if (!this.#lastActivity || (Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -602,7 +602,9 @@ export class Incomer <
       return finalEvent.redisMetadata.transactionId;
     }
 
-    await this.incomerChannel.pub(finalEvent);
+    if (this.incomerChannel) {
+      await this.incomerChannel.pub(finalEvent);
+    }
 
     this.logger.info(this.#standardLogFn({
       ...finalEvent, redisMetadata: {
@@ -726,6 +728,9 @@ export class Incomer <
         resolved: true
       }
     } as Transaction<"dispatcher">);
+
+    this.#lastActivity = Date.now();
+    this.dispatcherConnectionState = true;
 
     this.logger.debug(
       this.#standardLogFn({ ...logData, dispatcherConnectionState: this.dispatcherConnectionState } as any)("Resolved Ping event")
@@ -896,6 +901,8 @@ export class Incomer <
 
     await Promise.all(transactionToUpdate);
 
+    this.#lastActivity = Date.now();
+    this.dispatcherConnectionState = true;
     this.emit("registered");
   }
 }
