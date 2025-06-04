@@ -249,6 +249,8 @@ export class Incomer <
 
     const store = this.newTransactionStore ?? this.defaultIncomerTransactionStore;
 
+    await timers.setTimeout(this.#publishInterval);
+
     try {
       for await (const transactionKeys of store.transactionLazyFetch()) {
         const transactions = await Promise.all(transactionKeys.map(
