@@ -768,6 +768,16 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
 
     const relatedTransaction = await senderTransactionStore.getTransactionById(transactionId);
 
+    await senderTransactionStore.updateTransaction(transactionId, {
+      ...relatedTransaction,
+      redisMetadata: {
+        ...relatedTransaction.redisMetadata,
+        mainTransaction: true,
+        relatedTransaction: [],
+        published: true
+      }
+    } as Transaction<"incomer">);
+
     const filteredConcernedIncomers = await this.getFilteredConcernedIncomers(eventRest.name);
 
     if (filteredConcernedIncomers.length === 0 && relatedTransaction !== null) {
