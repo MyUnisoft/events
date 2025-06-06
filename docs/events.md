@@ -649,3 +649,83 @@ export interface Exercice {
 }
 ```
 </details>
+
+
+## VisitedPage
+
+```ts
+export interface VisitedPage {
+  name: "visitedPage";
+  scope: Scope & Required<Pick<Scope, "accountingFolderId" | "persPhysiqueId">>;
+  operation: "VOID";
+  data: {
+    path: string;
+  }
+}
+```
+
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "VisitedPage event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "visitedPage"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["VOID"]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "persPhysiqueId": {
+          "type": "number"
+        },
+        "accountingFolderId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number",
+          "nullable": true
+        },
+        "firmSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "persPhysiqueId", "accountingFolderId"],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
