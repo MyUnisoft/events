@@ -124,7 +124,7 @@ export class TransactionStore<
     return `${this.#key}-${transactionId}`;
   }
 
-  async* transactionLazyFetch(count = 10_000) {
+  async* transactionLazyFetch(count = 100_000) {
     let cursor = 0;
 
     do {
@@ -219,6 +219,6 @@ export class TransactionStore<
   async deleteTransactions(
     transactionIds: string[]
   ): Promise<void> {
-    await this.adapter.del(transactionIds);
+    await this.adapter.del(transactionIds.map((transactionId) => this.#buildTransactionKey(transactionId)));
   }
 }
