@@ -49,7 +49,7 @@ import { IncomerStore } from "./store/incomer.class.js";
 // CONSTANTS
 // Arbitrary value according to fastify default pluginTimeout
 // Max timeout is 8_000, but u may init both an Dispatcher & an Incomer
-const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
+const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 5 :
   Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME);
 const kDefaultStartTime = Number.isNaN(Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT)) ? 3_500 :
   Number(process.env.MYUNISOFT_INCOMER_INIT_TIMEOUT);
@@ -158,7 +158,8 @@ export class Incomer <
   #checkDispatcherStateInterval: NodeJS.Timeout;
   #checkTransactionsStateInterval: NodeJS.Timeout;
 
-  #retryPublishLock = new Mutex({ concurrency: 1 });
+  #retryPublishLock = new Mutex({ concurrency: 1, keepReferencingTimers: false });
+  #registrationCbLock = new Mutex({ concurrency: 1, keepReferencingTimers: false });
 
   #lastActivity: number;
   #idleTime: number;
@@ -211,7 +212,7 @@ export class Incomer <
 
     this.incomerStore = new IncomerStore({
       adapter: this.#redis as RedisAdapter<RegisteredIncomer>,
-      idleTime: 60_000
+      idleTime: this.#idleTime
     });
 
     this.#dispatcherTransactionStore = new TransactionStore({
@@ -231,7 +232,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if (!this.#lastActivity || (Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
+    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -367,12 +368,16 @@ export class Incomer <
     finally {
       this.#checkRegistrationInterval = setInterval(() => this.registrationIntervalCb()
         .catch((error) => this.logger.error({ error: error.stack }, "failed while registering")),
-      this.#idleTime).unref();
+      this.#publishInterval).unref();
     }
   }
 
   private async registrationIntervalCb() {
+    const free = await this.#registrationCbLock.acquire();
+
     if (this.dispatcherConnectionState) {
+      free();
+
       return;
     }
 
@@ -390,28 +395,28 @@ export class Incomer <
       }
     };
 
-    const transaction = await this.defaultIncomerTransactionStore.setTransaction({
-      ...event,
-      redisMetadata: {
-        ...event.redisMetadata,
-        mainTransaction: true,
-        relatedTransaction: null,
-        resolved: false
-      }
-    }) as IncomerMainTransaction["incomerRegistrationTransaction"];
-
-    const fullyFormattedEvent: IncomerRegistrationMessage = {
-      ...event,
-      redisMetadata: {
-        ...event.redisMetadata,
-        transactionId: transaction.redisMetadata.transactionId,
-        eventTransactionId: transaction.redisMetadata.eventTransactionId
-      }
-    };
-
-    await this.#dispatcherChannel.pub(fullyFormattedEvent);
-
     try {
+      const transaction = await this.defaultIncomerTransactionStore.setTransaction({
+        ...event,
+        redisMetadata: {
+          ...event.redisMetadata,
+          mainTransaction: true,
+          relatedTransaction: null,
+          resolved: false
+        }
+      }) as IncomerMainTransaction["incomerRegistrationTransaction"];
+
+      const fullyFormattedEvent: IncomerRegistrationMessage = {
+        ...event,
+        redisMetadata: {
+          ...event.redisMetadata,
+          transactionId: transaction.redisMetadata.transactionId,
+          eventTransactionId: transaction.redisMetadata.eventTransactionId
+        }
+      };
+
+      await this.#dispatcherChannel.pub(fullyFormattedEvent);
+
       await once(this, "registered", {
         signal: AbortSignal.timeout(kDefaultStartTime)
       });
@@ -434,6 +439,7 @@ export class Incomer <
           .catch((error) => this.logger.error({ error: error.stack }, "failed while retry publishing"));
       }, this.#publishInterval).unref();
 
+      this.#lastActivity = Date.now();
       this.dispatcherConnectionState = true;
 
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
@@ -442,8 +448,9 @@ export class Incomer <
       this.logger.error({ error }, "Failed to register in time");
 
       this.dispatcherConnectionState = false;
-
-      return;
+    }
+    finally {
+      free();
     }
   }
 
@@ -503,6 +510,7 @@ export class Incomer <
       }
 
       this.#retryPublishLock.reset();
+      this.#registrationCbLock.reset();
 
       await this.externals?.close();
 
@@ -635,9 +643,6 @@ export class Incomer <
       return;
     }
 
-    this.#lastActivity = Date.now();
-    this.dispatcherConnectionState = true;
-
     try {
       if (channel === this.dispatcherChannelName && isDispatcherChannelMessage(formattedMessage)) {
         await this.handleDispatcherMessages(channel, formattedMessage);
@@ -710,6 +715,9 @@ export class Incomer <
     const { redisMetadata } = message;
     const { transactionId } = redisMetadata;
 
+    this.#lastActivity = Date.now();
+    this.dispatcherConnectionState = true;
+
     const logData = {
       channel,
       ...message
@@ -728,9 +736,6 @@ export class Incomer <
         resolved: true
       }
     } as Transaction<"dispatcher">);
-
-    this.#lastActivity = Date.now();
-    this.dispatcherConnectionState = true;
 
     this.logger.debug(
       this.#standardLogFn({ ...logData, dispatcherConnectionState: this.dispatcherConnectionState } as any)("Resolved Ping event")
