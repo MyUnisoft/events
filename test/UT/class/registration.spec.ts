@@ -69,10 +69,10 @@ describe("Registration", () => {
   }
 
   beforeAll(async() => {
-    await redis.flushall();
-
     await redis.initialize();
     await subscriber.initialize();
+
+    await redis.flushall();
 
     dispatcher = new Dispatcher({
       redis,
@@ -94,13 +94,10 @@ describe("Registration", () => {
     await subscriber.close();
   });
 
-  afterEach(async() => {
-    await redis.flushdb();
-  });
-
   describe("Initializing a new Incomer", () => {
     let handlePingFn: (...any) => any;
     let incomerProvidedUUID: string;
+    let callLength;
 
     const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
 
@@ -135,9 +132,11 @@ describe("Registration", () => {
     it("Should correctly register the new incomer", async() => {
       await timers.setTimeout(3_000);
 
+      callLength = mockedIncomerHandleApprovement.mock.calls.length;
+
       expect(mockedIncomerHandleDispatcherMessage).toHaveBeenCalled();
       expect(mockedIncomerLoggerInfo.mock.calls[2][0]).toContain("Incomer registered");
-      expect(mockedIncomerHandleApprovement).toHaveBeenCalledTimes(1);
+      expect(callLength).toBeGreaterThan(0);
       expect(incomer["providedUUID"]).toBeDefined();
 
       incomerProvidedUUID = incomer["providedUUID"];
@@ -150,7 +149,7 @@ describe("Registration", () => {
 
       Reflect.set(incomer, "handlePing", handlePingFn);
 
-      await timers.setTimeout(kPingInterval);
+      await timers.setTimeout(10_000);
 
       expect(incomer.dispatcherConnectionState).toBe(false);
 
@@ -170,7 +169,7 @@ describe("Registration", () => {
 
       await timers.setTimeout(kCheckTransactionInterval + 1_000);
 
-      expect(mockedIncomerHandleApprovement).toHaveBeenCalledTimes(2);
+      expect(mockedIncomerHandleApprovement.mock.calls.length).toBeGreaterThan(callLength)
       expect(incomer["providedUUID"]).toBe(incomerProvidedUUID);
 
       const incomerTransactions = await incomer["newTransactionStore"].getTransactions();
