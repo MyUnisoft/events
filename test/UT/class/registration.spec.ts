@@ -96,6 +96,7 @@ describe("Registration", () => {
 
   describe("Initializing a new Incomer", () => {
     let handlePingFn: (...any) => any;
+    let registerFn: (...any) => Promise<any>;
     let incomerProvidedUUID: string;
     let callLength;
 
@@ -122,9 +123,11 @@ describe("Registration", () => {
       });
 
       handlePingFn = incomer["handlePing"];
+      registerFn = incomer["registrationIntervalCb"];
 
       Reflect.set(incomer, "logger", incomerLogger);
       Reflect.set(incomer, "handlePing", updateIncomerState);
+      Reflect.set(incomer, "registrationIntervalCb", () => new Promise((resolve) => resolve(void 0)));
 
       await incomer.initialize();
     });
@@ -143,13 +146,9 @@ describe("Registration", () => {
     });
 
     it("Should have removed the incomer", async() => {
-      await timers.setTimeout(kIdleTime + 1_000);
+      await timers.setTimeout(kIdleTime);
 
       expect(mockedDispatcherRemoveNonActives).toHaveBeenCalled();
-
-      Reflect.set(incomer, "handlePing", handlePingFn);
-
-      await timers.setTimeout(10_000);
 
       expect(incomer.dispatcherConnectionState).toBe(false);
 
@@ -163,7 +162,13 @@ describe("Registration", () => {
     });
 
     it("Should have register again & handle the unpublished event", async() => {
+      Reflect.set(incomer, "registrationIntervalCb", registerFn);
+
       await timers.setTimeout(5_000);
+
+      Reflect.set(incomer, "handlePing", handlePingFn);
+
+      await timers.setTimeout(kPingInterval);
 
       expect(incomer.dispatcherConnectionState).toBe(true);
 
