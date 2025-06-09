@@ -50,7 +50,7 @@ import {
 import { EventsService, TAKE_LEAD_BACK_SYM } from "./service/events.service.js";
 
 // CONSTANTS
-const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 10 :
+const kIdleTime = Number.isNaN(Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME)) ? 60_000 * 5 :
   Number(process.env.MYUNISOFT_DISPATCHER_IDLE_TIME);
 const kCheckLastActivityInterval = Number.isNaN(
   Number(process.env.MYUNISOFT_DISPATCHER_CHECK_LAST_ACTIVITY_INTERVAL)
