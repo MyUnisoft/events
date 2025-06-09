@@ -172,7 +172,7 @@ describe("eventsValidationFn", () => {
     });
   });
 
-  describe("DocumentCloud", () => {
+  describe("cloudDocument", () => {
     let cloudDocument;
 
     before(() => {
@@ -201,14 +201,34 @@ describe("eventsValidationFn", () => {
       exercice = eventsValidationFn.get("exercice");
     });
 
-    test("cloudDocument should have a validation function for \"create\", \"update\", \"delete\"", () => {
+    test("exercice should have a validation function for \"create\", \"update\", \"delete\"", () => {
       assert.ok(exercice.has("create"));
       assert.ok(exercice.has("update"));
       assert.ok(exercice.has("delete"));
     });
 
-    test("cloudDocument should not have a validation function for \"delete\", \"void\"", () => {
+    test("exercice should not have a validation function for \"delete\", \"void\"", () => {
       assert.ok(!exercice.has("void"));
     });
-  })
+  });
+
+  describe("visitedPage", () => {
+    let visitedPage;
+
+    before(() => {
+      assert.ok(eventsValidationFn.has("visitedPage"));
+
+      visitedPage = eventsValidationFn.get("visitedPage");
+    });
+
+    test("exercice should have a validation function for \"void\"", () => {
+      assert.ok(visitedPage.has("void"));
+    });
+
+    test("exercice should not have a validation function for \"create\", \"update\", \"delete\"", () => {
+      assert.ok(!visitedPage.has("create"));
+      assert.ok(!visitedPage.has("update"));
+      assert.ok(!visitedPage.has("delete"));
+    });
+  });
 });
