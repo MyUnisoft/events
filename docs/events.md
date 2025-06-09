@@ -487,7 +487,6 @@ export interface AccountingEntryLettering {
   operation: "CREATE";
   data: {
     id: string;
-    piece2: string;
     paymentType: string;
     piece1?: string;
   }
@@ -521,9 +520,6 @@ export interface AccountingEntryLettering {
           "type": "string",
           "pattern": "^[0-9]+"
         },
-        "piece2": {
-          "type": "string"
-        },
         "paymentType": {
           "type": "string"
         },
@@ -531,7 +527,7 @@ export interface AccountingEntryLettering {
           "type": "string"
         }
       },
-      "required": ["id", "piece2", "paymentType"],
+      "required": ["id", "paymentType"],
       "additionalProperties": false
     }
   },
