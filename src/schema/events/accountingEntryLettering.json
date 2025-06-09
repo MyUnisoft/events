@@ -7,9 +7,6 @@
           "type": "string",
           "pattern": "^[0-9]+"
         },
-        "piece2": {
-          "type": "string"
-        },
         "paymentType": {
           "type": "string"
         },
@@ -17,7 +14,7 @@
           "type": "string"
         }
       },
-      "required": ["id", "piece2", "paymentType"],
+      "required": ["id", "paymentType"],
       "additionalProperties": false
     },
     "delete": {
@@ -27,9 +24,6 @@
           "type": "string",
           "pattern": "^[0-9]+"
         },
-        "piece2": {
-          "type": "string"
-        },
         "paymentType": {
           "type": "string"
         },
@@ -37,7 +31,7 @@
           "type": "string"
         }
       },
-      "required": ["id", "piece2", "paymentType"],
+      "required": ["id", "paymentType"],
       "additionalProperties": false
     }
   }

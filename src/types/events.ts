@@ -107,7 +107,6 @@ export interface AccountingEntryLettering {
   operation: "CREATE" | "DELETE";
   data: {
     id: string;
-    piece2: string;
     paymentType: string;
     piece1?: string;
   }
