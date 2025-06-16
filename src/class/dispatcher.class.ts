@@ -601,7 +601,7 @@ export class Dispatcher<T extends GenericEvent = GenericEvent> extends EventEmit
     for (const incomer of incomers) {
       const { providedUUID: uuid } = incomer;
 
-      if (incomer.baseUUID === this.#selfProvidedUUID || incomer.baseUUID === incomer.providedUUID) {
+      if (incomer.baseUUID === this.#selfProvidedUUID) {
         await this.incomerStore.updateIncomerState(uuid);
 
         continue;
