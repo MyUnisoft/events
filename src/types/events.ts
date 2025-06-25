@@ -35,7 +35,7 @@ export interface Connector {
 export interface AccountingFolder {
   name: "accountingFolder";
   scope: Scope & Required<Pick<Scope, "firmId">>;
-  operation: "CREATE" | "UPDATE" | "DELETE";
+  operation: "CREATE";
   data: {
     id: string;
   };
@@ -51,7 +51,7 @@ export enum DocumentKind {
 export interface Document {
   name: "document";
   scope: Scope;
-  operation: "CREATE" | "DELETE";
+  operation: "CREATE";
   data: {
     id: string;
     kind: DocumentKind;

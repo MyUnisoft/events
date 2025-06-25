@@ -11,28 +11,6 @@
       "required": ["id"],
       "additionalProperties": false
     },
-    "update": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[0-9]+"
-        }
-      },
-      "required": ["id"],
-      "additionalProperties": false
-    },
-    "delete": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[0-9]+"
-        }
-      },
-      "required": ["id"],
-      "additionalProperties": false
-    },
     "scope": {
       "type": "object",
       "properties": {
