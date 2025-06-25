@@ -131,7 +131,7 @@ Event notifying the creation of a new Accounting Folder (a company).
 export interface AccountingFolder {
   name: "accountingFolder";
   scope: Scope & Required<Pick<Scope, "firmId">>;
-  operation: "CREATE" | "UPDATE";
+  operation: "CREATE";
   data: {
     id: string;
   };
@@ -153,7 +153,7 @@ export interface AccountingFolder {
     "operation": {
       "type": "string",
       "description": "Operation operated next to the event",
-      "enum": ["CREATE", "UPDATE", "DELETE"]
+      "enum": ["CREATE"]
     },
     "scope": {
       "type": "object",
@@ -220,7 +220,7 @@ export enum DocumentKind {
 export interface Document {
   name: "document";
   scope: Scope;
-  operation: "CREATE" | "DELETE";
+  operation: "CREATE";
   data: {
     id: string;
     kind: DocumentKind;
@@ -244,7 +244,7 @@ export interface Document {
     "operation": {
       "type": "string",
       "description": "Operation operated next to the event",
-      "enum": ["CREATE", "DELETE"]
+      "enum": ["CREATE"]
     },
     "scope": {
       "$ref": "Scope"

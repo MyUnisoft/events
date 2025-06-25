@@ -16,23 +16,6 @@
       },
       "required": ["id", "kind", "name"],
       "additionalProperties": false
-    },
-    "delete": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[0-9]+"
-        },
-        "kind": {
-          "enum": ["AF", "PF", "DB", "ED"]
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "required": ["id", "kind", "name"],
-      "additionalProperties": false
     }
   }
 }

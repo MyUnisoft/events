@@ -40,15 +40,15 @@ describe("eventsValidationFn", () => {
       accountingFolder = eventsValidationFn.get("accountingFolder");
     });
 
-    test("accountingFolder should have a validation function for \"create\", \"update\", \"delete\", \"scope\"", () => {
+    test("accountingFolder should have a validation function for \"create\", \"scope\"", () => {
       assert.ok(accountingFolder.has("create"));
-      assert.ok(accountingFolder.has("update"));
-      assert.ok(accountingFolder.has("delete"));
       assert.ok(accountingFolder.has("scope"));
     });
 
-    test("accountingFolder should not have a validation function for \"void\"", () => {
+    test("accountingFolder should not have a validation function for \"void\", \"update\", \"delete\"", () => {
       assert.ok(!accountingFolder.has("void"));
+      assert.ok(!accountingFolder.has("update"));
+      assert.ok(!accountingFolder.has("delete"));
     });
   });
 
@@ -61,13 +61,13 @@ describe("eventsValidationFn", () => {
       document = eventsValidationFn.get("document");
     });
 
-    test("document should have a validation function for \"create\", \"delete\"", () => {
+    test("document should have a validation function for \"create\"", () => {
       assert.ok(document.has("create"));
-      assert.ok(document.has("delete"));
     });
 
-    test("document should not have a validation function for \"update\", \"void\"", () => {
+    test("document should not have a validation function for \"update\", \"void\", \"delete\"", () => {
       assert.ok(!document.has("update"));
+      assert.ok(!document.has("delete"));
       assert.ok(!document.has("void"));
     });
   });
