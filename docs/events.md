@@ -214,7 +214,8 @@ export enum DocumentKind {
   DossierAnnuel = "AF",
   DossierPermanent = "PF",
   BaseDocumentaire = "DB",
-  ExternalDocument = "ED"
+  ExternalDocument = "ED",
+  MiscellaneousFlow = "MF"
 }
 
 export interface Document {
@@ -256,7 +257,7 @@ export interface Document {
           "type": "string"
         },
         "kind": {
-          "enum": ["AF", "PF", "DB", "ED"]
+          "enum": ["AF", "PF", "DB", "ED", "MF"]
         },
         "name": {
           "type": "string"
