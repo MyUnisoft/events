@@ -45,7 +45,8 @@ export enum DocumentKind {
   DossierAnnuel = "AF",
   DossierPermanent = "PF",
   BaseDocumentaire = "DB",
-  ExternalDocument = "ED"
+  ExternalDocument = "ED",
+  MiscellaneousFlow = "MF"
 }
 
 export interface Document {
