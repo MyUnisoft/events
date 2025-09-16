@@ -41,13 +41,13 @@ export interface AccountingFolder {
   };
 }
 
-export enum DocumentKind {
-  DossierAnnuel = "AF",
-  DossierPermanent = "PF",
-  BaseDocumentaire = "DB",
-  ExternalDocument = "ED",
-  MiscellaneousFlow = "MF"
-}
+export const DocumentKind = {
+  DossierAnnuel: "AF",
+  DossierPermanent: "PF",
+  BaseDocumentaire: "DB",
+  ExternalDocument: "ED",
+  MiscellaneousFlow: "MF"
+} as const;
 
 export interface Document {
   name: "document";
@@ -55,7 +55,7 @@ export interface Document {
   operation: "CREATE";
   data: {
     id: string;
-    kind: DocumentKind;
+    kind: typeof DocumentKind[keyof typeof DocumentKind];
     name: string;
   }
 }
