@@ -218,6 +218,8 @@ export const DOCUMENT_KIND = Object.freeze({
   MiscellaneousFlow: "MF"
 });
 
+export type DocumentKind = typeof DOCUMENT_KIND[keyof typeof DOCUMENT_KIND];
+
 export interface Document {
   name: "document";
   scope: Scope;
