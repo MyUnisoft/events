@@ -210,13 +210,13 @@ export interface AccountingFolder {
 Event notifying the creation/addition of a document.
 
 ```ts
-export const DocumentKind = {
+export const DOCUMENT_KIND = Object.freeze({
   DossierAnnuel: "AF",
   DossierPermanent: "PF",
   BaseDocumentaire: "DB",
   ExternalDocument: "ED",
   MiscellaneousFlow: "MF"
-} as const;
+});
 
 export interface Document {
   name: "document";
@@ -224,7 +224,7 @@ export interface Document {
   operation: "CREATE";
   data: {
     id: string;
-    kind: typeof DocumentKind[keyof typeof DocumentKind];
+    kind: typeof DOCUMENT_KIND[keyof typeof DOCUMENT_KIND];
     name: string;
   };
 }
