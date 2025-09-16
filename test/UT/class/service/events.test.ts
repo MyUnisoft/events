@@ -141,7 +141,7 @@ describe("EventsService", () => {
     test("Calling forceDispatcherTakeLead as the only dispatcher, it should stay alive", async() => {
       let incomers = await dispatcher.eventsService.getIncomers();
 
-      dispatcher.eventsService.forceDispatcherTakeLead(incomers, incomers[0]);
+      dispatcher.eventsService.forceDispatcherTakeLead(incomers, [...incomers.values()][0]);
 
       await timers.setTimeout(2_000);
 

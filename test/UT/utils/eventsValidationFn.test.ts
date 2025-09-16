@@ -3,7 +3,7 @@ import assert from "node:assert";
 import { describe, before, test } from "node:test";
 
 // Import Internal Dependencies
-import { eventsValidationFn } from "../../../src/utils/index.js";
+import { eventsValidationFn, NestedValidationFunctions } from "../../../src/utils/index.js";
 
 
 describe("eventsValidationFn", () => {
@@ -12,7 +12,7 @@ describe("eventsValidationFn", () => {
   });
 
   describe("connector", () => {
-    let connector;
+    let connector: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("connector"));
@@ -21,18 +21,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("connector should have a validation function for \"create\", \"update\", \"delete\"", () => {
-      assert.ok(connector.has("create"));
-      assert.ok(connector.has("update"));
-      assert.ok(connector.has("delete"));
+      assert.ok(connector!.has("create"));
+      assert.ok(connector!.has("update"));
+      assert.ok(connector!.has("delete"));
     });
 
     test("connector should not have a validation function for \"void\"", () => {
-      assert.ok(!connector.has("void"));
+      assert.ok(!connector!.has("void"));
     });
   });
 
   describe("accountingFolder", () => {
-    let accountingFolder;
+    let accountingFolder: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("accountingFolder"));
@@ -41,19 +41,19 @@ describe("eventsValidationFn", () => {
     });
 
     test("accountingFolder should have a validation function for \"create\", \"scope\"", () => {
-      assert.ok(accountingFolder.has("create"));
-      assert.ok(accountingFolder.has("scope"));
+      assert.ok(accountingFolder!.has("create"));
+      assert.ok(accountingFolder!.has("scope"));
     });
 
     test("accountingFolder should not have a validation function for \"void\", \"update\", \"delete\"", () => {
-      assert.ok(!accountingFolder.has("void"));
-      assert.ok(!accountingFolder.has("update"));
-      assert.ok(!accountingFolder.has("delete"));
+      assert.ok(!accountingFolder!.has("void"));
+      assert.ok(!accountingFolder!.has("update"));
+      assert.ok(!accountingFolder!.has("delete"));
     });
   });
 
   describe("document", () => {
-    let document;
+    let document: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("document"));
@@ -62,18 +62,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("document should have a validation function for \"create\"", () => {
-      assert.ok(document.has("create"));
+      assert.ok(document!.has("create"));
     });
 
     test("document should not have a validation function for \"update\", \"void\", \"delete\"", () => {
-      assert.ok(!document.has("update"));
-      assert.ok(!document.has("delete"));
-      assert.ok(!document.has("void"));
+      assert.ok(!document!.has("update"));
+      assert.ok(!document!.has("delete"));
+      assert.ok(!document!.has("void"));
     });
   });
 
   describe("portfolio", () => {
-    let portfolio;
+    let portfolio: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("portfolio"));
@@ -82,18 +82,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("portfolio should have a validation function for \"create\", \"delete\"", () => {
-      assert.ok(portfolio.has("create"));
-      assert.ok(portfolio.has("delete"));
+      assert.ok(portfolio!.has("create"));
+      assert.ok(portfolio!.has("delete"));
     });
 
     test("portfolio should not have a validation function for \"update\", \"void\"", () => {
-      assert.ok(!portfolio.has("update"));
-      assert.ok(!portfolio.has("void"));
+      assert.ok(!portfolio!.has("update"));
+      assert.ok(!portfolio!.has("void"));
     });
   });
 
   describe("AccountingLineEntry", () => {
-    let accountingLineEntry;
+    let accountingLineEntry: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("accountingLineEntry"));
@@ -102,18 +102,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("accountingLineEntry should have a validation function for \"create\"", () => {
-      assert.ok(accountingLineEntry.has("create"));
+      assert.ok(accountingLineEntry!.has("create"));
     });
 
     test("accountingLineEntry should not have a validation function for \"update\", \"delete\", \"void\"", () => {
-      assert.ok(!accountingLineEntry.has("update"));
-      assert.ok(!accountingLineEntry.has("delete"));
-      assert.ok(!accountingLineEntry.has("void"));
+      assert.ok(!accountingLineEntry!.has("update"));
+      assert.ok(!accountingLineEntry!.has("delete"));
+      assert.ok(!accountingLineEntry!.has("void"));
     });
   });
 
   describe("AdminMessage", () => {
-    let adminMessage;
+    let adminMessage: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("adminMessage"));
@@ -122,18 +122,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("adminMessage should have a validation function for \"void\"", () => {
-      assert.ok(adminMessage.has("void"));
+      assert.ok(adminMessage!.has("void"));
     });
 
     test("adminMessage should not have a validation function for \"create\", \"update\", \"delete\"", () => {
-      assert.ok(!adminMessage.has("create"));
-      assert.ok(!adminMessage.has("update"));
-      assert.ok(!adminMessage.has("delete"));
+      assert.ok(!adminMessage!.has("create"));
+      assert.ok(!adminMessage!.has("update"));
+      assert.ok(!adminMessage!.has("delete"));
     });
   });
 
   describe("ThirdParty", () => {
-    let thirdParty;
+    let thirdParty: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("thirdParty"));
@@ -142,18 +142,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("thirdParty should have a validation function for \"create\", \"update\", \"delete\"", () => {
-      assert.ok(thirdParty.has("create"));
-      assert.ok(thirdParty.has("update"));
-      assert.ok(thirdParty.has("delete"));
+      assert.ok(thirdParty!.has("create"));
+      assert.ok(thirdParty!.has("update"));
+      assert.ok(thirdParty!.has("delete"));
     });
 
     test("thirdParty should not have a validation function for \"void\"", () => {
-      assert.ok(!thirdParty.has("void"));
+      assert.ok(!thirdParty!.has("void"));
     });
   });
 
   describe("AccountingEntryLettering", () => {
-    let accountingEntryLettering;
+    let accountingEntryLettering: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("accountingEntryLettering"));
@@ -162,18 +162,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("accountingEntryLettering should have a validation function for \"create\", \"delete\"", () => {
-      assert.ok(accountingEntryLettering.has("create"));
-      assert.ok(accountingEntryLettering.has("delete"));
+      assert.ok(accountingEntryLettering!.has("create"));
+      assert.ok(accountingEntryLettering!.has("delete"));
     });
 
     test("accountingEntryLettering should not have a validation function for \"update\", \"void\"", () => {
-      assert.ok(!accountingEntryLettering.has("update"));
-      assert.ok(!accountingEntryLettering.has("void"));
+      assert.ok(!accountingEntryLettering!.has("update"));
+      assert.ok(!accountingEntryLettering!.has("void"));
     });
   });
 
   describe("cloudDocument", () => {
-    let cloudDocument;
+    let cloudDocument: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("cloudDocument"));
@@ -182,18 +182,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("cloudDocument should have a validation function for \"create\", \"update\"", () => {
-      assert.ok(cloudDocument.has("create"));
-      assert.ok(cloudDocument.has("update"));
+      assert.ok(cloudDocument!.has("create"));
+      assert.ok(cloudDocument!.has("update"));
     });
 
     test("cloudDocument should not have a validation function for \"delete\", \"void\"", () => {
-      assert.ok(!cloudDocument.has("delete"));
-      assert.ok(!cloudDocument.has("void"));
+      assert.ok(!cloudDocument!.has("delete"));
+      assert.ok(!cloudDocument!.has("void"));
     });
   });
 
   describe("Exercice", () => {
-    let exercice;
+    let exercice: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("exercice"));
@@ -202,18 +202,18 @@ describe("eventsValidationFn", () => {
     });
 
     test("exercice should have a validation function for \"create\", \"update\", \"delete\"", () => {
-      assert.ok(exercice.has("create"));
-      assert.ok(exercice.has("update"));
-      assert.ok(exercice.has("delete"));
+      assert.ok(exercice!.has("create"));
+      assert.ok(exercice!.has("update"));
+      assert.ok(exercice!.has("delete"));
     });
 
     test("exercice should not have a validation function for \"delete\", \"void\"", () => {
-      assert.ok(!exercice.has("void"));
+      assert.ok(!exercice!.has("void"));
     });
   });
 
   describe("visitedPage", () => {
-    let visitedPage;
+    let visitedPage: NestedValidationFunctions | undefined;
 
     before(() => {
       assert.ok(eventsValidationFn.has("visitedPage"));
@@ -222,13 +222,13 @@ describe("eventsValidationFn", () => {
     });
 
     test("exercice should have a validation function for \"void\"", () => {
-      assert.ok(visitedPage.has("void"));
+      assert.ok(visitedPage!.has("void"));
     });
 
     test("exercice should not have a validation function for \"create\", \"update\", \"delete\"", () => {
-      assert.ok(!visitedPage.has("create"));
-      assert.ok(!visitedPage.has("update"));
-      assert.ok(!visitedPage.has("delete"));
+      assert.ok(!visitedPage!.has("create"));
+      assert.ok(!visitedPage!.has("update"));
+      assert.ok(!visitedPage!.has("delete"));
     });
   });
 });

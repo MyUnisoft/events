@@ -71,6 +71,7 @@ describe("Dispatcher", () => {
       await subscriber.initialize();
 
       dispatcher = new Dispatcher({
+        name: "foo",
         redis,
         subscriber,
         logger,
@@ -161,7 +162,7 @@ describe("Dispatcher", () => {
       });
 
       describe("Publishing a well formed register event but multiple times", () => {
-        let channel;
+        let channel: Channel;
         let incomerTransactionStore: TransactionStore<"incomer">;
 
         const event = {
@@ -394,6 +395,7 @@ describe("Dispatcher", () => {
       }
 
       dispatcher = new Dispatcher({
+        name: "foo",
         redis,
         subscriber,
         logger,
@@ -659,11 +661,11 @@ describe("Dispatcher", () => {
         const secondIncomerName = "bar";
         const secondUuid = randomUUID();
         let firstIncomerProvidedUUID;
-        let secondIncomerProvidedUUID;
+        let secondIncomerProvidedUUID: string;
         let hasDistributedEvents = false;
         let firstIncomerTransactionStore: TransactionStore<"incomer">;
         let secondIncomerTransactionStore: TransactionStore<"incomer">;
-        let mainTransactionId;
+        let mainTransactionId: string | null | undefined;
 
         beforeAll(async() => {
           await subscriber.subscribe("dispatcher");
@@ -835,7 +837,7 @@ describe("Dispatcher", () => {
         test("it should have distributed the event & resolve the main transaction", async() => {
           await timers.setTimeout(10_000);
 
-          const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId);
+          const transaction = await firstIncomerTransactionStore.getTransactionById(mainTransactionId!);
 
           expect(transaction).toBeNull();
 

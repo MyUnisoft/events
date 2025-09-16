@@ -120,7 +120,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(concernedIncomer, "newTransactionStore", firstIncomerTransactionStore);
 
-          concernedIncomer["lastPingDate"] = Date.now();
+          concernedIncomer["lastActivity"] = Date.now();
           concernedIncomer.emit("registered");
 
           handleApprovementIndex++;
@@ -144,7 +144,7 @@ describe("Publishing/exploiting a custom event & inactive incomer", () => {
 
           Reflect.set(secondConcernedIncomer, "newTransactionStore", secondIncomerTransactionStore);
 
-          secondConcernedIncomer["lastPingDate"] = Date.now();
+          secondConcernedIncomer["lastActivity"] = Date.now();
           secondConcernedIncomer.emit("registered");
         }
       });

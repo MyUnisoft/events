@@ -63,8 +63,8 @@ describe("Registration", () => {
     }
   };
 
-  function updateIncomerState(...args) {
-    incomer["lastPingDate"] = Date.now();
+  function updateIncomerState(...args: any[]) {
+    incomer["lastActivity"] = Date.now();
     incomer["dispatcherConnectionState"] = true;
   }
 
@@ -95,10 +95,10 @@ describe("Registration", () => {
   });
 
   describe("Initializing a new Incomer", () => {
-    let handlePingFn: (...any) => any;
-    let registerFn: (...any) => Promise<any>;
+    let handlePingFn: (...arg0: any[]) => any;
+    let registerFn: (...arg0: any[]) => Promise<any>;
     let incomerProvidedUUID: string;
-    let callLength;
+    let callLength: number;
 
     const eventComeBackHandler = jest.fn().mockImplementation(() => Ok({ status: "RESOLVED" }));
 
