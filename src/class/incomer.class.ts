@@ -161,7 +161,7 @@ export class Incomer <
   #retryPublishLock = new Mutex({ concurrency: 1, keepReferencingTimers: false });
   #registrationCbLock = new Mutex({ concurrency: 1, keepReferencingTimers: false });
 
-  #lastActivity: number;
+  private lastActivity: number;
   #idleTime: number;
   #eventsValidationFn: Map<string, ValidateFunction<Record<string, any>> | NestedValidationFunctions> | undefined;
   #customValidationCbFn: ((event: T) => void) | undefined;
@@ -232,7 +232,7 @@ export class Incomer <
   private async checkDispatcherState() {
     const date = Date.now();
 
-    if ((Number(this.#lastActivity) + Number(this.#maxPingInterval)) < date) {
+    if ((Number(this.lastActivity) + Number(this.#maxPingInterval)) < date) {
       this.dispatcherConnectionState = false;
 
       return;
@@ -341,7 +341,7 @@ export class Incomer <
       });
 
       this.#checkDispatcherStateInterval = setInterval(() => {
-        if (!this.#lastActivity) {
+        if (!this.lastActivity) {
           return;
         }
 
@@ -350,7 +350,7 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.#checkTransactionsStateInterval = setInterval(() => {
-        if (!this.#lastActivity) {
+        if (!this.lastActivity) {
           return;
         }
 
@@ -422,7 +422,7 @@ export class Incomer <
       });
 
       this.#checkDispatcherStateInterval = setInterval(() => {
-        if (!this.#lastActivity) {
+        if (!this.lastActivity) {
           return;
         }
 
@@ -431,7 +431,7 @@ export class Incomer <
       }, this.#maxPingInterval).unref();
 
       this.#checkTransactionsStateInterval = setInterval(() => {
-        if (!this.#lastActivity) {
+        if (!this.lastActivity) {
           return;
         }
 
@@ -439,7 +439,7 @@ export class Incomer <
           .catch((error) => this.logger.error({ error: error.stack }, "failed while retry publishing"));
       }, this.#publishInterval).unref();
 
-      this.#lastActivity = Date.now();
+      this.lastActivity = Date.now();
       this.dispatcherConnectionState = true;
 
       this.logger.info(`Incomer registered with uuid ${this.providedUUID}`);
@@ -715,7 +715,7 @@ export class Incomer <
     const { redisMetadata } = message;
     const { transactionId } = redisMetadata;
 
-    this.#lastActivity = Date.now();
+    this.lastActivity = Date.now();
     this.dispatcherConnectionState = true;
 
     const logData = {
@@ -906,7 +906,7 @@ export class Incomer <
 
     await Promise.all(transactionToUpdate);
 
-    this.#lastActivity = Date.now();
+    this.lastActivity = Date.now();
     this.dispatcherConnectionState = true;
     this.emit("registered");
   }
