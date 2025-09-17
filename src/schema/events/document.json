@@ -8,7 +8,7 @@
           "pattern": "^[0-9]+"
         },
         "kind": {
-          "enum": ["AF", "PF", "DB", "ED"]
+          "enum": ["AF", "PF", "DB", "ED", "MF"]
         },
         "name": {
           "type": "string"

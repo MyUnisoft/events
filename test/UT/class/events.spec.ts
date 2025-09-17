@@ -17,7 +17,7 @@ import {
   eventsValidationFn,
   type EventOptions,
   type Events,
-  DocumentKind
+  DOCUMENT_KIND
 } from "../../../src/index.js";
 import {
   Transaction,
@@ -64,6 +64,7 @@ async function initDispatcherInstance(
   const { pingInterval, checkTransactionInterval, idleTime, checkLastActivityInterval } = options;
 
   const dispatcher = new Dispatcher<EventOptions<keyof Events>>({
+    name: "foo",
     redis,
     subscriber,
     pingInterval,
@@ -448,7 +449,7 @@ describe("event", () => {
       data: {
         id: "1",
         name: "foo",
-        kind: DocumentKind.DossierAnnuel
+        kind: DOCUMENT_KIND.DossierAnnuel
       },
       scope: {
         schemaId: 1,

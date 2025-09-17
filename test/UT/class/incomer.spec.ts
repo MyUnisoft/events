@@ -129,7 +129,7 @@ describe("Init Incomer with Dispatcher alive", () => {
       pingInterval: pingInterval,
       idleTime: kIdleTime,
       incomerUUID: dispatcherIncomer.baseUUID,
-      instanceName: "node:Pulsar"
+      name: "node:Pulsar"
     });
 
     await dispatcher.initialize();

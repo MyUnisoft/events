@@ -41,12 +41,15 @@ export interface AccountingFolder {
   };
 }
 
-export enum DocumentKind {
-  DossierAnnuel = "AF",
-  DossierPermanent = "PF",
-  BaseDocumentaire = "DB",
-  ExternalDocument = "ED"
-}
+export const DOCUMENT_KIND = Object.freeze({
+  DossierAnnuel: "AF",
+  DossierPermanent: "PF",
+  BaseDocumentaire: "DB",
+  ExternalDocument: "ED",
+  MiscellaneousFlow: "MF"
+});
+
+export type DocumentKind = typeof DOCUMENT_KIND[keyof typeof DOCUMENT_KIND];
 
 export interface Document {
   name: "document";

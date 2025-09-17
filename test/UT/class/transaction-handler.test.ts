@@ -137,7 +137,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -147,7 +147,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -157,7 +157,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -175,7 +175,7 @@ describe("transactionHandler", () => {
             instance: "incomer"
           });
 
-          let resolvedEvent;
+          let resolvedEvent: { spreadTransaction: any; mainTransaction?: Transaction<"incomer">; };
 
           before(async() => {
             await incomerStore.setIncomer(publisher, publisher.providedUUID);
@@ -221,7 +221,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -231,7 +231,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -241,7 +241,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -251,7 +251,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -269,7 +269,7 @@ describe("transactionHandler", () => {
             instance: "incomer"
           });
 
-          let resolvedEvent;
+          let resolvedEvent: { spreadTransaction: any; mainTransaction?: Transaction<"incomer">; };
 
           before(async() => {
             await incomerStore.setIncomer(publisher, publisher.providedUUID);
@@ -318,7 +318,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -328,7 +328,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -338,7 +338,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -356,7 +356,7 @@ describe("transactionHandler", () => {
             instance: "incomer"
           });
 
-          let unResolved;
+          let unResolved: { spreadTransaction: any; mainTransaction?: Transaction<"incomer">; };
 
           before(async() => {
             await incomerStore.setIncomer(publisher, publisher.providedUUID);
@@ -402,7 +402,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -412,7 +412,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -422,7 +422,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -432,7 +432,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -450,7 +450,7 @@ describe("transactionHandler", () => {
             instance: "incomer"
           });
 
-          let backupEvent;
+          let backupEvent: unknown;
 
           before(async() => {
             await incomerStore.setIncomer(publisher, publisher.providedUUID);
@@ -503,7 +503,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -513,7 +513,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -523,7 +523,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -533,7 +533,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -604,7 +604,7 @@ describe("transactionHandler", () => {
             eventsCast: [connectorEvent.name],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -614,7 +614,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
@@ -624,7 +624,7 @@ describe("transactionHandler", () => {
             eventsCast: [],
             eventsSubscribe: [{ name: connectorEvent.name }],
             providedUUID: randomUUID(),
-            isDispatcherActiveInstance: false,
+            isDispatcherActiveInstance: "false",
             baseUUID: randomUUID(),
             lastActivity: now,
             aliveSince: now
