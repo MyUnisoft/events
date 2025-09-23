@@ -41,16 +41,9 @@ export function validate<T extends keyof Events = keyof Events>(
     throw new Error(`metadata: [${concatErrors(metadataValidationFunction.errors)}]`);
   }
 
-  if (!scopeValidationFunction(scope)) {
-    throw new Error(`scope: [${concatErrors(scopeValidationFunction.errors)}]`);
-  }
-
-  if (event.has("scope")) {
-    const eventScopeValidationFn = event.get("scope");
-
-    if (!eventScopeValidationFn(scope)) {
-      throw new Error(`scope: [${concatErrors(eventScopeValidationFn.errors)}]`);
-    }
+  const eventScopeValidationFn = event.has("scope") ? event.get("scope") : scopeValidationFunction;
+  if (!eventScopeValidationFn(scope)) {
+    throw new Error(`scope: [${concatErrors(eventScopeValidationFn.errors)}]`);
   }
 }
 
