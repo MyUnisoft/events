@@ -1,19 +1,26 @@
 // Import Internal Dependencies
-import { Incomer, type IncomerOptions } from "./incomer.class.js";
+import { EventCallbackResponse, Incomer, type IncomerOptions } from "./incomer.class.js";
 import { Dispatcher } from "./dispatcher.class.js";
 import type {
+  CallBackEventMessage,
   GenericEvent
 } from "../types/index.js";
 
-export class Externals<T extends GenericEvent = GenericEvent> {
-  public incomer: Incomer<T>;
-  public dispatcher: Dispatcher<T>;
+export class Externals<
+  TListenedEvents extends GenericEvent = GenericEvent,
+  KCastedEvents extends GenericEvent = GenericEvent
+> {
+  public incomer: Incomer<KCastedEvents, TListenedEvents>;
+  public dispatcher: Dispatcher<TListenedEvents | KCastedEvents>;
 
   constructor(
-    options: IncomerOptions<T>
+    options: IncomerOptions<TListenedEvents, KCastedEvents>
   ) {
-    this.incomer = new Incomer({
+    const opts: IncomerOptions<KCastedEvents, TListenedEvents> = {
       ...options,
+      eventCallback: options.eventCallback as unknown as (
+        message: CallBackEventMessage<KCastedEvents>
+      ) => Promise<EventCallbackResponse>,
       eventsCast: options.eventsSubscribe.map((val) => val.name),
       eventsSubscribe: options.eventsCast.map((eventCast) => {
         return {
@@ -21,9 +28,10 @@ export class Externals<T extends GenericEvent = GenericEvent> {
         };
       }),
       externalsInitialized: true
-    });
+    };
+    this.incomer = new Incomer<KCastedEvents, TListenedEvents>(opts);
 
-    this.dispatcher = new Dispatcher({
+    this.dispatcher = new Dispatcher<TListenedEvents | KCastedEvents>({
       ...options,
       pingInterval: Number(process.env.MYUNISOFT_DISPATCHER_PING) || undefined,
       checkLastActivityInterval: Number(process.env.MYUNISOFT_DISPATCHER_ACTIVITY_CHECK) || undefined,
