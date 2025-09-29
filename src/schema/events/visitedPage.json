@@ -40,7 +40,7 @@
           "nullable": true
         }
       },
-      "required": ["schemaId", "firmId", "persPhysiqueId"],
+      "required": ["schemaId", "accountingFolderId", "persPhysiqueId"],
       "additionalProperties": false
     }
   }
