@@ -728,3 +728,76 @@ export interface VisitedPage {
 }
 ```
 </details>
+
+## YousignSignature
+
+```ts
+export interface YousignSignature {
+  name: "yousignSignature";
+  scope: Scope;
+  operation: "VOID";
+  data: {
+    id: string;
+  }
+}
+```
+
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "yousignSignature": {
+    "void": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number",
+          "nullable": true
+        },
+        "firmSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderId": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "persPhysiqueId": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "schemaId"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
+```
+</details>
+

@@ -144,6 +144,15 @@ export interface VisitedPage {
   }
 }
 
+export interface YousignSignature {
+  name: "yousignSignature";
+  scope: Scope;
+  operation: "VOID";
+  data: {
+    id: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -156,4 +165,5 @@ export interface Events {
   cloudDocument: CloudDocument;
   exercice: Exercice;
   visitedPage: VisitedPage;
+  yousignSignature: YousignSignature;
 }
