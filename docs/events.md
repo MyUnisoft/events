@@ -801,3 +801,81 @@ export interface YousignSignature {
 ```
 </details>
 
+## TaxReturnSent
+
+```ts
+export interface TaxReturnSent {
+  name: "TaxReturnSent";
+  scope: Scope;
+  operation: "VOID";
+  data: {
+    idDepot: string;
+  }
+}
+```
+
+<details>
+<summary>JSON Schema</summary>
+
+```json
+{
+  "description": "taxReturnSent event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "taxReturnSent"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["VOID"]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "persPhysiqueId": {
+          "type": "number"
+        },
+        "accountingFolderId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number",
+          "nullable": true
+        },
+        "firmSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "persPhysiqueId", "accountingFolderId"],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "idDepot": {
+          "type": "string"
+        }
+      },
+      "required": ["idDepot"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+</details>
