@@ -17,10 +17,18 @@
         "id": {
           "type": "string",
           "pattern": "^[0-9]+"
+        },
+        "oldState": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "newState": {
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "required": ["id"],
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "delete": {
       "type": "object",
@@ -31,6 +39,39 @@
         }
       },
       "required": ["id"],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number"
+        },
+        "firmSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderId": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "persPhysiqueId": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "accountingFolderId", "persPhysiqueId"],
       "additionalProperties": false
     }
   }
