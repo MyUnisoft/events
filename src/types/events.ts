@@ -153,6 +153,15 @@ export interface YousignSignature {
   }
 }
 
+export interface TaxReturnSent {
+name: "taxReturnSent";
+scope: Scope;
+operation: "VOID";
+  data: {
+    idDepot: string;
+  }
+}
+
 export interface Events {
   accountingFolder: AccountingFolder;
   connector: Connector;
@@ -166,4 +175,5 @@ export interface Events {
   exercice: Exercice;
   visitedPage: VisitedPage;
   yousignSignature: YousignSignature;
+  taxReturnSent: TaxReturnSent;
 }

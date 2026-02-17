@@ -1,0 +1,48 @@
+{
+  "taxReturnSent": {
+    "void": {
+      "type": "object",
+      "properties": {
+        "idDepot": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        }
+      },
+      "required": ["idDepot"],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number"
+        },
+        "firmSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderId": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "persPhysiqueId": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "persPhysiqueId", "accountingFolderId"],
+      "additionalProperties": false
+    }
+  }
+}

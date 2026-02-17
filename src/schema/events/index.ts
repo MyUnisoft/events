@@ -9,5 +9,5 @@ export { exercice } from "./exercice.json";
 export { portfolio } from "./portfolio.json";
 export { thirdParty } from "./thirdParty.json";
 export { visitedPage } from "./visitedPage.json";
+export { taxReturnSent } from "./taxReturnSent.json";
 export { yousignSignature } from "./yousignSignature.json";
-
