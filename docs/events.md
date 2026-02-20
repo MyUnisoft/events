@@ -608,6 +608,8 @@ export interface Exercice {
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
+    oldState?: Record<string, any>;
+    newState?: Record<string, any>;
   }
 }
 ```
@@ -637,6 +639,14 @@ export interface Exercice {
       "properties": {
         "id": {
           "type": "string"
+        },
+        "oldState": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "newState": {
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "required": ["id"],

@@ -132,6 +132,8 @@ export interface Exercice {
   operation: "CREATE" | "UPDATE" | "DELETE";
   data: {
     id: string;
+    oldState?: Record<string, any>;
+    newState?: Record<string, any>;
   }
 }
 
