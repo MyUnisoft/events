@@ -211,7 +211,7 @@ describe("EventsService", () => {
     })
   });
 
-  describe("GetEventById", () => {
+  describe("getEventById", () => {
     const incomer = new Incomer({
       redis,
       subscriber,
@@ -430,6 +430,116 @@ describe("EventsService", () => {
 
       for (const event of eventsData) {
         assert.equal(event.redisMetadata.eventTransactionId, eventId);
+      }
+    });
+  });
+
+  describe("getUnresolvedEvents", () => {
+    const incomer = new Incomer({
+      redis,
+      subscriber,
+      name: "foo",
+      eventsCast: [],
+      eventsSubscribe: [],
+      eventCallback: eventCallBackHandler,
+      dispatcherInactivityOptions: {
+        publishInterval: kPingInterval,
+        maxPingInterval: kPingInterval
+      },
+      externalsInitialized: true
+    });
+
+    const dispatcher = new Dispatcher({
+      redis,
+      name: "foo",
+      subscriber,
+      logger,
+      pingInterval: kPingInterval,
+      checkLastActivityInterval: 5_000,
+      checkTransactionInterval: 120_000,
+      eventsValidation: {
+        eventsValidationFn: eventsValidationFn,
+        customValidationCbFn: validate as any
+      },
+      idleTime: 5_000,
+      incomerUUID: incomer.baseUUID
+    });
+
+    const secondIncomer = new Incomer({
+      redis,
+      subscriber,
+      name: "foo",
+      eventsCast: [...Object.keys(AVAILABLE_EVENTS)],
+      eventsSubscribe: [...Object.values(AVAILABLE_EVENTS)],
+      eventCallback: eventCallBackHandler,
+      dispatcherInactivityOptions: {
+        publishInterval: kPingInterval,
+        maxPingInterval: kPingInterval
+      },
+      externalsInitialized: true
+    });
+
+    const secondDispatcher = new Dispatcher({
+      redis,
+      name: "foo",
+      subscriber,
+      logger,
+      pingInterval: kPingInterval,
+      checkLastActivityInterval: 5_000,
+      checkTransactionInterval: 120_000,
+      eventsValidation: {
+        eventsValidationFn: eventsValidationFn,
+        customValidationCbFn: validate as any
+      },
+      idleTime: 5_000,
+      incomerUUID: secondIncomer.baseUUID
+    });
+
+    before(async() => {
+      await redis.flushall();
+
+      await dispatcher.initialize();
+      await incomer.initialize();
+
+      await secondDispatcher.initialize();
+      await secondIncomer.initialize();
+    });
+
+    after(async() => {
+      await secondIncomer.close();
+      await secondDispatcher.close();
+      await incomer.close();
+      await dispatcher.close();
+    });
+
+    test("You should retrieved data about the unresolved events", async() => {
+      const eventId = await secondIncomer.publish({
+        name: "connector",
+        scope: {
+          schemaId: 1
+        },
+        operation: "CREATE",
+        data: {
+          id: "1",
+          code: "foo"
+        },
+        metadata: {
+          agent: "nodejs",
+          origin: {
+            endpoint: "test",
+            method: "POST"
+          },
+          createdAt: Date.now()
+        }
+      });
+
+      await timers.setTimeout(500);
+
+      const unresolvedEvents = await secondDispatcher.eventsService.getUnresolvedEvents();
+
+      for (const unresolvedEvent of unresolvedEvents.values()) {
+        console.log("FOOOOO", unresolvedEvent);
+        assert.equal(unresolvedEvent.redisMetadata.resolved, false);
       }
     });
   });

@@ -114,6 +114,27 @@ export class EventsService extends EventEmitter {
     };
   }
 
+  async getUnresolvedEvents() {
+    const dispatcherTransactions = await this.dispatcherTransactionStore.getTransactions();
+    const backupDispatcherTransactions = await this.backupDispatcherTransactionStore.getTransactions();
+
+    const mappedBackupDispatcherTransactions = [...backupDispatcherTransactions.values()].map((backupDispatcherTransaction) => {
+      return {
+        ...backupDispatcherTransaction,
+        isBackupTransaction: true
+      };
+    });
+
+    const events = [];
+    for (const dispatcherTransaction of [...dispatcherTransactions.values(), ...mappedBackupDispatcherTransactions]) {
+      if (dispatcherTransaction.name !== "PING" && !dispatcherTransaction.redisMetadata.resolved) {
+        events.push(dispatcherTransaction);
+      }
+    }
+
+    return events;
+  }
+
   async getIncomerReceivedEvents(opts: GetIncomerReceivedEventsOptions): Promise<GetIncomerReceivedEventsResponse[]> {
     const { incomerId } = opts;
 
