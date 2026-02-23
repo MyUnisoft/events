@@ -138,6 +138,19 @@ export interface AccountingFolder {
 }
 ```
 
+```ts
+export interface AccountingFolder {
+  name: "accountingFolder";
+  scope: Scope & Required<Pick<Scope, "firmId">>;
+  operation: "UPDATE";
+  data: {
+    id: string;
+    previousState?: Record<string, unknown>;
+    currentState?: Record<string, unknown>;
+  };
+}
+```
+
 <details>
 <summary>JSON Schema</summary>
 
@@ -193,6 +206,77 @@ export interface AccountingFolder {
       "properties": {
         "id": {
           "type": "string"
+          }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+
+```json
+{
+  "description": "AccountingFolder updated event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "accountingFolder"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["UPDATE"]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schemaId": {
+          "type": "number"
+        },
+        "firmId": {
+          "type": "number"
+        },
+        "firmSIRET": {
+            "type": "number",
+            "nullable": true
+          },
+        "accountingFolderId": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderSIRET": {
+          "type": "number",
+          "nullable": true
+        },
+        "accountingFolderRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "persPhysiqueId": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": ["schemaId", "firmId"],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+          },
+        "previousState": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "currentState": {
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "required": ["id"],
@@ -605,11 +689,22 @@ export interface CloudDocument {
 export interface Exercice {
   name: "exercice";
   scope: Scope;
-  operation: "CREATE" | "UPDATE" | "DELETE";
+  operation: "CREATE" |  "DELETE";
   data: {
     id: string;
-    oldState?: Record<string, any>;
-    newState?: Record<string, any>;
+  }
+}
+```
+
+```ts
+export interface Exercice {
+  name: "exercice";
+  scope: Scope;
+  operation: "UPDATE";
+  data: {
+    id: string;
+    previousState?: Record<string, any>;
+    currentState?: Record<string, any>;
   }
 }
 ```
@@ -629,7 +724,39 @@ export interface Exercice {
     "operation": {
       "type": "string",
       "description": "Operation operated next to the event",
-      "enum": ["CREATE", "UPDATE", "DELETE"]
+      "enum": ["CREATE", "DELETE"]
+    },
+    "scope": {
+      "$ref": "Scope"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "operation", "scope", "data"],
+  "additionalProperties": false
+}
+```
+```json
+{
+  "description": "Exercice updated event ",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "value": "exercice"
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation operated next to the event",
+      "enum": ["UPDATE"]
     },
     "scope": {
       "$ref": "Scope"
@@ -640,11 +767,11 @@ export interface Exercice {
         "id": {
           "type": "string"
         },
-        "oldState": {
+        "previousState": {
           "type": "object",
           "additionalProperties": true
         },
-        "newState": {
+        "currentState": {
           "type": "object",
           "additionalProperties": true
         }
