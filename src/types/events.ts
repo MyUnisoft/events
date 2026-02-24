@@ -35,9 +35,11 @@ export interface Connector {
 export interface AccountingFolder {
   name: "accountingFolder";
   scope: Scope & Required<Pick<Scope, "firmId">>;
-  operation: "CREATE";
+  operation: "CREATE" | "UPDATE";
   data: {
     id: string;
+    previousState?: Record<string, any>;
+    currentState?: Record<string, any>;
   };
 }
 
@@ -129,11 +131,11 @@ export interface CloudDocument {
 export interface Exercice {
   name: "exercice";
   scope: Scope;
-  operation: "CREATE" | "UPDATE" | "DELETE";
+  operation: "CREATE" |"UPDATE" | "DELETE";
   data: {
     id: string;
-    oldState?: Record<string, any>;
-    newState?: Record<string, any>;
+    previousState?: Record<string, any>;
+    currentState?: Record<string, any>;
   }
 }
 

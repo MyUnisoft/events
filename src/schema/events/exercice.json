@@ -18,11 +18,11 @@
           "type": "string",
           "pattern": "^[0-9]+"
         },
-        "oldState": {
+        "previousState": {
           "type": "object",
           "additionalProperties": true
         },
-        "newState": {
+        "currentState": {
           "type": "object",
           "additionalProperties": true
         }

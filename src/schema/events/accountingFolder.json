@@ -11,6 +11,25 @@
       "required": ["id"],
       "additionalProperties": false
     },
+    "update": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+"
+        },
+        "previousState": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "currentState": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": true
+    },
     "scope": {
       "type": "object",
       "properties": {
